@@ -27,11 +27,12 @@
 
 ## 当前阶段
 
-项目处于从零启动阶段。已确认产品方向和技术路线，但尚未创建前端代码、Supabase 项目、数据库迁移或部署环境。
+项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、数据库设计草案和初始 migration；尚未创建真实 Supabase 项目、执行数据库迁移或完成用户 A/B 权限负例验证。
 
 ## 进入开发前必须补齐
 
 - 数据库 schema 和 RLS 策略已完成设计草案，并已生成初始 migration，尚未执行 Supabase 验证。
 - 第一阶段实施计划。
 - 本地启动命令、测试命令、验收路径。
-- Supabase 项目创建方式和 `.env.example`。
+- Supabase 测试项目创建方式和 `.env.local`。
+- 登录后默认 household 初始化流程接线。

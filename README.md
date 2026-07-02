@@ -19,6 +19,8 @@ npm run dev
 
 复制 `.env.example` 为 `.env.local`，并填入 Supabase 测试项目的公开配置。
 
+不要把 service role key、数据库密码或其他 secret 写入 `.env.local` 的 `NEXT_PUBLIC_*` 变量。
+
 ## 真源文档
 
 内部开发真源在 `dev-docs/`。实现前先阅读：
@@ -28,4 +30,3 @@ npm run dev
 - `dev-docs/architecture.md`
 - `dev-docs/database-design.md`
 - `dev-docs/acceptance.md`
-

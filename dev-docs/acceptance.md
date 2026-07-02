@@ -41,6 +41,9 @@
 - `npm run dev -- --hostname 127.0.0.1 --port 3000`：本地服务启动在 `http://127.0.0.1:3000`。
 - 浏览器桌面视口：`1280x720`，页面标题为 `Home Inventory`，无 console error。
 - 浏览器移动视口：`390x844`，无横向溢出，无 console error。
+- Supabase 接入骨架：`npm test` 通过 3 个测试文件 / 6 个测试。
+- 登录页：`/login` 可打开，邮箱/密码表单可见，无 console error；短密码会显示 `密码至少需要 8 位`。
+- 登录页未配置 Supabase 时：有效邮箱密码会显示 `Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`，不会假成功。
 
 后续每个阶段必须记录：
 
