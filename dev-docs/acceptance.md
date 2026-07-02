@@ -44,6 +44,8 @@
 - Supabase 接入骨架：`npm test` 通过 3 个测试文件 / 6 个测试。
 - 登录页：`/login` 可打开，邮箱/密码表单可见，无 console error；短密码会显示 `密码至少需要 8 位`。
 - 登录页未配置 Supabase 时：有效邮箱密码会显示 `Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`，不会假成功。
+- Supabase public env 默认读取修复：`npm test` 通过 5 个测试文件 / 13 个测试，`npm run lint` 和 `npm run build` 通过。
+- 应用首页：`/app` 已创建；未登录访问显示“请先登录”，无 console error；登录成功后会跳转到 `/app`。
 
 后续每个阶段必须记录：
 

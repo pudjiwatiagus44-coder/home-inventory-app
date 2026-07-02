@@ -27,7 +27,7 @@
 
 ## 当前阶段
 
-项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、数据库设计草案和初始 migration；用户已在 Supabase 项目中执行 migration 成功。用户 A/B 权限负例验证尚未完成。
+项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、登录后 `/app` 应用首页、数据库设计草案和初始 migration；用户已在 Supabase 项目中执行 migration 成功。用户 A/B 权限负例验证尚未完成。
 
 ## 进入开发前必须补齐
 
@@ -35,4 +35,4 @@
 - 第一阶段实施计划。
 - 本地启动命令、测试命令、验收路径。
 - `.env.local` 已配置 public Supabase URL 和 publishable key；禁止提交真实值。
-- 登录后默认 household 初始化流程的真实账号验证。
+- 新增物品表单和物品 CRUD 闭环。

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { validateAuthCredentials } from "./auth-validation";
 import { initializeDefaultHousehold } from "./default-household";
@@ -8,6 +9,7 @@ import { initializeDefaultHousehold } from "./default-household";
 type AuthMode = "sign-in" | "sign-up";
 
 export function AuthForm() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,11 +42,7 @@ export function AuthForm() {
 
       if (result.data.session) {
         await initializeDefaultHousehold(supabase, credentials.email);
-        setMessage(
-          mode === "sign-in"
-            ? "登录成功，家庭空间已准备好"
-            : "注册成功，家庭空间已准备好",
-        );
+        router.push("/app");
         return;
       }
 
