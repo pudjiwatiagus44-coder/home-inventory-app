@@ -10,7 +10,7 @@
 | 启动基线 | `npm install`、`npm run lint`、`npm run build`、`npm run dev` 已验证 | 已验证 |
 | 第一闭环 | 用户注册到管理物品的完整流程跑通 | 未验证 |
 | 数据影响 | 数据创建、更新、删除证据 | 未验证 |
-| 权限安全 | RLS 设计草案和初始 migration 已完成，用户 A/B 负例尚未执行 | 设计完成，未验证 |
+| 权限安全 | RLS 设计草案和初始 migration 已完成并已执行，用户 A/B 负例尚未执行 | migration 已执行，未验证 |
 | 第三方 | Supabase 官方文档和 sandbox/API 证据 | 部分确认 |
 | UI | 截图、响应式、空/加载/错误状态 | 未验证 |
 | Git | `.gitignore`、私有资料、checkpoint | 未验证 |

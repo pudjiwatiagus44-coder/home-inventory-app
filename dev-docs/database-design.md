@@ -398,8 +398,8 @@ using (public.is_household_member(household_id));
 
 ## 未验证项
 
-- Supabase 项目尚未创建。
-- migration 尚未执行。
+- Supabase 项目已创建。
+- migration 已由用户在 Supabase SQL Editor 执行成功。
 - RLS 策略尚未在真实 Supabase 项目验证。
 - `locations.area_id` 和 `items.location_id` 的同 household 约束尚未在真实 Supabase 项目验证。
 - 用户注册后的默认 household 初始化函数尚未在真实 Supabase 项目验证。
@@ -408,5 +408,5 @@ using (public.is_household_member(household_id));
 
 1. 创建 `.env.example`。
 2. scaffold Next.js 项目。
-3. 在 Supabase 测试项目中运行 migration。
-4. 做用户 A/B 权限负例验证。
+3. 做用户 A/B 权限负例验证。
+4. 验证 Next.js 登录后的默认 household 初始化流程。

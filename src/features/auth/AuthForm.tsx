@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { validateAuthCredentials } from "./auth-validation";
+import { initializeDefaultHousehold } from "./default-household";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -34,6 +35,16 @@ export function AuthForm() {
 
       if (result.error) {
         setMessage(result.error.message);
+        return;
+      }
+
+      if (result.data.session) {
+        await initializeDefaultHousehold(supabase, credentials.email);
+        setMessage(
+          mode === "sign-in"
+            ? "登录成功，家庭空间已准备好"
+            : "注册成功，家庭空间已准备好",
+        );
         return;
       }
 
