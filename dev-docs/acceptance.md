@@ -7,7 +7,7 @@
 | 项目边界 | `dev-docs/project-brief.md` 已确认 | 已确认初版 |
 | 技术路线 | `Next.js + TypeScript + Supabase + PWA` 已由用户确认 | 已确认 |
 | 架构 owner | `dev-docs/architecture.md` owner map 完成 | 已确认初版 |
-| 启动基线 | 安装、启动、环境变量、服务说明 | 未验证 |
+| 启动基线 | `npm install`、`npm run lint`、`npm run build`、`npm run dev` 已验证 | 已验证 |
 | 第一闭环 | 用户注册到管理物品的完整流程跑通 | 未验证 |
 | 数据影响 | 数据创建、更新、删除证据 | 未验证 |
 | 权限安全 | RLS 设计草案和初始 migration 已完成，用户 A/B 负例尚未执行 | 设计完成，未验证 |
@@ -33,7 +33,14 @@
 
 ## 证据记录
 
-当前尚未进入代码实现，暂无运行证据。
+当前运行证据：
+
+- `npm install`：成功安装 361 个 package。
+- `npm run lint`：退出码 0。
+- `npm run build`：退出码 0，Next.js 生成 `/` 和 `/_not-found` 静态页面。
+- `npm run dev -- --hostname 127.0.0.1 --port 3000`：本地服务启动在 `http://127.0.0.1:3000`。
+- 浏览器桌面视口：`1280x720`，页面标题为 `Home Inventory`，无 console error。
+- 浏览器移动视口：`390x844`，无横向溢出，无 console error。
 
 后续每个阶段必须记录：
 
