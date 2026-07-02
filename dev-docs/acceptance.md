@@ -5,7 +5,7 @@
 | 门槛 | 需要的证据 | 状态 |
 | --- | --- | --- |
 | 项目边界 | `dev-docs/project-brief.md` 已确认 | 已确认初版 |
-| 技术路线 | 一个主推荐路线和拒绝路线 | 已确认初版 |
+| 技术路线 | `Next.js + TypeScript + Supabase + PWA` 已由用户确认 | 已确认 |
 | 架构 owner | `dev-docs/architecture.md` owner map 完成 | 已确认初版 |
 | 启动基线 | 安装、启动、环境变量、服务说明 | 未验证 |
 | 第一闭环 | 用户注册到管理物品的完整流程跑通 | 未验证 |
@@ -61,4 +61,3 @@
 - 不能在没有用户确认技术选型时 scaffold 代码。
 - 不能把 mock 数据包装成真实 Supabase 功能。
 - 不能把真实 Supabase secret、service role key 或用户数据提交到 Git。
-

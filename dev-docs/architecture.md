@@ -2,41 +2,46 @@
 
 ## 推荐架构
 
-- 推荐产品形态：Web/PWA first，后续再包装成移动 App。
-- 推荐技术路线：Supabase Auth + Supabase Postgres + RLS + 前端 Web/PWA。
+- 推荐产品形态：Web/PWA first，后续再评估移动 App。
+- 推荐技术路线：Next.js + TypeScript + Supabase Auth + Supabase Postgres + RLS + PWA。
 - 推荐部署形态：前端部署到托管平台，数据和认证由 Supabase 承载。
-- 为什么这是主路线：本产品的核心难点是账号、用户数据隔离、结构化查询和长期保存。Supabase 提供 Auth、Postgres 和 Row Level Security，适合从 MVP 走向公开用户。
-- 被拒绝路线和原因：
-  - 当前 Python + JSON 本地服务：适合个人局域网，不适合多用户账号和公开推广。
-  - 自建完整后端：第一阶段维护成本过高。
-  - Firebase：也可行，但本项目的数据关系更适合 Postgres。
-  - 原生 App 先行：会拖慢账号、数据和核心闭环验证。
+- 为什么这是主路线：本产品的核心难点是账号、用户数据隔离、结构化查询和长期保存。Supabase 提供 Auth、Postgres 和 Row Level Security，Next.js 提供清晰的前端、服务端和部署约定，适合从 MVP 走向公开用户。
+
+## 禁止路径
+
+- 禁止把当前 Python + JSON 本地服务改造成多用户公开后端。
+- 禁止在没有用户确认和真源更新时切换到 Firebase。
+- 禁止第一阶段自建完整后端服务。
+- 禁止原生 App 先行。
+- 禁止在没有 RLS 的情况下把用户数据表暴露给前端。
+- 禁止把 service role key 暴露给浏览器或提交到 Git。
+- 禁止 mock 数据冒充真实 Supabase 功能。
 
 ## 技术路线
 
-- 前端框架：待最终技术选型确认。主推荐倾向 Next.js 或 Vite + React，理由是生态成熟、Supabase 官方文档充足、适合 PWA。
-- 设计系统 owner：前端项目内的 design tokens 和基础组件。
-- 后端能力：第一阶段优先使用 Supabase Auth、Postgres、RLS 和自动 API；仅在需要复杂服务端逻辑时再加入自定义后端。
+- 前端框架：Next.js。
+- 语言：TypeScript。
+- PWA：manifest + service worker 或框架推荐 PWA 插件，进入实现前再定具体方式。
+- UI 基础：shadcn/ui + Tailwind CSS + 项目自己的 design tokens。
+- 设计系统 owner：前端项目内的 token、基础组件和后续 `dev-docs/frontend-design.md`。
+- 后端能力：第一阶段优先使用 Supabase Auth、Postgres、RLS 和自动 API；仅在需要复杂服务端逻辑时再加入 Next.js server actions/route handlers。
 - 数据库：Supabase Postgres。
 - 迁移方式：SQL migration 文件，不在控制台手改后忘记回写。
 - 第三方 SDK/API：Supabase JavaScript SDK。
-- 官方资料：
-  - Supabase Auth: https://supabase.com/docs/guides/auth
-  - Password Auth: https://supabase.com/docs/guides/auth/passwords
-  - Row Level Security: https://supabase.com/docs/guides/database/postgres/row-level-security
-  - Supabase with Next.js: https://supabase.com/docs/guides/getting-started/quickstarts/nextjs
+- 技术选择真源：`dev-docs/technical-selection.md`。
 
 ## Owner Map
 
 | 概念 | Owner | 不能由谁拥有 | 验证方式 |
 | --- | --- | --- | --- |
 | 产品边界 | `dev-docs/project-brief.md` | 临时代码、聊天记忆 | 文档审阅 |
-| 前端路由 | 前端应用路由配置 | Supabase 数据库 | 本地页面访问 |
-| 设计 token | 前端样式/token 文件 | 零散页面内联样式 | 截图和 CSS 检查 |
-| 业务组件 | 前端业务组件 | 数据库触发器 | UI 行为验证 |
+| 技术路线 | `dev-docs/technical-selection.md` | 单个组件或随手依赖 | 文档审阅 + package 检查 |
+| 前端路由 | Next.js app route | Supabase 数据库 | 本地页面访问 |
+| 设计 token | `src/styles/globals.css` 和基础组件 | 零散页面内联样式 | 截图和 CSS 检查 |
+| 业务组件 | `src/components/inventory/` | 数据库触发器 | UI 行为验证 |
 | API 合同 | Supabase schema/RLS + 客户端调用约定 | UI 文案 | API/数据库验证 |
 | 业务逻辑 | 前端 use case + 数据库约束/RLS | 纯 UI 显示层 | 正负路径测试 |
-| 数据库 schema | migration SQL | 前端本地状态 | migration diff |
+| 数据库 schema | `supabase/migrations/` SQL | 前端本地状态 | migration diff |
 | 登录/权限 | Supabase Auth + RLS | 前端隐藏按钮 | 用户 A/B 权限负例 |
 | 第三方接入 | Supabase SDK 初始化层 | 任意页面随手初始化 | 环境变量和调用检查 |
 | 部署/配置 | `.env.example` + 平台配置说明 | 硬编码密钥 | 构建和环境检查 |
@@ -53,7 +58,7 @@ auth.users
   -> items
 ```
 
-第一版虽然不做家庭成员共享，但仍建议保留 `households` 概念。每个用户注册后自动拥有一个默认家庭空间，后续扩展共享时不用大迁移。
+第一版虽然不做家庭成员共享，但仍保留 `households` 概念。每个用户注册后自动拥有一个默认家庭空间，后续扩展共享时不需要大迁移。
 
 ### profiles
 
@@ -112,13 +117,15 @@ auth.users
 - 用户只能读取自己所属 household 的数据。
 - 用户只能写入自己所属 household 的 areas、locations、items。
 - 第一版没有管理员读取用户数据的功能。
-- 前端可以显示/隐藏按钮，但真正权限必须由 RLS 保证。
+- 前端可以显示或隐藏按钮，但真正权限必须由 RLS 保证。
+- public schema 中暴露给前端的用户数据表必须启用 RLS。
 - service role key 只能在服务端或运维脚本中使用，不能暴露给浏览器。
 
 ## 请求生命周期
 
 ```text
 用户操作
+  -> Next.js 页面/组件
   -> 前端表单校验
   -> Supabase client 带当前用户 session 请求
   -> Supabase Auth 识别用户
@@ -129,9 +136,9 @@ auth.users
 
 ## 验证方式
 
-- 本地启动命令：待技术选型最终确认。
-- 构建命令：待技术选型最终确认。
-- 测试命令：待技术选型最终确认。
+- 本地启动命令：待 scaffold 后确认，预期为 `npm run dev`。
+- 构建命令：待 scaffold 后确认，预期为 `npm run build`。
+- 测试命令：待测试框架确认后写入。
 - UI 验证：注册、登录、新增位置、新增物品、搜索、编辑、删除、退出。
 - API/数据库验证：检查 Supabase 表数据。
 - 权限负例：用户 B 不能读写用户 A 的 household 数据。
