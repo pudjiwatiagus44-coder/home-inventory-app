@@ -11,6 +11,7 @@ import {
   isMissingAuthSessionError,
   ItemRow,
 } from "./dashboard-data";
+import { getOrCreateDefaultHouseholdId } from "./household-bootstrap";
 
 type DashboardState =
   | { status: "loading" }
@@ -48,21 +49,10 @@ export function AppDashboard() {
           return;
         }
 
-        const membershipResult = await supabase
-          .from("household_members")
-          .select("household_id")
-          .eq("user_id", userResult.data.user.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (membershipResult.error) {
-          throw new Error(membershipResult.error.message);
-        }
-
-        const householdId = membershipResult.data?.household_id;
-        if (!householdId) {
-          throw new Error("还没有找到家庭空间，请重新登录一次");
-        }
+        const householdId = await getOrCreateDefaultHouseholdId(
+          supabase,
+          userResult.data.user,
+        );
 
         const [householdResult, areasResult, itemsResult] = await Promise.all([
           supabase
