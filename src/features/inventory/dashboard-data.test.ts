@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardSummary, isMissingAuthSessionError } from "./dashboard-data";
+import {
+  buildDashboardSummary,
+  createDashboardHousehold,
+  isMissingAuthSessionError,
+} from "./dashboard-data";
 
 describe("buildDashboardSummary", () => {
   it("summarizes household, areas, and items for the dashboard", () => {
@@ -53,5 +57,23 @@ describe("isMissingAuthSessionError", () => {
     expect(isMissingAuthSessionError({ message: "permission denied" })).toBe(
       false,
     );
+  });
+});
+
+describe("createDashboardHousehold", () => {
+  it("uses the returned household row when it is available", () => {
+    expect(
+      createDashboardHousehold("household-1", {
+        id: "household-1",
+        name: "我的家庭",
+      }),
+    ).toEqual({ id: "household-1", name: "我的家庭" });
+  });
+
+  it("falls back when the household row is not visible yet", () => {
+    expect(createDashboardHousehold("household-1", null)).toEqual({
+      id: "household-1",
+      name: "我的家庭",
+    });
   });
 });

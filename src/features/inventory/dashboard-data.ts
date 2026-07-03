@@ -40,6 +40,13 @@ export function isMissingAuthSessionError(error: { message?: string } | null) {
   return error?.message === "Auth session missing!";
 }
 
+export function createDashboardHousehold(
+  householdId: string,
+  household: HouseholdRow | null,
+): HouseholdRow {
+  return household ?? { id: householdId, name: "我的家庭" };
+}
+
 export function buildDashboardSummary(data: DashboardData): DashboardSummary {
   return {
     householdId: data.household.id,

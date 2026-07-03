@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   AreaRow,
   buildDashboardSummary,
+  createDashboardHousehold,
   DashboardSummary,
   HouseholdRow,
   isMissingAuthSessionError,
@@ -59,7 +60,7 @@ export function AppDashboard() {
             .from("households")
             .select("id,name")
             .eq("id", householdId)
-            .single(),
+            .maybeSingle(),
           supabase
             .from("areas")
             .select("id,name,color")
@@ -84,7 +85,10 @@ export function AppDashboard() {
         }
 
         const summary = buildDashboardSummary({
-          household: householdResult.data as HouseholdRow,
+          household: createDashboardHousehold(
+            householdId,
+            householdResult.data as HouseholdRow | null,
+          ),
           areas: (areasResult.data ?? []) as AreaRow[],
           items: (itemsResult.data ?? []) as ItemRow[],
         });
