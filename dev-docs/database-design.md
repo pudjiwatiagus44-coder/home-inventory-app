@@ -417,19 +417,24 @@ using (public.is_household_member(household_id));
 - 用户 A 不能把 item 的 `household_id` 更新成不属于自己的 household。
 - 如果 location 属于另一个 household，插入/更新 item 必须失败。
 
-## 未验证项
+## 当前验证状态
 
 - Supabase 项目已创建。
-- migration 已由用户在 Supabase SQL Editor 执行成功。
-- RLS 策略尚未在真实 Supabase 项目验证。
-- `locations.area_id` 和 `items.location_id` 的同 household 约束尚未在真实 Supabase 项目验证。
-- 用户注册后的默认 household 初始化函数尚未在真实 Supabase 项目验证。
-- `202607030001_repair_default_household_rls.sql` 尚未在真实 Supabase 项目执行和验证。
-- `202607030002_reset_inventory_rls_policies.sql` 尚未在真实 Supabase 项目执行和验证。
+- 初始 migration 已由用户在 Supabase SQL Editor 执行成功。
+- `202607030001_repair_default_household_rls.sql` 已作为 RLS 和默认 household 初始化修复方案加入仓库。
+- `202607030002_reset_inventory_rls_policies.sql` 已作为真实 Supabase 项目 RLS 漂移的二次修复方案加入仓库；用户执行后二次反馈新增物品成功。
+- 2026-07-04 用户 A/B 权限负例已在真实 Supabase 项目验证：A 可创建自己的 area/location/item；B 读取 A 的 household/area/location/item 均为 0 行；B 向 A household 插入 area/item 被 RLS 拒绝；B 更新/删除 A item 返回 0 行；未登录 anon 读取 A item 返回 0 行。结果记录见 `dev-docs/acceptance.md`。
+- 当前证据支持第一版“用户只能访问自己 household 数据”的 RLS 边界。
+
+## 仍需补充验证
+
+- 在真实浏览器里完整走一遍区域、位置、物品新增/编辑/删除、搜索/筛选、刷新后仍存在的用户验收陪跑。
+- 针对 `locations.area_id` 和 `items.location_id` 的跨 household 复合外键负例，后续如单独调整区域/位置关系或共享模型，需要再补更细的数据库负例。
+- 如果未来开放家庭成员共享，必须重新设计 `household_members.role` 的 owner/member 写权限，不能沿用第一版 member-only 等价 owner 的简化策略。
 
 ## 下一步
 
-1. 创建 `.env.example`。
-2. scaffold Next.js 项目。
-3. 做用户 A/B 权限负例验证。
-4. 验证 Next.js 登录后的默认 household 初始化流程。
+1. 收口 `dev-docs/stages/mvp-first-loop.md` 和 `dev-docs/acceptance.md`，保持阶段计划、数据库设计和验收记录一致。
+2. 重新运行 `npm test`、`npm run lint`、`npm run build`。
+3. 做用户验收陪跑：真实浏览器验证区域/位置/物品 CRUD、搜索/筛选、移动端布局。
+4. 阶段收口后创建 Git checkpoint。
