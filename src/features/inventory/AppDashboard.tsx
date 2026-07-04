@@ -500,7 +500,7 @@ export function AppDashboard() {
       </header>
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 xl:grid-cols-[320px_1fr]">
-        <aside className="space-y-4">
+        <aside className="order-2 space-y-4 xl:order-1">
           <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
             <h2 className="mb-4 text-sm font-semibold">概览</h2>
             <div className="grid grid-cols-3 gap-3 xl:grid-cols-1">
@@ -693,7 +693,7 @@ export function AppDashboard() {
           </section>
         </aside>
 
-        <section className="min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)]">
+        <section className="order-1 min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)] xl:order-2">
           <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold">物品清单</h2>
