@@ -8,6 +8,7 @@
 - `technical-selection.md` - 已确认技术路线、备选路线取舍、平台能力判断。
 - `architecture.md` - 主推荐架构、owner map、数据和权限边界。
 - `database-design.md` - Supabase schema、对象关系、RLS 策略和权限负例。
+- `stages/mvp-first-loop.md` - 第一阶段实施计划：位置、物品 CRUD、搜索和权限负例。
 - `acceptance.md` - 阶段验收门槛、证据记录、停止条件。
 
 ## 文档职责
@@ -32,7 +33,7 @@
 ## 进入开发前必须补齐
 
 - 数据库 schema 和 RLS 策略已完成设计草案，初始 migration 已在 Supabase 项目执行成功。
-- 第一阶段实施计划。
+- 第一阶段实施计划已补齐：`dev-docs/stages/mvp-first-loop.md`，进入代码实现前仍需用户确认范围和第一个子阶段。
 - 本地启动命令、测试命令、验收路径。
 - `.env.local` 已配置 public Supabase URL 和 publishable key；禁止提交真实值。
 - 新增物品表单和物品 CRUD 闭环。

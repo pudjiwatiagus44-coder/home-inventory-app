@@ -1,40 +1,73 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   AreaRow,
   buildDashboardSummary,
   createDashboardHousehold,
+  DashboardItem,
   DashboardSummary,
+  filterInventoryItems,
+  getExpirationHighlights,
   HouseholdRow,
   isMissingAuthSessionError,
   ItemRow,
+  LocationRow,
 } from "./dashboard-data";
 import { getOrCreateDefaultHouseholdId } from "./household-bootstrap";
+import {
+  createInventoryArea,
+  createInventoryItem,
+  createInventoryLocation,
+  deleteInventoryArea,
+  deleteInventoryItem,
+  updateInventoryArea,
+  updateInventoryItem,
+  validateAreaInput,
+  validateInventoryItemInput,
+  validateLocationInput,
+} from "./inventory-actions";
 
 type DashboardState =
   | { status: "loading" }
   | { status: "unauthenticated" }
   | { status: "error"; message: string }
-  | { status: "ready"; summary: DashboardSummary };
+  | { status: "ready"; summary: DashboardSummary; userId: string };
+
+const areaColors = ["#64748b", "#256f6b", "#7c3aed", "#c2410c", "#be123c"];
 
 export function AppDashboard() {
   const router = useRouter();
   const [state, setState] = useState<DashboardState>({ status: "loading" });
+  const [areaForm, setAreaForm] = useState({ name: "", color: areaColors[0] });
+  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+  const [locationForm, setLocationForm] = useState({ name: "", areaId: "" });
+  const [itemForm, setItemForm] = useState({
+    name: "",
+    locationId: "",
+    note: "",
+    expireDate: "",
+  });
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    search: "",
+    areaId: "",
+    locationId: "",
+  });
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadDashboard() {
+  const loadDashboard = useCallback(
+    async (shouldUpdate: () => boolean = () => true) => {
       try {
         const supabase = createSupabaseBrowserClient();
         const userResult = await supabase.auth.getUser();
 
         if (userResult.error) {
           if (isMissingAuthSessionError(userResult.error)) {
-            if (isMounted) {
+            if (shouldUpdate()) {
               setState({ status: "unauthenticated" });
             }
             return;
@@ -44,7 +77,7 @@ export function AppDashboard() {
         }
 
         if (!userResult.data.user) {
-          if (isMounted) {
+          if (shouldUpdate()) {
             setState({ status: "unauthenticated" });
           }
           return;
@@ -55,30 +88,38 @@ export function AppDashboard() {
           userResult.data.user,
         );
 
-        const [householdResult, areasResult, itemsResult] = await Promise.all([
-          supabase
-            .from("households")
-            .select("id,name")
-            .eq("id", householdId)
-            .maybeSingle(),
-          supabase
-            .from("areas")
-            .select("id,name,color")
-            .eq("household_id", householdId)
-            .order("sort_order", { ascending: true }),
-          supabase
-            .from("items")
-            .select("id,name,note,expire_date")
-            .eq("household_id", householdId)
-            .order("created_at", { ascending: false })
-            .limit(5),
-        ]);
+        const [householdResult, areasResult, locationsResult, itemsResult] =
+          await Promise.all([
+            supabase
+              .from("households")
+              .select("id,name")
+              .eq("id", householdId)
+              .maybeSingle(),
+            supabase
+              .from("areas")
+              .select("id,name,color")
+              .eq("household_id", householdId)
+              .order("sort_order", { ascending: true }),
+            supabase
+              .from("locations")
+              .select("id,name,area_id")
+              .eq("household_id", householdId)
+              .order("sort_order", { ascending: true }),
+            supabase
+              .from("items")
+              .select("id,name,note,expire_date,location_id")
+              .eq("household_id", householdId)
+              .order("created_at", { ascending: false }),
+          ]);
 
         if (householdResult.error) {
           throw new Error(householdResult.error.message);
         }
         if (areasResult.error) {
           throw new Error(areasResult.error.message);
+        }
+        if (locationsResult.error) {
+          throw new Error(locationsResult.error.message);
         }
         if (itemsResult.error) {
           throw new Error(itemsResult.error.message);
@@ -90,33 +131,241 @@ export function AppDashboard() {
             householdResult.data as HouseholdRow | null,
           ),
           areas: (areasResult.data ?? []) as AreaRow[],
+          locations: (locationsResult.data ?? []) as LocationRow[],
           items: (itemsResult.data ?? []) as ItemRow[],
         });
 
-        if (isMounted) {
-          setState({ status: "ready", summary });
+        if (shouldUpdate()) {
+          setState({ status: "ready", summary, userId: userResult.data.user.id });
         }
       } catch (error) {
-        if (isMounted) {
+        if (shouldUpdate()) {
           setState({
             status: "error",
             message: error instanceof Error ? error.message : "加载失败",
           });
         }
       }
-    }
+    },
+    [],
+  );
 
-    void loadDashboard();
+  useEffect(() => {
+    let isMounted = true;
+
+    void Promise.resolve().then(() => loadDashboard(() => isMounted));
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadDashboard]);
+
+  const visibleItems = useMemo(() => {
+    if (state.status !== "ready") {
+      return [];
+    }
+
+    return filterInventoryItems(state.summary.items, filters);
+  }, [filters, state]);
+
+  const expirationHighlights = useMemo(() => {
+    if (state.status !== "ready") {
+      return { soonItems: [], expiredItems: [] };
+    }
+
+    return getExpirationHighlights(state.summary.items);
+  }, [state]);
+
+  const filteredLocations = useMemo(() => {
+    if (state.status !== "ready") {
+      return [];
+    }
+
+    return filters.areaId
+      ? state.summary.locations.filter((location) => location.areaId === filters.areaId)
+      : state.summary.locations;
+  }, [filters.areaId, state]);
 
   async function handleSignOut() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  async function handleSaveArea(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormMessage(null);
+
+    const validation = validateAreaInput(areaForm);
+    if (!validation.isValid) {
+      setFormMessage(validation.error);
+      return;
+    }
+
+    if (state.status !== "ready") {
+      setFormMessage("家庭空间尚未加载完成");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      if (editingAreaId) {
+        await updateInventoryArea(supabase, {
+          householdId: state.summary.householdId,
+          areaId: editingAreaId,
+          ...validation.value,
+        });
+        setFormMessage("区域已更新");
+      } else {
+        await createInventoryArea(supabase, {
+          householdId: state.summary.householdId,
+          ...validation.value,
+        });
+        setFormMessage("区域已保存");
+      }
+      setAreaForm({ name: "", color: areaColors[0] });
+      setEditingAreaId(null);
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "区域保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteArea(areaId: string) {
+    if (state.status !== "ready" || !window.confirm("确认删除这个区域？")) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormMessage(null);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await deleteInventoryArea(supabase, {
+        householdId: state.summary.householdId,
+        areaId,
+      });
+      setFormMessage("区域已删除");
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "区域删除失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleCreateLocation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormMessage(null);
+
+    const validation = validateLocationInput(locationForm);
+    if (!validation.isValid) {
+      setFormMessage(validation.error);
+      return;
+    }
+
+    if (state.status !== "ready") {
+      setFormMessage("家庭空间尚未加载完成");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await createInventoryLocation(supabase, {
+        householdId: state.summary.householdId,
+        ...validation.value,
+      });
+      setLocationForm({ name: "", areaId: "" });
+      setFormMessage("位置已保存");
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "位置保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleSaveItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormMessage(null);
+
+    const validation = validateInventoryItemInput(itemForm);
+    if (!validation.isValid) {
+      setFormMessage(validation.error);
+      return;
+    }
+
+    if (state.status !== "ready") {
+      setFormMessage("家庭空间尚未加载完成");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      if (editingItemId) {
+        await updateInventoryItem(supabase, {
+          householdId: state.summary.householdId,
+          itemId: editingItemId,
+          ...validation.value,
+        });
+        setFormMessage("物品已更新");
+      } else {
+        await createInventoryItem(supabase, {
+          householdId: state.summary.householdId,
+          createdBy: state.userId,
+          ...validation.value,
+        });
+        setFormMessage("物品已保存");
+      }
+      setItemForm({ name: "", locationId: "", note: "", expireDate: "" });
+      setEditingItemId(null);
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "物品保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteItem(itemId: string) {
+    if (state.status !== "ready" || !window.confirm("确认删除这个物品？")) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormMessage(null);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await deleteInventoryItem(supabase, {
+        householdId: state.summary.householdId,
+        itemId,
+      });
+      setFormMessage("物品已删除");
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "物品删除失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function startEditArea(area: DashboardSummary["areas"][number]) {
+    setEditingAreaId(area.id);
+    setAreaForm({ name: area.name, color: area.color });
+  }
+
+  function startEditItem(item: DashboardItem) {
+    setEditingItemId(item.id);
+    setItemForm({
+      name: item.name,
+      locationId: item.locationId ?? "",
+      note: item.note,
+      expireDate: item.expireDate ?? "",
+    });
   }
 
   if (state.status === "loading") {
@@ -156,7 +405,7 @@ export function AppDashboard() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div>
             <p className="text-sm text-[var(--muted-foreground)]">家庭空间</p>
             <h1 className="text-xl font-semibold">{state.summary.householdName}</h1>
@@ -171,50 +420,361 @@ export function AppDashboard() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[240px_1fr]">
-        <aside className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h2 className="mb-4 text-sm font-semibold">概览</h2>
-          <div className="grid gap-3">
-            <Metric label="区域" value={state.summary.areaCount} />
-            <Metric label="物品" value={state.summary.itemCount} />
-          </div>
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 xl:grid-cols-[320px_1fr]">
+        <aside className="space-y-4">
+          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
+            <h2 className="mb-4 text-sm font-semibold">概览</h2>
+            <div className="grid grid-cols-3 gap-3 xl:grid-cols-1">
+              <Metric label="区域" value={state.summary.areaCount} />
+              <Metric label="位置" value={state.summary.locationCount} />
+              <Metric label="物品" value={state.summary.itemCount} />
+            </div>
+          </section>
+
+          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold">区域</h2>
+              {editingAreaId ? (
+                <button
+                  className="text-sm text-[var(--muted-foreground)]"
+                  onClick={() => {
+                    setEditingAreaId(null);
+                    setAreaForm({ name: "", color: areaColors[0] });
+                  }}
+                  type="button"
+                >
+                  取消
+                </button>
+              ) : null}
+            </div>
+
+            <form className="grid gap-3" onSubmit={handleSaveArea}>
+              <label className="grid gap-2 text-sm font-medium">
+                区域名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setAreaForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：厨房"
+                  value={areaForm.name}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2" role="radiogroup">
+                {areaColors.map((color) => (
+                  <button
+                    aria-label={`区域颜色 ${color}`}
+                    className="h-8 w-8 rounded-full border-2"
+                    key={color}
+                    onClick={() =>
+                      setAreaForm((current) => ({ ...current, color }))
+                    }
+                    style={{
+                      backgroundColor: color,
+                      borderColor:
+                        areaForm.color === color ? "var(--foreground)" : "white",
+                    }}
+                    type="button"
+                  />
+                ))}
+              </div>
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                {editingAreaId ? "保存区域" : "新增区域"}
+              </button>
+            </form>
+
+            <ul className="mt-4 divide-y divide-[var(--border)]">
+              {state.summary.areas.map((area) => (
+                <li className="flex items-center justify-between gap-3 py-3" key={area.id}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: area.color }}
+                      />
+                      <p className="truncate text-sm font-medium">{area.name}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                      {area.locationCount} 个位置
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button className="text-sm" onClick={() => startEditArea(area)} type="button">
+                      编辑
+                    </button>
+                    <button
+                      className="text-sm text-red-600"
+                      onClick={() => handleDeleteArea(area.id)}
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
+            <h2 className="mb-4 text-sm font-semibold">位置</h2>
+            <form className="grid gap-3" onSubmit={handleCreateLocation}>
+              <label className="grid gap-2 text-sm font-medium">
+                位置名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：上层抽屉"
+                  value={locationForm.name}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                所属区域
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      areaId: event.target.value,
+                    }))
+                  }
+                  value={locationForm.areaId}
+                >
+                  <option value="">未分区</option>
+                  {state.summary.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                保存位置
+              </button>
+            </form>
+
+            <ul className="mt-4 divide-y divide-[var(--border)]">
+              {state.summary.locations.map((location) => (
+                <li className="py-3" key={location.id}>
+                  <p className="text-sm font-medium">{location.name}</p>
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                    {location.areaName}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
         </aside>
 
-        <section className="min-h-[420px] rounded-md border border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <section className="min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)]">
+          <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold">物品清单</h2>
               <p className="text-sm text-[var(--muted-foreground)]">
-                {state.summary.itemCount} 个物品
+                {visibleItems.length} / {state.summary.itemCount} 个物品
               </p>
             </div>
-            <button
-              className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white opacity-70"
-              disabled
-              type="button"
-            >
-              新增物品
-            </button>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, search: event.target.value }))
+                }
+                placeholder="搜索名称或备注"
+                value={filters.search}
+              />
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    areaId: event.target.value,
+                    locationId: "",
+                  }))
+                }
+                value={filters.areaId}
+              >
+                <option value="">全部区域</option>
+                {state.summary.areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    locationId: event.target.value,
+                  }))
+                }
+                value={filters.locationId}
+              >
+                <option value="">全部位置</option>
+                {filteredLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {state.summary.isEmpty ? (
-            <div className="flex min-h-[300px] items-center justify-center p-6">
-              <div className="max-w-sm text-center">
-                <h3 className="text-base font-semibold">还没有物品</h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                  家庭空间已经准备好。下一步会接入新增物品表单。
-                </p>
-              </div>
+          <div className="grid gap-3 border-b border-[var(--border)] p-4 lg:grid-cols-2">
+            <ExpirationPanel
+              emptyText="暂无即将过期物品"
+              items={expirationHighlights.soonItems}
+              title="即将过期物品"
+              tone="soon"
+            />
+            <ExpirationPanel
+              emptyText="暂无已过期物品"
+              items={expirationHighlights.expiredItems}
+              title="已过期物品"
+              tone="expired"
+            />
+          </div>
+
+          <form
+            className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-[1fr_180px] xl:grid-cols-[1fr_180px_1fr_160px_auto]"
+            onSubmit={handleSaveItem}
+          >
+            <label className="grid gap-2 text-sm font-medium">
+              物品名称
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                maxLength={120}
+                onChange={(event) =>
+                  setItemForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="例如：感冒药"
+                value={itemForm.name}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              位置
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setItemForm((current) => ({
+                    ...current,
+                    locationId: event.target.value,
+                  }))
+                }
+                value={itemForm.locationId}
+              >
+                <option value="">未设置位置</option>
+                {state.summary.locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.areaName} / {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              备注
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                maxLength={1000}
+                onChange={(event) =>
+                  setItemForm((current) => ({ ...current, note: event.target.value }))
+                }
+                placeholder="可选"
+                value={itemForm.note}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              过期日
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setItemForm((current) => ({
+                    ...current,
+                    expireDate: event.target.value,
+                  }))
+                }
+                type="date"
+                value={itemForm.expireDate}
+              />
+            </label>
+            <button
+              className="h-10 self-end rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+              disabled={isSaving}
+              type="submit"
+            >
+              {editingItemId ? "保存修改" : "新增物品"}
+            </button>
+          </form>
+
+          {editingItemId ? (
+            <div className="border-b border-[var(--border)] px-4 py-3">
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={() => {
+                  setEditingItemId(null);
+                  setItemForm({ name: "", locationId: "", note: "", expireDate: "" });
+                }}
+                type="button"
+              >
+                取消编辑
+              </button>
             </div>
+          ) : null}
+
+          {formMessage ? (
+            <p className="border-b border-[var(--border)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+              {formMessage}
+            </p>
+          ) : null}
+
+          {state.summary.isEmpty ? (
+            <EmptyState text="先创建区域和位置，再添加第一个物品。" />
+          ) : visibleItems.length === 0 ? (
+            <EmptyState text="没有匹配的物品。" />
           ) : (
             <ul className="divide-y divide-[var(--border)]">
-              {state.summary.recentItems.map((item) => (
+              {visibleItems.map((item) => (
                 <li className="p-4" key={item.id}>
-                  <p className="font-medium">{item.name}</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    {item.note || "无备注"}
-                    {item.expireDate ? ` · 到期 ${item.expireDate}` : ""}
-                  </p>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                        {item.areaName} / {item.locationName}
+                        {item.note ? ` · ${item.note}` : " · 无备注"}
+                      </p>
+                      <ExpirationBadge item={item} />
+                    </div>
+                    <div className="flex shrink-0 gap-3">
+                      <button className="text-sm" onClick={() => startEditItem(item)} type="button">
+                        编辑
+                      </button>
+                      <button
+                        className="text-sm text-red-600"
+                        onClick={() => handleDeleteItem(item.id)}
+                        type="button"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -242,4 +802,83 @@ function Metric({ label, value }: { label: string; value: number }) {
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-[300px] items-center justify-center p-6">
+      <div className="max-w-sm text-center">
+        <h3 className="text-base font-semibold">暂无内容</h3>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+          {text}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ExpirationPanel({
+  emptyText,
+  items,
+  title,
+  tone,
+}: {
+  emptyText: string;
+  items: DashboardItem[];
+  title: string;
+  tone: "soon" | "expired";
+}) {
+  const toneClass =
+    tone === "expired"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-amber-200 bg-amber-50 text-amber-800";
+
+  return (
+    <section className={`rounded-md border p-3 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="text-xs font-medium">{items.length} 个</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-3 text-sm opacity-80">{emptyText}</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {items.slice(0, 5).map((item) => (
+            <li className="rounded-md bg-white/70 p-2" key={item.id}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 truncate text-sm font-medium">{item.name}</p>
+                <time className="shrink-0 text-xs font-medium">{item.expireDate}</time>
+              </div>
+              <p className="mt-1 truncate text-xs opacity-80">
+                {item.areaName} / {item.locationName}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.length > 5 ? (
+        <p className="mt-2 text-xs opacity-80">还有 {items.length - 5} 个</p>
+      ) : null}
+    </section>
+  );
+}
+
+function ExpirationBadge({ item }: { item: DashboardItem }) {
+  if (item.expirationStatus === "none") {
+    return null;
+  }
+
+  const labels = {
+    expired: `已过期 ${item.expireDate}`,
+    soon: `即将过期 ${item.expireDate}`,
+    normal: `到期 ${item.expireDate}`,
+  };
+  const className =
+    item.expirationStatus === "expired"
+      ? "text-red-700"
+      : item.expirationStatus === "soon"
+        ? "text-amber-700"
+        : "text-[var(--muted-foreground)]";
+
+  return <p className={`mt-2 text-sm ${className}`}>{labels[item.expirationStatus]}</p>;
 }

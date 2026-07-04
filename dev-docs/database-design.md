@@ -374,6 +374,27 @@ using (public.is_household_member(household_id));
 
 实现方式：初始 migration 提供 `public.create_default_household(display_name text default '')`，由登录后的 Next.js 流程调用。这个函数会创建 profile、默认 household、owner membership 和默认区域；如果用户已经有 owner household，会返回已有 household。
 
+### 初始化修复 migration
+
+`supabase/migrations/202607030001_repair_default_household_rls.sql` 用于修复真实 Supabase 项目里可能出现的初始化漂移：
+
+- 用户已有 `households` 但缺少 `household_members` owner 关系时，补回 owner membership。
+- 用户已有 owner household 但缺少默认区域时，补回 `默认区域`。
+- 重新定义 `public.is_household_member` 和 `public.create_default_household`，保持第一版权限模型不变。
+- 重新落稳 `locations` 的 select/insert/update/delete RLS 策略。
+- 重新落稳 `items_set_created_by` trigger 和 `items` 的 select/insert/update/delete RLS 策略。
+
+这个 migration 不新增表、不新增角色、不改变第一版单账号私有清单边界。
+
+`supabase/migrations/202607030002_reset_inventory_rls_policies.sql` 用于真实 Supabase 项目 RLS 策略疑似漂移时的二次修复：
+
+- 删除 `areas`、`locations`、`items` 上现有 RLS policies。
+- 按项目真源重新创建这三类库存表的 member-only select/insert/update/delete 策略。
+- 重新创建 `items_set_created_by` trigger。
+- 最后输出当前 policy 列表，供验收记录。
+
+这个 migration 不改表结构，不扩大用户数据访问范围。
+
 ## 数据操作安全表
 
 | 操作 | 登录要求 | 权限规则 | 校验位置 | 负例 |
@@ -403,6 +424,8 @@ using (public.is_household_member(household_id));
 - RLS 策略尚未在真实 Supabase 项目验证。
 - `locations.area_id` 和 `items.location_id` 的同 household 约束尚未在真实 Supabase 项目验证。
 - 用户注册后的默认 household 初始化函数尚未在真实 Supabase 项目验证。
+- `202607030001_repair_default_household_rls.sql` 尚未在真实 Supabase 项目执行和验证。
+- `202607030002_reset_inventory_rls_policies.sql` 尚未在真实 Supabase 项目执行和验证。
 
 ## 下一步
 

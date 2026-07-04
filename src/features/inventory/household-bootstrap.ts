@@ -1,15 +1,30 @@
 import { initializeDefaultHousehold } from "../auth/default-household";
 
 type HouseholdBootstrapClient = {
-  from: (table: "household_members") => {
-    select: (columns: "household_id") => {
-      eq: (
-        column: "user_id",
-        value: string,
-      ) => {
-        limit: (count: 1) => {
+  from: {
+    (table: "household_members"): {
+      select: (columns: "household_id") => {
+        eq: (
+          column: "user_id",
+          value: string,
+        ) => {
+          limit: (count: 1) => {
+            maybeSingle: () => Promise<{
+              data: { household_id: string } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    };
+    (table: "households"): {
+      select: (columns: "id") => {
+        eq: (
+          column: "id",
+          value: string,
+        ) => {
           maybeSingle: () => Promise<{
-            data: { household_id: string } | null;
+            data: { id: string } | null;
             error: { message: string } | null;
           }>;
         };
@@ -40,7 +55,19 @@ export async function getOrCreateDefaultHouseholdId(
   }
 
   if (membershipResult.data?.household_id) {
-    return membershipResult.data.household_id;
+    const visibleHouseholdResult = await supabase
+      .from("households")
+      .select("id")
+      .eq("id", membershipResult.data.household_id)
+      .maybeSingle();
+
+    if (visibleHouseholdResult.error) {
+      throw new Error(visibleHouseholdResult.error.message);
+    }
+
+    if (visibleHouseholdResult.data?.id) {
+      return visibleHouseholdResult.data.id;
+    }
   }
 
   return initializeDefaultHousehold(supabase, user.email ?? user.id);
