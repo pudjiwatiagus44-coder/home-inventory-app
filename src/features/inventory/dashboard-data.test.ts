@@ -3,6 +3,7 @@ import {
   buildDashboardSummary,
   createDashboardHousehold,
   filterInventoryItems,
+  filterInventoryLocations,
   getExpirationHighlights,
   getExpirationStatus,
   isMissingAuthSessionError,
@@ -231,6 +232,45 @@ describe("filterInventoryItems", () => {
         locationId: "location-1",
       }),
     ).toEqual([items[0]]);
+  });
+});
+
+describe("filterInventoryLocations", () => {
+  const locations = [
+    {
+      id: "location-1",
+      name: "上层抽屉",
+      areaId: "area-1",
+      areaName: "厨房",
+    },
+    {
+      id: "location-2",
+      name: "药箱",
+      areaId: "area-2",
+      areaName: "卧室",
+    },
+    {
+      id: "location-3",
+      name: "备用箱",
+      areaId: null,
+      areaName: "未分区",
+    },
+  ];
+
+  it("returns all locations when no area is selected", () => {
+    expect(filterInventoryLocations(locations, "")).toEqual(locations);
+  });
+
+  it("returns only locations in the selected area", () => {
+    expect(filterInventoryLocations(locations, "area-1")).toEqual([
+      locations[0],
+    ]);
+  });
+
+  it("returns unassigned locations when the unassigned filter is selected", () => {
+    expect(filterInventoryLocations(locations, "__unassigned__")).toEqual([
+      locations[2],
+    ]);
   });
 });
 

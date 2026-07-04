@@ -7,6 +7,7 @@ import {
   deleteInventoryItem,
   updateInventoryArea,
   updateInventoryItem,
+  updateInventoryLocation,
   validateAreaInput,
   validateInventoryItemInput,
   validateLocationInput,
@@ -120,6 +121,92 @@ describe("createInventoryLocation", () => {
           household_id: "household-1",
           area_id: "area-1",
           name: "上层抽屉",
+        },
+      ],
+    ]);
+  });
+});
+
+describe("updateInventoryLocation", () => {
+  it("updates a location name and area in the current household", async () => {
+    const updates: unknown[] = [];
+    const supabase = {
+      from: (table: string) => ({
+        update: (payload: unknown) => {
+          updates.push([table, payload]);
+          return {
+            eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  single: async () => ({
+                    data: { id: "location-1", name: "下层抽屉" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        },
+      }),
+    };
+
+    await expect(
+      updateInventoryLocation(supabase, {
+        householdId: "household-1",
+        locationId: "location-1",
+        areaId: "area-2",
+        name: " 下层抽屉 ",
+      }),
+    ).resolves.toEqual({ id: "location-1", name: "下层抽屉" });
+
+    expect(updates).toEqual([
+      [
+        "locations",
+        {
+          area_id: "area-2",
+          name: "下层抽屉",
+        },
+      ],
+    ]);
+  });
+
+  it("can move a location back to no area", async () => {
+    const updates: unknown[] = [];
+    const supabase = {
+      from: (table: string) => ({
+        update: (payload: unknown) => {
+          updates.push([table, payload]);
+          return {
+            eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  single: async () => ({
+                    data: { id: "location-1", name: "备用箱" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        },
+      }),
+    };
+
+    await expect(
+      updateInventoryLocation(supabase, {
+        householdId: "household-1",
+        locationId: "location-1",
+        areaId: "",
+        name: "备用箱",
+      }),
+    ).resolves.toEqual({ id: "location-1", name: "备用箱" });
+
+    expect(updates).toEqual([
+      [
+        "locations",
+        {
+          area_id: null,
+          name: "备用箱",
         },
       ],
     ]);

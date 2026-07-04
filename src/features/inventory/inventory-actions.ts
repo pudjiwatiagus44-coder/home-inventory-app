@@ -107,7 +107,8 @@ type InventoryActionClient = {
     (table: "areas"): InsertBuilder<InventoryAreaRow> &
       UpdateBuilder<InventoryAreaRow> &
       DeleteBuilder;
-    (table: "locations"): InsertBuilder<InventoryLocationRow>;
+    (table: "locations"): InsertBuilder<InventoryLocationRow> &
+      UpdateBuilder<InventoryLocationRow>;
     (table: "items"): InsertBuilder<InventoryItemRow> &
       UpdateBuilder<InventoryItemRow> &
       DeleteBuilder;
@@ -204,6 +205,38 @@ export async function createInventoryLocation(
 
   if (!data) {
     throw new Error("新增位置后没有返回数据");
+  }
+
+  return data;
+}
+
+export async function updateInventoryLocation(
+  supabase: InventoryActionClient,
+  input: LocationInput & { householdId: string; locationId: string },
+): Promise<InventoryLocationRow> {
+  const validated = validateLocationInput(input);
+
+  if (!validated.isValid) {
+    throw new Error(validated.error);
+  }
+
+  const { data, error } = await supabase
+    .from("locations")
+    .update({
+      area_id: validated.value.areaId,
+      name: validated.value.name,
+    })
+    .eq("id", input.locationId)
+    .eq("household_id", input.householdId)
+    .select("id,name")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("更新位置后没有返回数据");
   }
 
   return data;

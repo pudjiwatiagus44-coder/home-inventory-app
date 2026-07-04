@@ -165,6 +165,21 @@ export function filterInventoryItems(
   });
 }
 
+export function filterInventoryLocations(
+  locations: DashboardLocation[],
+  areaId: string,
+): DashboardLocation[] {
+  if (!areaId) {
+    return locations;
+  }
+
+  if (areaId === "__unassigned__") {
+    return locations.filter((location) => !location.areaId);
+  }
+
+  return locations.filter((location) => location.areaId === areaId);
+}
+
 export function getExpirationHighlights(
   items: DashboardItem[],
 ): ExpirationHighlights {

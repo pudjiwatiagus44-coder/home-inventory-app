@@ -31,6 +31,29 @@
   -> 确认用户 B 看不到用户 A 的数据
 ```
 
+## 位置编辑与位置筛选验收路径
+
+```text
+登录进入 /app
+  -> 创建或确认至少两个区域
+  -> 创建或确认多个位置分别属于不同区域
+  -> 在位置列表点击某个位置右侧“编辑”
+  -> 在弹窗中修改位置名称并保存
+  -> 再次打开编辑弹窗，把该位置改到另一个区域或改为未分区
+  -> 在位置列表上方选择某个区域
+  -> 确认只显示该区域下的位置
+  -> 选择“全部区域”
+  -> 确认恢复显示全部位置
+```
+
+验收边界：
+
+- 本功能不新增数据库字段。
+- 本功能不修改 RLS。
+- 本功能不改变家庭共享、照片、扫码、支付、原生 App 的不做范围。
+- 位置编辑必须按当前用户 household 更新，不能只靠前端隐藏按钮。
+- 位置列表筛选只影响位置列表，不影响右侧物品清单的搜索/筛选状态。
+
 ## 证据记录
 
 当前运行证据：
@@ -64,6 +87,11 @@
 - 2026-07-04 Git checkpoint 证据：上一轮验证提交 `4d69808 checkpoint: inventory mvp validation` 用于记录 inventory MVP 验证状态；本次文档收口由本轮 Git 提交记录。
 - 2026-07-04 文档收口状态：`dev-docs/stages/mvp-first-loop.md`、`dev-docs/database-design.md`、`dev-docs/acceptance.md` 已对齐第一阶段当前状态：功能代码和 RLS 负例已有证据，仍需补完整浏览器用户验收陪跑和移动端操作体验。
 - 2026-07-04 文档收口后本地验证证据：在 `C:\Users\Administrator\Desktop\home-inventory-app` 执行 `npm test`，exit code 0，Vitest 通过 7 个测试文件 / 40 个测试；执行 `npm run lint`，exit code 0，ESLint 无报错输出；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 编译成功、TypeScript 通过、静态生成 6/6，生成路由 `/`、`/_not-found`、`/app`、`/login`。构建日志显示读取 `.env.local`，该文件仅用于本地环境变量，不应提交到 Git。
+- 2026-07-04 位置编辑与位置筛选开工记录：确认采用轻量弹窗方案；范围为位置重命名、修改所属区域、位置列表按区域筛选；不新增数据库字段、不修改 RLS、不加入家庭共享/照片/扫码/支付。
+- 2026-07-04 位置编辑与位置筛选代码证据：新增 `updateInventoryLocation`，按 `id + household_id` 更新 `locations.name` 和 `locations.area_id`；新增 `filterInventoryLocations`，支持全部区域、指定区域和未分区筛选；`/app` 位置列表右侧新增“编辑”入口，点击后打开轻量弹窗，可修改名称和所属区域；位置列表上方新增“显示区域”筛选，筛选只影响位置列表，不影响右侧物品清单筛选。
+- 2026-07-04 位置编辑与位置筛选测试证据：先运行针对 `updateInventoryLocation` 和 `filterInventoryLocations` 的失败测试，失败原因为新函数不存在；实现后运行 `npm test -- src/features/inventory/inventory-actions.test.ts src/features/inventory/dashboard-data.test.ts`，exit code 0，2 个测试文件 / 32 个测试通过。
+- 2026-07-04 位置编辑与位置筛选本地验证证据：执行 `npm test`，exit code 0，Vitest 通过 7 个测试文件 / 45 个测试；执行 `npm run lint`，exit code 0；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 编译成功、TypeScript 通过、静态生成 6/6，生成路由 `/`、`/_not-found`、`/app`、`/login`。
+- 2026-07-04 浏览器未登录验证证据：本地服务 `http://127.0.0.1:3000` 启动成功；打开 `http://127.0.0.1:3000/app`，页面标题为 `Home Inventory`，显示“请先登录”和“去登录”，无页面 console error。
 
 后续每个阶段必须记录：
 
@@ -100,6 +128,9 @@
 
 - 真实浏览器中完整走一遍新增区域、带区域新增位置、新增物品、搜索、筛选、编辑、删除。
 - 移动端完整操作体验和截图证据。
+- 位置编辑弹窗：重命名位置、修改所属区域、改为未分区、保存失败提示。
+- 位置列表区域筛选：全部区域、指定区域、无匹配位置空状态。
+- 真实登录后的浏览器验收：打开编辑位置弹窗、保存位置名称、修改所属区域、按区域筛选位置列表、刷新后仍保存。
 
 ## 停止条件
 

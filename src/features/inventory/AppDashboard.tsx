@@ -10,6 +10,7 @@ import {
   DashboardItem,
   DashboardSummary,
   filterInventoryItems,
+  filterInventoryLocations,
   getExpirationHighlights,
   HouseholdRow,
   isMissingAuthSessionError,
@@ -25,6 +26,7 @@ import {
   deleteInventoryItem,
   updateInventoryArea,
   updateInventoryItem,
+  updateInventoryLocation,
   validateAreaInput,
   validateInventoryItemInput,
   validateLocationInput,
@@ -44,6 +46,8 @@ export function AppDashboard() {
   const [areaForm, setAreaForm] = useState({ name: "", color: areaColors[0] });
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [locationForm, setLocationForm] = useState({ name: "", areaId: "" });
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [locationAreaFilter, setLocationAreaFilter] = useState("");
   const [itemForm, setItemForm] = useState({
     name: "",
     locationId: "",
@@ -186,6 +190,14 @@ export function AppDashboard() {
       : state.summary.locations;
   }, [filters.areaId, state]);
 
+  const visibleLocations = useMemo(() => {
+    if (state.status !== "ready") {
+      return [];
+    }
+
+    return filterInventoryLocations(state.summary.locations, locationAreaFilter);
+  }, [locationAreaFilter, state]);
+
   async function handleSignOut() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
@@ -288,6 +300,40 @@ export function AppDashboard() {
     }
   }
 
+  async function handleSaveLocationEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormMessage(null);
+
+    const validation = validateLocationInput(locationForm);
+    if (!validation.isValid) {
+      setFormMessage(validation.error);
+      return;
+    }
+
+    if (state.status !== "ready" || !editingLocationId) {
+      setFormMessage("位置尚未选择");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await updateInventoryLocation(supabase, {
+        householdId: state.summary.householdId,
+        locationId: editingLocationId,
+        ...validation.value,
+      });
+      setLocationForm({ name: "", areaId: "" });
+      setEditingLocationId(null);
+      setFormMessage("位置已更新");
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "位置保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleSaveItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormMessage(null);
@@ -356,6 +402,18 @@ export function AppDashboard() {
   function startEditArea(area: DashboardSummary["areas"][number]) {
     setEditingAreaId(area.id);
     setAreaForm({ name: area.name, color: area.color });
+  }
+
+  function startEditLocation(location: DashboardSummary["locations"][number]) {
+    setFormMessage(null);
+    setEditingLocationId(location.id);
+    setLocationForm({ name: location.name, areaId: location.areaId ?? "" });
+  }
+
+  function cancelLocationEdit() {
+    setFormMessage(null);
+    setEditingLocationId(null);
+    setLocationForm({ name: "", areaId: "" });
   }
 
   function startEditItem(item: DashboardItem) {
@@ -570,16 +628,47 @@ export function AppDashboard() {
               </button>
             </form>
 
+            <label className="mt-4 grid gap-2 text-sm font-medium">
+              显示区域
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) => setLocationAreaFilter(event.target.value)}
+                value={locationAreaFilter}
+              >
+                <option value="">全部区域</option>
+                <option value="__unassigned__">未分区</option>
+                {state.summary.areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <ul className="mt-4 divide-y divide-[var(--border)]">
-              {state.summary.locations.map((location) => (
-                <li className="py-3" key={location.id}>
-                  <p className="text-sm font-medium">{location.name}</p>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    {location.areaName}
-                  </p>
+              {visibleLocations.map((location) => (
+                <li className="flex items-center justify-between gap-3 py-3" key={location.id}>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{location.name}</p>
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                      {location.areaName}
+                    </p>
+                  </div>
+                  <button
+                    className="shrink-0 text-sm"
+                    onClick={() => startEditLocation(location)}
+                    type="button"
+                  >
+                    编辑
+                  </button>
                 </li>
               ))}
             </ul>
+            {visibleLocations.length === 0 ? (
+              <p className="mt-4 rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                当前区域暂无位置。
+              </p>
+            ) : null}
           </section>
         </aside>
 
@@ -781,6 +870,85 @@ export function AppDashboard() {
           )}
         </section>
       </main>
+
+      {editingLocationId ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+        >
+          <section className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">编辑位置</h2>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={cancelLocationEdit}
+                type="button"
+              >
+                取消
+              </button>
+            </div>
+
+            <form className="grid gap-3" onSubmit={handleSaveLocationEdit}>
+              <label className="grid gap-2 text-sm font-medium">
+                位置名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  value={locationForm.name}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                所属区域
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      areaId: event.target.value,
+                    }))
+                  }
+                  value={locationForm.areaId}
+                >
+                  <option value="">未分区</option>
+                  {state.summary.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {formMessage ? (
+                <p className="rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                  {formMessage}
+                </p>
+              ) : null}
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+                  onClick={cancelLocationEdit}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                  disabled={isSaving}
+                  type="submit"
+                >
+                  保存修改
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
