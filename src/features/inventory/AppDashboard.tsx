@@ -57,6 +57,7 @@ export function AppDashboard() {
     expireDate: "",
   });
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     areaId: "",
@@ -499,8 +500,26 @@ export function AppDashboard() {
         </div>
       </header>
 
+      <section className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:px-6 xl:hidden">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-[var(--muted-foreground)]">快速查找</p>
+            <p className="truncate text-sm font-medium">
+              {filters.search ? `正在搜索：${filters.search}` : "搜索物品名称或备注"}
+            </p>
+          </div>
+          <button
+            className="h-10 shrink-0 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white"
+            onClick={() => setIsMobileSearchOpen(true)}
+            type="button"
+          >
+            搜索物品
+          </button>
+        </div>
+      </section>
+
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 xl:grid-cols-[320px_1fr]">
-        <aside className="order-2 space-y-4 xl:order-1">
+        <aside className="order-1 space-y-4">
           <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
             <h2 className="mb-4 text-sm font-semibold">概览</h2>
             <div className="grid grid-cols-3 gap-3 xl:grid-cols-1">
@@ -693,7 +712,7 @@ export function AppDashboard() {
           </section>
         </aside>
 
-        <section className="order-1 min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)] xl:order-2">
+        <section className="order-2 min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)]">
           <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold">物品清单</h2>
@@ -701,7 +720,7 @@ export function AppDashboard() {
                 {visibleItems.length} / {state.summary.itemCount} 个物品
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="hidden gap-2 xl:grid xl:grid-cols-3">
               <input
                 className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
                 onChange={(event) =>
@@ -926,6 +945,107 @@ export function AppDashboard() {
           )}
         </section>
       </main>
+
+      {isMobileSearchOpen ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end bg-black/40 px-3 py-3 sm:items-center sm:justify-center sm:px-4"
+          role="dialog"
+        >
+          <section className="max-h-[88vh] w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:max-w-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+              <div>
+                <h2 className="text-base font-semibold">搜索物品</h2>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  {visibleItems.length} / {state.summary.itemCount} 个物品
+                </p>
+              </div>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={() => setIsMobileSearchOpen(false)}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+
+            <div className="grid gap-2 border-b border-[var(--border)] p-4">
+              <input
+                autoFocus
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, search: event.target.value }))
+                }
+                placeholder="搜索名称或备注"
+                value={filters.search}
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      areaId: event.target.value,
+                      locationId: "",
+                    }))
+                  }
+                  value={filters.areaId}
+                >
+                  <option value="">全部区域</option>
+                  {state.summary.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      locationId: event.target.value,
+                    }))
+                  }
+                  value={filters.locationId}
+                >
+                  <option value="">全部位置</option>
+                  {filteredLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="max-h-[48vh] overflow-y-auto">
+              {visibleItems.length === 0 ? (
+                <p className="p-4 text-sm text-[var(--muted-foreground)]">
+                  没有匹配的物品。
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--border)]">
+                  {visibleItems.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        className="block w-full px-4 py-3 text-left"
+                        onClick={() => setIsMobileSearchOpen(false)}
+                        type="button"
+                      >
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          {item.areaName} / {item.locationName}
+                          {item.note ? ` · ${item.note}` : ""}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {editingLocationId ? (
         <div
