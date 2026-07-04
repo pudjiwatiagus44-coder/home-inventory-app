@@ -39,6 +39,8 @@ type DashboardState =
   | { status: "error"; message: string }
   | { status: "ready"; summary: DashboardSummary; userId: string };
 
+type MobileQuickPanel = "search" | "item" | "location" | "area" | null;
+
 const areaColors = ["#64748b", "#256f6b", "#7c3aed", "#c2410c", "#be123c"];
 
 export function AppDashboard() {
@@ -57,7 +59,7 @@ export function AppDashboard() {
     expireDate: "",
   });
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [mobileQuickPanel, setMobileQuickPanel] = useState<MobileQuickPanel>(null);
   const [filters, setFilters] = useState({
     search: "",
     areaId: "",
@@ -215,6 +217,51 @@ export function AppDashboard() {
     router.push("/login");
   }
 
+  function openMobileQuickPanel(panel: Exclude<MobileQuickPanel, null>) {
+    setFormMessage(null);
+
+    if (panel === "area") {
+      setEditingAreaId(null);
+      setAreaForm({ name: "", color: areaColors[0] });
+    }
+
+    if (panel === "location") {
+      setEditingLocationId(null);
+      setLocationForm({ name: "", areaId: "" });
+    }
+
+    if (panel === "item") {
+      setEditingItemId(null);
+      setItemForm({
+        name: "",
+        areaId: "",
+        locationId: "",
+        note: "",
+        expireDate: "",
+      });
+    }
+
+    setMobileQuickPanel(panel);
+  }
+
+  async function handleMobileSaveArea(event: FormEvent<HTMLFormElement>) {
+    if (await handleSaveArea(event)) {
+      setMobileQuickPanel(null);
+    }
+  }
+
+  async function handleMobileCreateLocation(event: FormEvent<HTMLFormElement>) {
+    if (await handleCreateLocation(event)) {
+      setMobileQuickPanel(null);
+    }
+  }
+
+  async function handleMobileSaveItem(event: FormEvent<HTMLFormElement>) {
+    if (await handleSaveItem(event)) {
+      setMobileQuickPanel(null);
+    }
+  }
+
   async function handleSaveArea(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormMessage(null);
@@ -222,12 +269,12 @@ export function AppDashboard() {
     const validation = validateAreaInput(areaForm);
     if (!validation.isValid) {
       setFormMessage(validation.error);
-      return;
+      return false;
     }
 
     if (state.status !== "ready") {
       setFormMessage("家庭空间尚未加载完成");
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -250,8 +297,10 @@ export function AppDashboard() {
       setAreaForm({ name: "", color: areaColors[0] });
       setEditingAreaId(null);
       await loadDashboard();
+      return true;
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "区域保存失败");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -286,12 +335,12 @@ export function AppDashboard() {
     const validation = validateLocationInput(locationForm);
     if (!validation.isValid) {
       setFormMessage(validation.error);
-      return;
+      return false;
     }
 
     if (state.status !== "ready") {
       setFormMessage("家庭空间尚未加载完成");
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -304,8 +353,10 @@ export function AppDashboard() {
       setLocationForm({ name: "", areaId: "" });
       setFormMessage("位置已保存");
       await loadDashboard();
+      return true;
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "位置保存失败");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -352,12 +403,12 @@ export function AppDashboard() {
     const validation = validateInventoryItemInput(itemForm);
     if (!validation.isValid) {
       setFormMessage(validation.error);
-      return;
+      return false;
     }
 
     if (state.status !== "ready") {
       setFormMessage("家庭空间尚未加载完成");
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -387,8 +438,10 @@ export function AppDashboard() {
       });
       setEditingItemId(null);
       await loadDashboard();
+      return true;
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "物品保存失败");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -501,20 +554,43 @@ export function AppDashboard() {
       </header>
 
       <section className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:px-6 xl:hidden">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs text-[var(--muted-foreground)]">快速查找</p>
+        <div className="mx-auto grid max-w-7xl gap-3">
+          <div>
+            <p className="text-xs text-[var(--muted-foreground)]">快捷操作</p>
             <p className="truncate text-sm font-medium">
-              {filters.search ? `正在搜索：${filters.search}` : "搜索物品名称或备注"}
+              {filters.search ? `正在搜索：${filters.search}` : "搜索或新增常用内容"}
             </p>
           </div>
-          <button
-            className="h-10 shrink-0 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white"
-            onClick={() => setIsMobileSearchOpen(true)}
-            type="button"
-          >
-            搜索物品
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white"
+              onClick={() => openMobileQuickPanel("search")}
+              type="button"
+            >
+              搜索物品
+            </button>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              onClick={() => openMobileQuickPanel("item")}
+              type="button"
+            >
+              新增物品
+            </button>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              onClick={() => openMobileQuickPanel("location")}
+              type="button"
+            >
+              新增位置
+            </button>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              onClick={() => openMobileQuickPanel("area")}
+              type="button"
+            >
+              新增区域
+            </button>
+          </div>
         </div>
       </section>
 
@@ -946,7 +1022,7 @@ export function AppDashboard() {
         </section>
       </main>
 
-      {isMobileSearchOpen ? (
+      {mobileQuickPanel === "search" ? (
         <div
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-end bg-black/40 px-3 py-3 sm:items-center sm:justify-center sm:px-4"
@@ -962,7 +1038,7 @@ export function AppDashboard() {
               </div>
               <button
                 className="text-sm text-[var(--muted-foreground)]"
-                onClick={() => setIsMobileSearchOpen(false)}
+                onClick={() => setMobileQuickPanel(null)}
                 type="button"
               >
                 关闭
@@ -1029,7 +1105,7 @@ export function AppDashboard() {
                     <li key={item.id}>
                       <button
                         className="block w-full px-4 py-3 text-left"
-                        onClick={() => setIsMobileSearchOpen(false)}
+                        onClick={() => setMobileQuickPanel(null)}
                         type="button"
                       >
                         <p className="text-sm font-medium">{item.name}</p>
@@ -1043,6 +1119,269 @@ export function AppDashboard() {
                 </ul>
               )}
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {mobileQuickPanel === "item" ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end bg-black/40 px-3 py-3 sm:items-center sm:justify-center sm:px-4"
+          role="dialog"
+        >
+          <section className="max-h-[88vh] w-full overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:max-w-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+              <h2 className="text-base font-semibold">新增物品</h2>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={() => setMobileQuickPanel(null)}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+
+            <form className="grid gap-3 p-4" onSubmit={handleMobileSaveItem}>
+              <label className="grid gap-2 text-sm font-medium">
+                物品名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={120}
+                  onChange={(event) =>
+                    setItemForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  placeholder="例如：感冒药"
+                  value={itemForm.name}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                区域
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setItemForm((current) => ({
+                      ...current,
+                      areaId: event.target.value,
+                      locationId: "",
+                    }))
+                  }
+                  value={itemForm.areaId}
+                >
+                  <option value="">不设置位置</option>
+                  <option value="__unassigned__">未分区</option>
+                  {state.summary.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                位置
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  disabled={!itemForm.areaId}
+                  onChange={(event) =>
+                    setItemForm((current) => ({
+                      ...current,
+                      locationId: event.target.value,
+                    }))
+                  }
+                  value={itemForm.locationId}
+                >
+                  <option value="">
+                    {!itemForm.areaId
+                      ? "请先选择区域"
+                      : itemFormLocations.length === 0
+                        ? "该区域暂无位置"
+                        : "请选择位置"}
+                  </option>
+                  {itemFormLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                备注
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={1000}
+                  onChange={(event) =>
+                    setItemForm((current) => ({ ...current, note: event.target.value }))
+                  }
+                  placeholder="可选"
+                  value={itemForm.note}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                过期日
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setItemForm((current) => ({
+                      ...current,
+                      expireDate: event.target.value,
+                    }))
+                  }
+                  type="date"
+                  value={itemForm.expireDate}
+                />
+              </label>
+              {formMessage ? (
+                <p className="rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                  {formMessage}
+                </p>
+              ) : null}
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                保存物品
+              </button>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {mobileQuickPanel === "location" ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end bg-black/40 px-3 py-3 sm:items-center sm:justify-center sm:px-4"
+          role="dialog"
+        >
+          <section className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:max-w-md">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+              <h2 className="text-base font-semibold">新增位置</h2>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={() => setMobileQuickPanel(null)}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+
+            <form className="grid gap-3 p-4" onSubmit={handleMobileCreateLocation}>
+              <label className="grid gap-2 text-sm font-medium">
+                位置名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：上层抽屉"
+                  value={locationForm.name}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                所属区域
+                <select
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onChange={(event) =>
+                    setLocationForm((current) => ({
+                      ...current,
+                      areaId: event.target.value,
+                    }))
+                  }
+                  value={locationForm.areaId}
+                >
+                  <option value="">未分区</option>
+                  {state.summary.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {formMessage ? (
+                <p className="rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                  {formMessage}
+                </p>
+              ) : null}
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                保存位置
+              </button>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {mobileQuickPanel === "area" ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end bg-black/40 px-3 py-3 sm:items-center sm:justify-center sm:px-4"
+          role="dialog"
+        >
+          <section className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:max-w-md">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+              <h2 className="text-base font-semibold">新增区域</h2>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={() => setMobileQuickPanel(null)}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+
+            <form className="grid gap-3 p-4" onSubmit={handleMobileSaveArea}>
+              <label className="grid gap-2 text-sm font-medium">
+                区域名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setAreaForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：厨房"
+                  value={areaForm.name}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2" role="radiogroup">
+                {areaColors.map((color) => (
+                  <button
+                    aria-label={`区域颜色 ${color}`}
+                    className="h-8 w-8 rounded-full border-2"
+                    key={color}
+                    onClick={() =>
+                      setAreaForm((current) => ({ ...current, color }))
+                    }
+                    style={{
+                      backgroundColor: color,
+                      borderColor:
+                        areaForm.color === color ? "var(--foreground)" : "white",
+                    }}
+                    type="button"
+                  />
+                ))}
+              </div>
+              {formMessage ? (
+                <p className="rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                  {formMessage}
+                </p>
+              ) : null}
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                保存区域
+              </button>
+            </form>
           </section>
         </div>
       ) : null}
