@@ -180,6 +180,22 @@ export function filterInventoryLocations(
   return locations.filter((location) => location.areaId === areaId);
 }
 
+export function getLocationAreaFilterValue(
+  locations: DashboardLocation[],
+  locationId: string | null | undefined,
+) {
+  if (!locationId) {
+    return "";
+  }
+
+  const location = locations.find((candidate) => candidate.id === locationId);
+  if (!location) {
+    return "";
+  }
+
+  return location.areaId ?? "__unassigned__";
+}
+
 export function getExpirationHighlights(
   items: DashboardItem[],
 ): ExpirationHighlights {

@@ -54,6 +54,31 @@
 - 位置编辑必须按当前用户 household 更新，不能只靠前端隐藏按钮。
 - 位置列表筛选只影响位置列表，不影响右侧物品清单的搜索/筛选状态。
 
+## 物品表单区域优先选择验收路径
+
+```text
+登录进入 /app
+  -> 创建或确认至少两个区域
+  -> 创建或确认多个位置分别属于不同区域
+  -> 在新增物品表单先选择某个区域
+  -> 确认右侧位置下拉只显示该区域下的位置
+  -> 切换到另一个区域
+  -> 确认位置选择被清空，且位置下拉只显示新区域下的位置
+  -> 选择“未分区”
+  -> 确认位置下拉只显示未分区位置
+  -> 新增一个带区域下位置的物品并保存
+  -> 点击该物品“编辑”
+  -> 确认表单自动显示该物品所属区域和位置
+```
+
+验收边界：
+
+- 本功能不新增数据库字段。
+- 本功能不修改 RLS。
+- 本功能不改变家庭共享、照片、扫码、支付、原生 App 的不做范围。
+- 物品仍通过现有 `items.location_id` 关联位置，并通过位置间接归入区域。
+- 区域选择只用于限制物品表单中的位置下拉，不新增 `items.area_id`。
+
 ## 证据记录
 
 当前运行证据：
@@ -92,6 +117,10 @@
 - 2026-07-04 位置编辑与位置筛选测试证据：先运行针对 `updateInventoryLocation` 和 `filterInventoryLocations` 的失败测试，失败原因为新函数不存在；实现后运行 `npm test -- src/features/inventory/inventory-actions.test.ts src/features/inventory/dashboard-data.test.ts`，exit code 0，2 个测试文件 / 32 个测试通过。
 - 2026-07-04 位置编辑与位置筛选本地验证证据：执行 `npm test`，exit code 0，Vitest 通过 7 个测试文件 / 45 个测试；执行 `npm run lint`，exit code 0；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 编译成功、TypeScript 通过、静态生成 6/6，生成路由 `/`、`/_not-found`、`/app`、`/login`。
 - 2026-07-04 浏览器未登录验证证据：本地服务 `http://127.0.0.1:3000` 启动成功；打开 `http://127.0.0.1:3000/app`，页面标题为 `Home Inventory`，显示“请先登录”和“去登录”，无页面 console error。
+- 2026-07-04 物品表单区域优先选择开工记录：范围为新增/编辑物品表单先选择区域，再选择该区域下的位置；未选区域时位置下拉不展示全部位置；切换区域时清空已选位置；选择“未分区”时只显示未分区位置；不新增数据库字段、不修改 RLS、不加入家庭共享/照片/扫码/支付。
+- 2026-07-04 物品表单区域优先选择代码证据：`/app` 物品表单新增前端 `areaId` 状态和“区域”下拉；位置下拉改为由当前区域筛选后的 `itemFormLocations` 驱动；保存物品仍复用现有 `createInventoryItem` / `updateInventoryItem` 和 `items.location_id`；新增 `getLocationAreaFilterValue` 用于编辑已有物品时从当前位置推导区域或“未分区”。
+- 2026-07-04 物品表单区域优先选择测试证据：先运行 `npm test -- src/features/inventory/dashboard-data.test.ts`，失败原因为 `getLocationAreaFilterValue is not a function`；实现后同一命令 exit code 0，1 个测试文件 / 18 个测试通过。
+- 2026-07-04 物品表单区域优先选择本地验证证据：执行 `npm test`，exit code 0，Vitest 通过 7 个测试文件 / 48 个测试；执行 `npm run lint`，exit code 0；执行 `npm run build`，首次发现 `startEditItem` 缺少 ready 状态收窄并已补 guard，复跑 exit code 0，Next.js 16.2.10 / Turbopack 编译成功、TypeScript 通过、静态生成 6/6，生成路由 `/`、`/_not-found`、`/app`、`/login`。
 
 后续每个阶段必须记录：
 
@@ -131,6 +160,7 @@
 - 位置编辑弹窗：重命名位置、修改所属区域、改为未分区、保存失败提示。
 - 位置列表区域筛选：全部区域、指定区域、无匹配位置空状态。
 - 真实登录后的浏览器验收：打开编辑位置弹窗、保存位置名称、修改所属区域、按区域筛选位置列表、刷新后仍保存。
+- 真实登录后的浏览器验收：新增/编辑物品时先选择区域，再确认位置下拉只显示该区域或未分区下的位置。
 
 ## 停止条件
 

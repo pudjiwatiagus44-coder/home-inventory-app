@@ -6,6 +6,7 @@ import {
   filterInventoryLocations,
   getExpirationHighlights,
   getExpirationStatus,
+  getLocationAreaFilterValue,
   isMissingAuthSessionError,
 } from "./dashboard-data";
 
@@ -271,6 +272,37 @@ describe("filterInventoryLocations", () => {
     expect(filterInventoryLocations(locations, "__unassigned__")).toEqual([
       locations[2],
     ]);
+  });
+});
+
+describe("getLocationAreaFilterValue", () => {
+  const locations = [
+    {
+      id: "location-1",
+      name: "上层抽屉",
+      areaId: "area-1",
+      areaName: "厨房",
+    },
+    {
+      id: "location-2",
+      name: "备用箱",
+      areaId: null,
+      areaName: "未分区",
+    },
+  ];
+
+  it("returns the location area for an existing assigned location", () => {
+    expect(getLocationAreaFilterValue(locations, "location-1")).toBe("area-1");
+  });
+
+  it("returns the unassigned filter value for an existing unassigned location", () => {
+    expect(getLocationAreaFilterValue(locations, "location-2")).toBe(
+      "__unassigned__",
+    );
+  });
+
+  it("returns an empty value when no location is selected", () => {
+    expect(getLocationAreaFilterValue(locations, null)).toBe("");
   });
 });
 

@@ -12,6 +12,7 @@ import {
   filterInventoryItems,
   filterInventoryLocations,
   getExpirationHighlights,
+  getLocationAreaFilterValue,
   HouseholdRow,
   isMissingAuthSessionError,
   ItemRow,
@@ -50,6 +51,7 @@ export function AppDashboard() {
   const [locationAreaFilter, setLocationAreaFilter] = useState("");
   const [itemForm, setItemForm] = useState({
     name: "",
+    areaId: "",
     locationId: "",
     note: "",
     expireDate: "",
@@ -197,6 +199,14 @@ export function AppDashboard() {
 
     return filterInventoryLocations(state.summary.locations, locationAreaFilter);
   }, [locationAreaFilter, state]);
+
+  const itemFormLocations = useMemo(() => {
+    if (state.status !== "ready" || !itemForm.areaId) {
+      return [];
+    }
+
+    return filterInventoryLocations(state.summary.locations, itemForm.areaId);
+  }, [itemForm.areaId, state]);
 
   async function handleSignOut() {
     const supabase = createSupabaseBrowserClient();
@@ -367,7 +377,13 @@ export function AppDashboard() {
         });
         setFormMessage("物品已保存");
       }
-      setItemForm({ name: "", locationId: "", note: "", expireDate: "" });
+      setItemForm({
+        name: "",
+        areaId: "",
+        locationId: "",
+        note: "",
+        expireDate: "",
+      });
       setEditingItemId(null);
       await loadDashboard();
     } catch (error) {
@@ -417,9 +433,14 @@ export function AppDashboard() {
   }
 
   function startEditItem(item: DashboardItem) {
+    if (state.status !== "ready") {
+      return;
+    }
+
     setEditingItemId(item.id);
     setItemForm({
       name: item.name,
+      areaId: getLocationAreaFilterValue(state.summary.locations, item.locationId),
       locationId: item.locationId ?? "",
       note: item.note,
       expireDate: item.expireDate ?? "",
@@ -743,7 +764,7 @@ export function AppDashboard() {
           </div>
 
           <form
-            className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-[1fr_180px] xl:grid-cols-[1fr_180px_1fr_160px_auto]"
+            className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-2 xl:grid-cols-[1fr_160px_180px_1fr_160px_auto]"
             onSubmit={handleSaveItem}
           >
             <label className="grid gap-2 text-sm font-medium">
@@ -759,9 +780,32 @@ export function AppDashboard() {
               />
             </label>
             <label className="grid gap-2 text-sm font-medium">
+              区域
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                onChange={(event) =>
+                  setItemForm((current) => ({
+                    ...current,
+                    areaId: event.target.value,
+                    locationId: "",
+                  }))
+                }
+                value={itemForm.areaId}
+              >
+                <option value="">不设置位置</option>
+                <option value="__unassigned__">未分区</option>
+                {state.summary.areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
               位置
               <select
                 className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                disabled={!itemForm.areaId}
                 onChange={(event) =>
                   setItemForm((current) => ({
                     ...current,
@@ -770,10 +814,16 @@ export function AppDashboard() {
                 }
                 value={itemForm.locationId}
               >
-                <option value="">未设置位置</option>
-                {state.summary.locations.map((location) => (
+                <option value="">
+                  {!itemForm.areaId
+                    ? "请先选择区域"
+                    : itemFormLocations.length === 0
+                      ? "该区域暂无位置"
+                      : "请选择位置"}
+                </option>
+                {itemFormLocations.map((location) => (
                   <option key={location.id} value={location.id}>
-                    {location.areaName} / {location.name}
+                    {location.name}
                   </option>
                 ))}
               </select>
@@ -819,7 +869,13 @@ export function AppDashboard() {
                 className="text-sm text-[var(--muted-foreground)]"
                 onClick={() => {
                   setEditingItemId(null);
-                  setItemForm({ name: "", locationId: "", note: "", expireDate: "" });
+                  setItemForm({
+                    name: "",
+                    areaId: "",
+                    locationId: "",
+                    note: "",
+                    expireDate: "",
+                  });
                 }}
                 type="button"
               >
