@@ -8,13 +8,14 @@
 - `technical-selection.md` - 已确认技术路线、备选路线取舍、平台能力判断。
 - `architecture.md` - 主推荐架构、owner map、数据和权限边界。
 - `database-design.md` - Supabase schema、对象关系、RLS 策略和权限负例。
+- `deployment-route.md` - 已确认部署路线、免费层边界、环境变量和上线前检查。
 - `stages/mvp-first-loop.md` - 第一阶段实施计划：位置、物品 CRUD、搜索和权限负例。
 - `acceptance.md` - 阶段验收门槛、证据记录、停止条件。
 
 ## 文档职责
 
 - 产品方向变更先改 `project-brief.md`。
-- 技术栈、框架、数据库、部署路线变更先改 `technical-selection.md`。
+- 技术栈、框架、数据库变更先改 `technical-selection.md`；部署路线变更先改 `deployment-route.md` 并同步 `technical-selection.md`。
 - 数据模型、RLS、owner 边界、请求生命周期变更先改 `architecture.md`。
 - 表结构、字段、索引、RLS 策略和数据库负例变更先改 `database-design.md`。
 - 验收标准、证据要求、停止条件变更先改 `acceptance.md`。
@@ -29,6 +30,8 @@
 ## 当前阶段
 
 项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、登录后 `/app` 应用首页、数据库设计草案和初始 migration；用户已在 Supabase 项目中执行 migration 成功。用户 A/B 权限负例验证尚未完成。
+
+部署路线已确认初版：先使用 Vercel 免费层托管前端，Supabase 免费层继续承载 Auth 和 Postgres；上线前仍需完成 Vercel 项目创建、环境变量配置、Supabase Auth 回跳地址配置和生产 URL 验收。
 
 ## 进入开发前必须补齐
 

@@ -12,8 +12,32 @@
 | 数据影响 | 数据创建、更新、删除证据 | 已有代码、用户反馈和 RLS 负例证据；仍需完整浏览器陪跑 |
 | 权限安全 | RLS 设计、migration、真实 Supabase 用户 A/B 负例 | 已验证，13 项通过 / 0 项失败 |
 | 第三方 | Supabase 官方文档和 sandbox/API 证据 | 部分确认 |
+| 部署路线 | `dev-docs/deployment-route.md` 已确认 Vercel 免费层 + Supabase 免费层 | 已确认路线；尚未部署验证 |
 | UI | 截图、响应式、空/加载/错误状态 | 基础浏览器证据已记录；完整移动端操作体验未验证 |
 | Git | `.gitignore`、私有资料、checkpoint | 已有 checkpoint；本次文档收口由本轮 Git 提交记录 |
+
+## 部署验收路径
+
+```text
+创建或确认 GitHub 仓库
+  -> 在 Vercel 导入 Next.js 项目
+  -> 配置 Supabase public 环境变量
+  -> 配置 Supabase Auth Site URL 和 Redirect URLs
+  -> Vercel 构建成功
+  -> 打开生产 URL
+  -> 未登录访问 /app 被要求登录
+  -> 登录后进入 /app
+  -> 新增/搜索/编辑/删除一条测试物品
+  -> 刷新页面确认数据仍存在
+  -> 用另一个用户确认不能读取或修改该用户数据
+```
+
+部署验收边界：
+
+- 第一版只使用免费层，不承诺商业生产 SLA。
+- 不购买 VPS，不自建数据库，不改变技术路线。
+- 不提交 `.env.local`、service role key、数据库密码或真实用户数据。
+- 未完成生产 URL 登录、CRUD 和用户 A/B 权限负例前，不能声明线上版本安全可用。
 
 ## 第一阶段验收路径
 

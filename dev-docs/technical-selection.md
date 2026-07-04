@@ -106,9 +106,13 @@ RLS 是安全硬边界：
 
 托管建议：
 
-- 前端：Vercel 优先评估。
-- 数据和认证：Supabase。
+- 前端：Vercel 免费层作为第一版部署路线。
+- 数据和认证：Supabase 免费层继续承载 Auth、Postgres 和 RLS。
 - 本地开发：`npm install`、`npm run dev`、`.env.local`。
+
+部署路线真源：`dev-docs/deployment-route.md`。
+
+第一版部署目标是让用户在电脑关机、换网络、不在同一路由器下仍可登录使用。当前不购买 VPS，不自建数据库，不改变 Next.js + Supabase 主路线。
 
 不引入第二后端运行时。除非未来出现 Next.js/Supabase 不能合理覆盖的工作负载，否则不加入 Python、Go、Java 或独立 Node API 服务。
 
@@ -146,4 +150,3 @@ RLS 是安全硬边界：
 ## 下一步
 
 先设计数据库 schema 和 RLS 策略，再 scaffold Next.js 项目。不要在 RLS 设计完成前写真实业务功能。
-

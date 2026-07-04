@@ -4,7 +4,7 @@
 
 - 推荐产品形态：Web/PWA first，后续再评估移动 App。
 - 推荐技术路线：Next.js + TypeScript + Supabase Auth + Supabase Postgres + RLS + PWA。
-- 推荐部署形态：前端部署到托管平台，数据和认证由 Supabase 承载。
+- 推荐部署形态：前端部署到 Vercel 免费层，数据和认证由 Supabase 免费层承载；部署路线真源见 `dev-docs/deployment-route.md`。
 - 为什么这是主路线：本产品的核心难点是账号、用户数据隔离、结构化查询和长期保存。Supabase 提供 Auth、Postgres 和 Row Level Security，Next.js 提供清晰的前端、服务端和部署约定，适合从 MVP 走向公开用户。
 
 ## 禁止路径
@@ -44,7 +44,7 @@
 | 数据库 schema | `supabase/migrations/` SQL | 前端本地状态 | migration diff |
 | 登录/权限 | Supabase Auth + RLS | 前端隐藏按钮 | 用户 A/B 权限负例 |
 | 第三方接入 | Supabase SDK 初始化层 | 任意页面随手初始化 | 环境变量和调用检查 |
-| 部署/配置 | `.env.example` + 平台配置说明 | 硬编码密钥 | 构建和环境检查 |
+| 部署/配置 | `dev-docs/deployment-route.md` + `.env.example` + Vercel/Supabase 平台配置 | 硬编码密钥、聊天记忆、个人电脑进程 | 构建、环境变量、Auth 回跳地址和生产 URL 验收 |
 
 ## 初始数据模型草案
 
@@ -143,4 +143,3 @@ auth.users
 - API/数据库验证：检查 Supabase 表数据。
 - 权限负例：用户 B 不能读写用户 A 的 household 数据。
 - Git checkpoint：第一阶段文档和代码分别小步提交。
-
