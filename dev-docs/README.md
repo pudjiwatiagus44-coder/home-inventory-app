@@ -5,11 +5,12 @@
 ## 当前真源索引
 
 - `project-brief.md` - 产品边界、MVP、不做什么、第一闭环。
-- `technical-selection.md` - 已确认技术路线、备选路线取舍、平台能力判断。
+- `technical-selection.md` - 已确认技术路线、备选路线取舍、平台能力判断、中国大陆正式版目标路线。
 - `architecture.md` - 主推荐架构、owner map、数据和权限边界。
 - `database-design.md` - Supabase schema、对象关系、RLS 策略和权限负例。
-- `deployment-route.md` - 已确认部署路线、免费层边界、环境变量和上线前检查。
+- `deployment-route.md` - 已确认部署路线、免费层边界、中国大陆正式版路线、环境变量和上线前检查。
 - `stages/mvp-first-loop.md` - 第一阶段实施计划：位置、物品 CRUD、搜索和权限负例。
+- `stages/mainland-production-route.md` - 中国大陆正式版实施路线：备案、国内云、数据库、认证、权限和发布验收。
 - `acceptance.md` - 阶段验收门槛、证据记录、停止条件。
 
 ## 文档职责
@@ -31,7 +32,7 @@
 
 项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、登录后 `/app` 应用首页、数据库设计草案和初始 migration；用户已在 Supabase 项目中执行 migration 成功。用户 A/B 权限负例验证尚未完成。
 
-部署路线已确认初版：先使用 Vercel 免费层托管前端，Supabase 免费层继续承载 Auth 和 Postgres；上线前仍需完成 Vercel 项目创建、环境变量配置、Supabase Auth 回跳地址配置和生产 URL 验收。
+部署路线已确认两阶段：Vercel 免费层 + Supabase 免费层仅作为临时测试版；用户已在 2026-07-05 确认要直接推进中国大陆正式版，后续需要国内云平台、域名备案、国内 PostgreSQL、自有认证/权限层和正式发布验收。
 
 ## 进入开发前必须补齐
 

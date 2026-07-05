@@ -2,9 +2,11 @@
 
 ## 结论
 
-主路线：`Next.js + TypeScript + Supabase + PWA`。
+当前 MVP 技术主线：`Next.js + TypeScript + Supabase + PWA`。
 
-这条路线已经由用户确认。除非用户明确批准并更新本文件，否则后续实现不得切换到 Firebase、自建后端、原生 App 先行、纯 Vite 前端或本地 Python/JSON 后端。
+中国大陆正式版目标主线：`Next.js + TypeScript + 国内云 PostgreSQL + 自有认证/权限层 + PWA`。
+
+MVP 路线已经由用户确认并完成基础实现。2026-07-05 用户进一步确认要直接面向中国大陆用户使用，因此正式版需要从 Supabase 托管路线迁移到中国大陆部署路线。除非用户明确批准并更新本文件，否则后续不得切换到 Firebase、原生 App 先行、纯 Vite 前端或本地 Python/JSON 后端。
 
 ## 已审计证据
 
@@ -17,6 +19,7 @@
   - Supabase Row Level Security: https://supabase.com/docs/guides/database/postgres/row-level-security
   - Supabase Next.js quickstart: https://supabase.com/docs/guides/getting-started/quickstarts/nextjs
   - Next.js docs: https://nextjs.org/docs
+  - `dev-docs/deployment-route.md`：中国大陆正式版路线已确认，Vercel + Supabase 仅保留为临时测试版。
 
 ## 推荐产品形态
 
@@ -70,7 +73,7 @@
 
 ## 后端和数据选择
 
-选择：Supabase Auth + Supabase Postgres + Row Level Security。
+MVP 选择：Supabase Auth + Supabase Postgres + Row Level Security。
 
 理由：
 
@@ -85,9 +88,20 @@ RLS 是安全硬边界：
 - 没有 RLS 策略和用户 A/B 负例验证前，不能声明 MVP 安全可用。
 - service role key 不能出现在浏览器代码、公开仓库或 `.env.example` 的真实值里。
 
+中国大陆正式版选择：国内云 PostgreSQL + 自有认证/权限层。
+
+原因：
+
+- Supabase 托管版没有中国大陆正式部署区域，不适合作为面向中国大陆用户的长期生产后端。
+- 当前应用的大部分业务数据模型可以迁移到标准 PostgreSQL。
+- 自有认证/权限层需要重新实现“邮箱 + 密码登录、session、用户只能访问自己数据”的规则。
+- Supabase RLS 的安全思想要保留，但正式版不能假设 Supabase RLS 继续存在。
+
 ## 数据库选择
 
-选择：Supabase Postgres。
+MVP 选择：Supabase Postgres。
+
+中国大陆正式版选择：国内云 PostgreSQL。
 
 第一版核心表：
 
@@ -106,15 +120,17 @@ RLS 是安全硬边界：
 
 托管建议：
 
-- 前端：Vercel 免费层作为第一版部署路线。
-- 数据和认证：Supabase 免费层继续承载 Auth、Postgres 和 RLS。
+- 临时测试版前端：Vercel 免费层。
+- 临时测试版数据和认证：Supabase 免费层继续承载 Auth、Postgres 和 RLS。
+- 中国大陆正式版前端/后端：国内云服务器或国内云应用托管。
+- 中国大陆正式版数据和认证：国内云 PostgreSQL + 自有认证/权限层。
 - 本地开发：`npm install`、`npm run dev`、`.env.local`。
 
 部署路线真源：`dev-docs/deployment-route.md`。
 
-第一版部署目标是让用户在电脑关机、换网络、不在同一路由器下仍可登录使用。当前不购买 VPS，不自建数据库，不改变 Next.js + Supabase 主路线。
+初始在线测试目标是让用户在电脑关机、换网络、不在同一路由器下仍可登录使用。中国大陆正式版目标是让中国大陆用户稳定访问，因此需要新的部署和后端迁移阶段。
 
-不引入第二后端运行时。除非未来出现 Next.js/Supabase 不能合理覆盖的工作负载，否则不加入 Python、Go、Java 或独立 Node API 服务。
+仍优先保持单一 Node.js / Next.js 运行时。中国大陆正式版需要增加服务端认证、数据库访问和权限校验，但不默认引入 Python、Go、Java 或第二套后端运行时。
 
 ## 备选路线取舍
 
@@ -128,7 +144,7 @@ RLS 是安全硬边界：
 
 ### 自建后端 + PostgreSQL
 
-暂不选择。控制力强，但第一版维护成本过高，会把产品验证拖成基础设施工程。
+中国大陆正式版选择该方向，但实现必须分阶段推进。原因是正式版需要国内云部署、ICP备案、数据库备份、日志监控和不依赖 Supabase 的认证权限层。不能在未完成迁移设计前直接替换当前 Supabase 路线。
 
 ### 原生 App 先行
 
@@ -149,4 +165,4 @@ RLS 是安全硬边界：
 
 ## 下一步
 
-先设计数据库 schema 和 RLS 策略，再 scaffold Next.js 项目。不要在 RLS 设计完成前写真实业务功能。
+下一步先写中国大陆正式版迁移实施计划，覆盖云平台选择、域名备案、国内数据库、自有认证、权限校验、数据迁移、部署脚本、备份恢复和发布验收。不要在该计划确认前直接改认证或数据库代码。

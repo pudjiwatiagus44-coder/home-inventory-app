@@ -3,15 +3,16 @@
 ## 推荐架构
 
 - 推荐产品形态：Web/PWA first，后续再评估移动 App。
-- 推荐技术路线：Next.js + TypeScript + Supabase Auth + Supabase Postgres + RLS + PWA。
-- 推荐部署形态：前端部署到 Vercel 免费层，数据和认证由 Supabase 免费层承载；部署路线真源见 `dev-docs/deployment-route.md`。
-- 为什么这是主路线：本产品的核心难点是账号、用户数据隔离、结构化查询和长期保存。Supabase 提供 Auth、Postgres 和 Row Level Security，Next.js 提供清晰的前端、服务端和部署约定，适合从 MVP 走向公开用户。
+- MVP 技术路线：Next.js + TypeScript + Supabase Auth + Supabase Postgres + RLS + PWA。
+- 中国大陆正式版目标路线：Next.js + TypeScript + 国内云 PostgreSQL + 自有认证/权限层 + PWA。
+- 推荐部署形态：Vercel + Supabase 仅作为临时测试版；中国大陆正式版部署到国内云平台，部署路线真源见 `dev-docs/deployment-route.md`。
+- 为什么路线要调整：本产品面向中国大陆用户时，访问稳定性、备案、数据存储和运维要求会成为核心约束。Supabase/Vercel 适合快速 MVP，但中国大陆正式版需要国内云资源、国内数据库、备案流程和可控的服务端权限层。
 
 ## 禁止路径
 
 - 禁止把当前 Python + JSON 本地服务改造成多用户公开后端。
 - 禁止在没有用户确认和真源更新时切换到 Firebase。
-- 禁止第一阶段自建完整后端服务。
+- 禁止在未完成中国大陆正式版迁移计划前直接替换 Supabase 或自建后端。
 - 禁止原生 App 先行。
 - 禁止在没有 RLS 的情况下把用户数据表暴露给前端。
 - 禁止把 service role key 暴露给浏览器或提交到 Git。
@@ -30,6 +31,15 @@
 - 第三方 SDK/API：Supabase JavaScript SDK。
 - 技术选择真源：`dev-docs/technical-selection.md`。
 
+中国大陆正式版目标技术路线：
+
+- 前端框架：继续使用 Next.js。
+- 运行时：继续优先使用 Node.js / Next.js，避免引入第二套后端语言。
+- 数据库：迁移到国内云 PostgreSQL。
+- 登录：从 Supabase Auth 迁移为自有邮箱密码登录或国内可用认证服务。
+- 权限：从 Supabase RLS 迁移为服务端权限校验 + 数据库约束的等效边界。
+- 部署：国内云服务器或国内云应用托管。
+
 ## Owner Map
 
 | 概念 | Owner | 不能由谁拥有 | 验证方式 |
@@ -45,6 +55,9 @@
 | 登录/权限 | Supabase Auth + RLS | 前端隐藏按钮 | 用户 A/B 权限负例 |
 | 第三方接入 | Supabase SDK 初始化层 | 任意页面随手初始化 | 环境变量和调用检查 |
 | 部署/配置 | `dev-docs/deployment-route.md` + `.env.example` + Vercel/Supabase 平台配置 | 硬编码密钥、聊天记忆、个人电脑进程 | 构建、环境变量、Auth 回跳地址和生产 URL 验收 |
+| 中国大陆正式版认证 | 待新增的服务端认证层 + `dev-docs/technical-selection.md` | Supabase Auth、前端 localStorage、聊天记忆 | 登录正负例、session 过期、密码存储验证 |
+| 中国大陆正式版数据库 | 国内云 PostgreSQL + migration | Supabase 控制台手工状态、前端本地状态 | migration、备份恢复、跨用户负例 |
+| 中国大陆正式版部署 | `dev-docs/deployment-route.md` + 国内云平台配置 | Vercel preview、个人电脑进程 | ICP 备案、生产域名、HTTPS、日志和访问测试 |
 
 ## 初始数据模型草案
 
