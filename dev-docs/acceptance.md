@@ -1,5 +1,276 @@
 # Acceptance Truth
 
+## 2026-07-07 Browser self-hosted auth and inventory CRUD evidence
+
+- Code evidence: added `src/features/auth/self-hosted-auth-client.ts` and `src/features/auth/self-hosted-auth-client.test.ts`; updated `src/features/auth/AuthForm.tsx` to call `/api/auth/login` and `/api/auth/register` instead of Supabase browser auth.
+- Dev-server evidence: updated `npm run dev` to `next dev --webpack` because Next.js 16.2.10 Turbopack on Windows repeatedly failed to create a `pg` junction under `.next/dev/node_modules`, causing `/api/auth/register` to return 500.
+- Browser auth evidence: with local PostgreSQL on `localhost:5432`, Playwright registered a new self-hosted user through `/login`, received the `home_inventory_session` cookie, and reached `/app`.
+- Browser dashboard evidence: `/app` called `GET /api/inventory/dashboard` and rendered the empty PostgreSQL-backed dashboard for the new self-hosted user.
+- Browser CRUD evidence: created area `厨房`, location `冰箱`, and item `牛奶`; API responses for `POST /api/inventory/areas`, `POST /api/inventory/locations`, `POST /api/inventory/items`, and follow-up dashboard refreshes all returned 200.
+- Persistence evidence: after browser reload, the created `厨房` / `冰箱` / `牛奶` data remained visible from PostgreSQL-backed dashboard data.
+- Logout evidence: browser login for the same self-hosted user returned 200, dashboard showed the created item, `POST /api/auth/logout` returned 200, the session cookie was cleared, and direct `/app` access after logout rendered the unauthenticated state.
+- Tooling evidence: added `@playwright/test` as a dev dependency to make local browser verification reproducible.
+- Safety evidence: this used the local disposable `home_inventory_test` database only; no production database, real cloud service, real user data, database password, service role key, private key, or session secret was committed.
+- Remaining unverified: browser-level update/delete flows for existing area/location/item records, and Alibaba Cloud test-environment deployment.
+
+## 2026-07-07 Local PostgreSQL installation and real integration evidence
+
+- Local runtime evidence: installed PostgreSQL locally through Scoop as `postgresql` 18.4-2 after the EDB installer path left an incomplete PostgreSQL directory.
+- Database evidence: started the local PostgreSQL server on `localhost:5432` and created disposable test database `home_inventory_test`.
+- Script evidence: updated `npm run test:postgres` to use `--no-file-parallelism` because PostgreSQL integration test files reset the same disposable `public` schema.
+- Real PostgreSQL integration evidence: with local process/user `TEST_DATABASE_URL`, `DATABASE_URL`, and `SESSION_SECRET`, `npm run test:postgres` passed 2 files / 2 real database tests with 2 skip-placeholder tests.
+- Inventory permission evidence: the real PostgreSQL inventory integration registers users A/B, creates A's area/location/item, verifies B's dashboard is empty, and rejects B writes against A's area/location/item ids.
+- Full local validation evidence after PostgreSQL install: `npm test` passed 26 files / 164 tests with 2 skipped placeholder cases; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack and generated all auth and inventory API routes.
+- Safety evidence: no production database, real cloud service, real user data, database password, service role key, private key, or session secret was committed.
+- Remaining unverified: browser-level self-hosted auth/inventory flow against the local PostgreSQL runtime, and future server deployment on Alibaba Cloud test environment.
+
+## 2026-07-07 Self-hosted `/app` inventory loop and PostgreSQL test preparation evidence
+
+- Code evidence: added `src/app/api/inventory/dashboard/handlers.ts`, `src/app/api/inventory/dashboard/route.ts`, `src/app/api/inventory/dashboard/route.test.ts`, `src/features/inventory/self-hosted-inventory-client.ts`, and `src/features/inventory/self-hosted-inventory-client.test.ts`.
+- `/app` evidence: self-hosted users now load dashboard data through `GET /api/inventory/dashboard`; self-hosted inventory create/update/delete operations call the self-hosted API routes; Supabase temporary write path remains for the existing Supabase mode.
+- Auth evidence: self-hosted sign-out calls `POST /api/auth/logout`.
+- PostgreSQL preparation evidence: added `src/features/inventory/postgres-inventory.integration.test.ts`; updated `npm run test:postgres` to include auth and inventory integration suites.
+- Runbook evidence: added `dev-docs/local-postgres-test-runbook.md` with local test database safety rules, env var placeholders, schema source, and verification commands.
+- Local machine condition evidence: current shell has no `TEST_DATABASE_URL`, `DATABASE_URL`, or `SESSION_SECRET`; `psql`, `pg_isready`, and `docker` are not available on `PATH`.
+- Runtime PostgreSQL evidence: `npm run test:postgres` passed 2 files with 2 real-database tests skipped because `TEST_DATABASE_URL` is not configured.
+- Safety evidence: no real PostgreSQL connection was opened, no real database URL/session secret/service role key/database password/private key was added, and no real user data was migrated.
+- TDD evidence: dashboard/client tests first failed on missing modules, then passed after implementation; self-hosted dashboard state test first failed on the old pending state, then passed after implementation.
+- Full local validation evidence after truth-doc update: `npm test` passed 26 files / 164 tests with 2 skipped real-database integration cases; `npm run test:postgres` passed 2 files with 2 real-database cases skipped; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/inventory/dashboard` is now listed as a dynamic route alongside the inventory write routes.
+- Secret scan evidence: matches were limited to local runbook placeholders, test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, database password, or session secret was found.
+- Remaining blocked: actual local/test PostgreSQL browser flow and real PostgreSQL API A/B negative execution require a reachable test PostgreSQL database and local-only environment variables.
+
+## 2026-07-07 Self-hosted inventory API A/B negative route test evidence
+
+- Code evidence: added `src/app/api/inventory/inventory-routes-permissions.test.ts` and route handler modules under `src/app/api/inventory/**/handlers.ts`.
+- Route structure evidence: Next.js route files now stay as thin HTTP exports, while injectable handler factories are used for unit tests without connecting to PostgreSQL.
+- API A/B negative evidence: tests model user B calling route handlers with user A ids and verify HTTP 403 for cross-user area/location/item update, delete, create-under-foreign-parent, and move-under-foreign-parent attempts.
+- Contract evidence: area creation route ignores a caller-provided `householdId` and forwards only current `userId`, `name`, and `color` to the service.
+- Permission boundary evidence: API routes map service-level ownership errors to 403; actual ownership checks remain in `createInventoryService` before repository writes.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: `npm test -- src/app/api/inventory/inventory-routes-permissions.test.ts` first failed because `./areas/handlers` did not exist; after implementation it passed 1 file / 11 tests.
+- Targeted validation evidence: `npm test -- src/app/api/inventory/route-helpers.test.ts src/app/api/inventory/inventory-routes-permissions.test.ts src/features/inventory/inventory-service-permissions.test.ts` passed 3 files / 25 tests.
+- Local build evidence before truth-doc update: `npm run lint` exit code 0; `npm run build` exit code 0 using webpack, with all inventory API routes still listed as dynamic routes.
+- Remaining unverified: actual local/test PostgreSQL runtime write flow, browser flows using self-hosted auth, and real PostgreSQL test-database API A/B negative checks.
+
+## 2026-07-07 Self-hosted inventory write API skeleton evidence
+
+- Code evidence: added `src/app/api/inventory/route-helpers.ts`, `src/app/api/inventory/route-helpers.test.ts`, and route files under `src/app/api/inventory/areas`, `src/app/api/inventory/locations`, and `src/app/api/inventory/items`.
+- API contract evidence: the route skeleton covers create/update/delete for areas, locations, and items under self-hosted auth.
+- Auth boundary evidence: route helper resolves the current user from the self-hosted session cookie and returns 401 when no session is present.
+- Permission boundary evidence: API routes do not accept `householdId`; they call inventory service methods that resolve the current user's household and reject cross-household area/location/item ids before repository writes.
+- Error evidence: missing PostgreSQL inventory configuration maps to 501; service-level ownership errors map to 403; missing current-user household maps to 404; validation errors map to 400.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: `npm test -- src/app/api/inventory/route-helpers.test.ts` first failed because `./route-helpers` did not exist; after implementation it passed 1 file / 4 tests.
+- Full local test evidence: `npm test` passed 22 files / 147 tests with 1 skipped real-database integration flow.
+- Preliminary local build evidence before truth-doc update: `npm run lint` exit code 0; `npm run build` exit code 0 using webpack, with `/api/inventory/areas`, `/api/inventory/areas/[areaId]`, `/api/inventory/locations`, `/api/inventory/locations/[locationId]`, `/api/inventory/items`, and `/api/inventory/items/[itemId]` listed as dynamic routes.
+- Remaining unverified: actual local/test PostgreSQL runtime write flow, browser flows using self-hosted auth, and API-level A/B negative checks against a real PostgreSQL test database.
+
+## 2026-07-07 PostgreSQL inventory service permission negative test skeleton evidence
+
+- Code evidence: added `src/features/inventory/inventory-service-permissions.test.ts`.
+- Permission boundary evidence: the dedicated test file models user B's dashboard and attempts to write with user A's area/location/item ids.
+- Covered negative cases: create location under another user's area; update/delete another user's area; update/delete another user's location; move a current-user location into another user's area; create item in another user's location; update/delete another user's item; move a current-user item into another user's location.
+- Repository-call evidence: each negative case verifies that the write repository method is not called after the ownership check rejects the request.
+- Behavior boundary evidence: this was a test-organization step and did not change production behavior, repository SQL, real database configuration, Supabase adapter behavior, or frontend behavior.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- Validation evidence: `npm test -- src/features/inventory/inventory-service-permissions.test.ts` passed 1 file / 10 tests.
+- Full local validation evidence: `npm test` passed 21 files / 143 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime A/B negative flow, browser flows using self-hosted auth, and API/server-action level A/B negative checks.
+
+## 2026-07-07 PostgreSQL inventory A/B negative skeleton: create-location area ownership evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts` and `src/features/inventory/inventory-service.test.ts`.
+- Permission boundary evidence: `createLocationForCurrentUser({ userId, name, areaId })` rejects a provided `areaId` when that area is not present in the current user's dashboard/household.
+- A/B negative evidence: this covers user B attempting to create a location under user A's area id.
+- Repository boundary evidence: PostgreSQL SQL did not change in this step; the foreign `areaId` is rejected before the repository is called.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted test first failed because `createLocationForCurrentUser` accepted a foreign `areaId` and called the repository; after implementation, `src/features/inventory/inventory-service.test.ts` passed 1 file / 25 tests.
+- Full local validation evidence: `npm test` passed 20 files / 133 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime A/B negative flow, browser location creation with self-hosted auth, and full PostgreSQL A/B negative suite across area/location/item create/update/delete.
+
+## 2026-07-07 PostgreSQL inventory create-area write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `createAreaForCurrentUser({ userId, name, color })` resolves the current user's household through the repository; callers do not provide `householdId`.
+- Repository evidence: PostgreSQL `createArea` validates input, uses parameterized SQL, inserts into `areas (household_id, name, color)`, and returns `id, name, color`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because PostgreSQL `createArea` still threw the not-connected placeholder and `createAreaForCurrentUser` did not exist; after implementation, targeted tests passed 2 files / 38 tests.
+- Full local validation evidence: `npm test` passed 20 files / 132 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime area creation, browser area creation flow using self-hosted auth, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory update/delete-area write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `updateAreaForCurrentUser({ userId, areaId, name, color })` and `deleteAreaForCurrentUser({ userId, areaId })` resolve the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: area update/delete rejects a provided `areaId` when that area is not present in the current user's dashboard/household.
+- Repository evidence: PostgreSQL `updateArea` validates input, uses parameterized SQL, updates `areas`, scopes the mutation with `where id = $1 and household_id = $2`, and returns `id, name, color`.
+- Repository evidence: PostgreSQL `deleteArea` uses parameterized SQL, deletes from `areas`, and scopes the mutation with `where id = $1 and household_id = $2`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because PostgreSQL `updateArea` and `deleteArea` still threw the not-connected placeholder and `updateAreaForCurrentUser` / `deleteAreaForCurrentUser` did not exist; after implementation, targeted tests passed 2 files / 34 tests.
+- Full local validation evidence: `npm test` passed 20 files / 128 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime area update/delete, browser area update/delete flow using self-hosted auth, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory update/delete-location write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-actions.ts`, `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `updateLocationForCurrentUser({ userId, locationId, name, areaId })` and `deleteLocationForCurrentUser({ userId, locationId })` resolve the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: location update/delete rejects a provided `locationId` when that location is not present in the current user's dashboard/household.
+- Permission boundary evidence: location update rejects a provided `areaId` when that area is not present in the current user's dashboard/household.
+- Repository evidence: PostgreSQL `updateLocation` validates input, uses parameterized SQL, updates `locations`, scopes the mutation with `where id = $1 and household_id = $2`, and returns `id, name`.
+- Repository evidence: PostgreSQL `deleteLocation` uses parameterized SQL, deletes from `locations`, and scopes the mutation with `where id = $1 and household_id = $2`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype, with `deleteLocation` added to the adapter contract.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because `updateLocationForCurrentUser` and `deleteLocationForCurrentUser` did not exist, PostgreSQL `updateLocation` still threw the not-connected placeholder, and `deleteLocation` was missing from the repository contract; after implementation, targeted tests passed 2 files / 28 tests.
+- Full local validation evidence: `npm test` passed 20 files / 122 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime location update/delete, browser location update/delete flow using self-hosted auth, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory delete-item write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `deleteItemForCurrentUser({ userId, itemId })` resolves the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: item deletion rejects a provided `itemId` when that item is not present in the current user's dashboard/household.
+- Repository evidence: PostgreSQL `deleteItem` uses parameterized SQL, deletes from `items`, and scopes the mutation with `where id = $1 and household_id = $2`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because PostgreSQL `deleteItem` still threw the not-connected placeholder and `deleteItemForCurrentUser` did not exist; after implementation, targeted tests passed 2 files / 20 tests.
+- Full local validation evidence: `npm test` passed 20 files / 114 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime item deletion, browser delete-item flow using self-hosted auth, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory update-item write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `updateItemForCurrentUser({ userId, itemId, name, note, expireDate, locationId })` resolves the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: item update rejects a provided `itemId` when that item is not present in the current user's dashboard/household.
+- Permission boundary evidence: item update rejects a provided `locationId` when that location is not present in the current user's dashboard/household.
+- Repository evidence: PostgreSQL `updateItem` validates input, uses parameterized SQL, updates `items`, scopes the mutation with `where id = $1 and household_id = $2`, and returns `id, name, note, expire_date, location_id`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because PostgreSQL `updateItem` still threw the not-connected placeholder and `updateItemForCurrentUser` did not exist; after implementation, targeted tests passed 2 files / 17 tests.
+- Full local validation evidence: `npm test` passed 20 files / 111 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime item update, browser update-item flow using self-hosted auth, PostgreSQL delete item path, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory create-item write skeleton evidence
+
+- Code evidence: updated `src/features/inventory/inventory-service.ts`, `src/features/inventory/inventory-service.test.ts`, `src/features/inventory/inventory-repository.ts`, and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `createItemForCurrentUser({ userId, name, note, expireDate, locationId })` resolves the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: item creation rejects a provided `locationId` when that location is not present in the current user's dashboard/household.
+- Repository evidence: PostgreSQL `createItem` validates input, uses parameterized SQL, inserts into `items (household_id, location_id, name, note, expire_date, created_by)`, and returns `id, name, note, expire_date, location_id`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because PostgreSQL `createItem` still threw the not-connected placeholder and `createItemForCurrentUser` did not exist; after implementation, targeted tests passed 2 files / 13 tests.
+- Full local validation evidence: `npm test` passed 20 files / 107 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/api/auth/login`, `/api/auth/logout`, `/api/auth/register`, and `/app` are dynamic routes.
+- Secret scan evidence: matches were limited to test placeholder URLs, existing documentation text, and an npm package URL containing `sk-` as part of `queue-microtask`; no real database URL, service role key, private key, API key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime item creation, browser create-item flow using self-hosted auth, PostgreSQL update/delete item paths, and full user A/B PostgreSQL negative tests.
+
+## 2026-07-07 PostgreSQL inventory create-location write skeleton evidence
+
+- Code evidence: added `src/features/inventory/inventory-service.ts` and `src/features/inventory/inventory-service.test.ts`; updated `src/features/inventory/inventory-repository.ts` and `src/features/inventory/inventory-repository.test.ts`.
+- Service boundary evidence: `createLocationForCurrentUser({ userId, name, areaId })` resolves the current user's household through the repository; callers do not provide `householdId`.
+- Permission boundary evidence: location creation does not trust a frontend-provided household id.
+- Repository evidence: PostgreSQL `createLocation` validates input, uses parameterized SQL, inserts into `locations (household_id, area_id, name)`, and returns `id, name`.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- Safety evidence: no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because `inventory-service` did not exist and PostgreSQL `createLocation` still threw the not-connected placeholder; after implementation, targeted tests passed 2 files / 9 tests.
+- Full local validation evidence: `npm test` passed 20 files / 103 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Secret scan evidence: matches were limited to test placeholder URLs and existing documentation text; no real database URL, service role key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime location creation, browser create-location flow using self-hosted auth, and PostgreSQL update/delete/item write paths.
+
+## 2026-07-07 PostgreSQL inventory dashboard read repository evidence
+
+- Code evidence: updated `src/features/inventory/inventory-repository.ts` and `src/features/inventory/inventory-repository.test.ts`.
+- Behavior evidence: added `getDashboardForUser(userId)` for PostgreSQL dashboard reads.
+- Permission boundary evidence: the PostgreSQL read path first resolves the user's household through `household_members` joined to `households`, then scopes `areas`, `locations`, and `items` by that household id.
+- Safety evidence: SQL calls are parameterized; no real PostgreSQL connection is opened by unit tests; no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- Compatibility evidence: the Supabase adapter remains intact for the current temporary prototype.
+- TDD evidence: targeted tests first failed because `getDashboardForUser` did not exist; after implementation, `npm test -- src/features/inventory/inventory-repository.test.ts` passed 1 file / 5 tests.
+- Full local validation evidence: `npm test` passed 19 files / 99 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Secret scan evidence: matches were limited to test placeholder URLs and existing documentation text; no real database URL, service role key, or session secret was found.
+- UI boundary: this read repository is not wired into `/app` as an editable dashboard yet, because PostgreSQL write CRUD is not connected and the UI would otherwise mix self-hosted reads with Supabase writes.
+- Remaining unverified: actual local/test PostgreSQL runtime inventory reads, browser display of PostgreSQL-backed inventory data, and PostgreSQL inventory write CRUD.
+
+## 2026-07-07 `/app` self-hosted session recognition evidence
+
+- Code evidence: added `src/app/app/app-auth.ts`, `src/app/app/app-auth.test.ts`, `src/features/inventory/app-dashboard-state.ts`, and `src/features/inventory/app-dashboard-state.test.ts`.
+- Page evidence: updated `src/app/app/page.tsx` to resolve a self-hosted current user from `home_inventory_session` before rendering `/app`.
+- UI boundary evidence: updated `src/features/inventory/AppDashboard.tsx` to show an honest pending state when self-hosted auth is recognized but PostgreSQL inventory CRUD is not connected.
+- Compatibility evidence: when there is no self-hosted cookie, or PostgreSQL auth is not configured, `/app` continues to use the existing temporary Supabase browser path.
+- Safety evidence: no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because `app-auth` and `app-dashboard-state` did not exist; after implementation, targeted tests passed 4 files / 27 tests.
+- Full local validation evidence: `npm test` passed 19 files / 97 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack.
+- Build route evidence: `/app` is now a dynamic route because it reads server cookies before rendering.
+- Secret scan evidence: matches were limited to test placeholder URLs and existing documentation text; no real database URL, service role key, or session secret was found.
+- Remaining unverified: browser refresh with a real self-hosted PostgreSQL session, PostgreSQL inventory CRUD, and `/app` showing real PostgreSQL-backed inventory data.
+
+## 2026-07-07 server-side current-user session lookup evidence
+
+- Code evidence: updated `src/server/auth/auth-service.ts`, `src/server/auth/postgres-auth-repository.ts`, and `src/app/api/auth/route-helpers.ts`.
+- Behavior evidence: auth service can resolve the current user from a session token hash, reject missing/expired/revoked sessions, and reject disabled users.
+- Repository evidence: PostgreSQL auth repository can load a session by token hash through `auth_sessions` joined to `users`.
+- Route-helper evidence: `getCurrentUserFromRequest` reads the `home_inventory_session` cookie and returns `null` without database initialization when the cookie is missing.
+- Safety evidence: no real `DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, service role key, database password, or real user data was added.
+- TDD evidence: targeted tests first failed because `getCurrentUser`, `findSessionByHash`, and `getCurrentUserFromRequest` did not exist; after implementation, targeted tests passed 3 files / 20 tests.
+- Full local validation evidence: `npm test` passed 17 files / 92 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack and generated `/api/auth/login`, `/api/auth/logout`, and `/api/auth/register`.
+- Secret scan evidence: matches were limited to test placeholder URLs and existing documentation text; no real database URL, service role key, or session secret was found.
+- Remaining unverified: actual local/test PostgreSQL runtime session lookup, browser refresh persistence, `/app` protection using the new self-owned auth session, and PostgreSQL A/B permission negative tests.
+
+## 2026-07-06 gated PostgreSQL integration verification evidence
+
+- Code evidence: added `src/server/db/postgres-integration-config.ts`, `src/server/db/postgres-integration-config.test.ts`, and `src/server/auth/postgres-auth-repository.integration.test.ts`.
+- Script evidence: added `npm run test:postgres` for the PostgreSQL auth integration verification entrypoint.
+- Env boundary evidence: added empty `.env.example` placeholder `TEST_DATABASE_URL`; real values must stay outside Git.
+- Safety evidence: integration verification is skipped unless `TEST_DATABASE_URL` is configured, and configured database names must look like test databases.
+- Intended real-database coverage when enabled: reset disposable test schema, execute `dev-docs/sql/mainland_initial_schema.sql`, run register/login/logout through `createAuthService` and `createPostgresAuthRepository`, and verify user/profile/household/membership/session records.
+- Validation evidence: `npm test -- src/server/db/postgres-integration-config.test.ts` passed 1 file / 4 tests; `npm run test:postgres` passed 1 file with 1 skipped real-database flow because `TEST_DATABASE_URL` is not configured.
+- Full local validation evidence: `npm test` passed 17 files / 85 tests with 1 skipped real-database integration flow; `npm run lint` exit code 0; `npm run build` exit code 0 using webpack and generated `/api/auth/login`, `/api/auth/logout`, and `/api/auth/register`.
+- Remaining unverified: actual local/test PostgreSQL runtime connection, schema execution against a real database, browser registration/login/logout flow, session cookie lookup for current user, and PostgreSQL A/B permission negative tests.
+
+## 2026-07-06 auth API skeleton evidence
+
+- Code evidence: added `src/server/auth/auth-service.ts`, `src/server/auth/postgres-auth-repository.ts`, `src/app/api/auth/route-helpers.ts`, `src/app/api/auth/register/route.ts`, `src/app/api/auth/login/route.ts`, `src/app/api/auth/logout/route.ts`.
+- Repository evidence: `src/features/inventory/inventory-repository.ts` now includes a PostgreSQL adapter draft that keeps the current Supabase adapter intact.
+- Boundary evidence: PostgreSQL auth and inventory repositories intentionally do not open a database connection and throw explicit not-connected errors.
+- API evidence: Next.js build lists `/api/auth/login`, `/api/auth/logout`, and `/api/auth/register` as dynamic server routes.
+- Validation evidence: targeted auth/repository tests passed 3 files / 9 tests; full `npm test` passed 13 files / 70 tests; `npm run lint` exit code 0; `npm run build` exit code 0.
+- Remaining unverified: real PostgreSQL registration/login/logout persistence, real session lookup from cookie, PostgreSQL A/B permission negative tests, and browser end-to-end auth flow.
+
+## 2026-07-06 PostgreSQL auth repository implementation evidence
+
+- Code evidence: `src/server/auth/postgres-auth-repository.ts` now implements auth repository behavior against an injected PostgreSQL-style query client.
+- Behavior evidence: covered `findUserByEmail`, transactional `createUserWithDefaultHousehold`, `createSession`, and `revokeSessionByHash`.
+- Safety evidence: no-argument repository creation still returns explicit not-connected behavior; current API routes do not silently connect to an unspecified database.
+- Transaction evidence: user bootstrap test verifies `begin`, `commit`, and `rollback` behavior.
+- Validation evidence: targeted repository test first failed with 5 expected failures, then passed 1 file / 6 tests after implementation; full `npm test` passed 13 files / 75 tests; `npm run lint` exit code 0; `npm run build` exit code 0.
+- Remaining unverified: running the SQL against an actual local/test PostgreSQL database, wiring route handlers to a real PostgreSQL client, session cookie lookup for current user, and PostgreSQL A/B permission negative tests.
+
+## 2026-07-06 PostgreSQL client factory and route wiring evidence
+
+- Code evidence: added `src/server/db/postgres.ts` and `src/server/db/postgres.test.ts`.
+- API wiring evidence: `src/app/api/auth/route-helpers.ts` now creates the auth service through a PostgreSQL query client derived from server-only `DATABASE_URL`.
+- Dependency evidence: added `pg` and `@types/pg`.
+- Build evidence: `package.json` build script now uses `next build --webpack`; this avoids a verified Next.js 16.2.10 Turbopack Windows junction failure with `pg`.
+- Boundary evidence: route helpers return 501 when `DATABASE_URL` is missing, and no real PostgreSQL connection string was added.
+- Validation evidence: targeted route/db/auth tests passed 4 files / 16 tests; full `npm test` passed 15 files / 80 tests; `npm run lint` exit code 0; `npm run build` exit code 0.
+- Remaining unverified: actual local/test PostgreSQL runtime connection, schema execution against a real database, browser registration/login/logout flow, session cookie lookup for current user, and PostgreSQL A/B permission negative tests.
+
 ## 验收门槛
 
 | 门槛 | 需要的证据 | 状态 |
@@ -202,6 +473,13 @@
 - 2026-07-04 移动端新增快捷入口代码证据：`src/features/inventory/AppDashboard.tsx` 将移动端顶部扩展为“搜索物品 / 新增物品 / 新增位置 / 新增区域”四个入口；新增 `mobileQuickPanel` 状态统一管理搜索与新增弹窗；新增物品、位置、区域弹窗复用现有表单状态和 `createInventoryItem`、`createInventoryLocation`、`createInventoryArea` 保存路径，保存成功后关闭弹窗，保存失败时保留错误提示；页面下方原有表单仍保留。
 - 2026-07-04 移动端新增快捷入口本地验证证据：执行 `npm run lint`，exit code 0；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 编译成功、TypeScript 通过、静态生成 6/6；执行 `npm test`，exit code 0，Vitest 通过 7 个测试文件 / 48 个测试。
 - 2026-07-04 移动端新增快捷入口用户验收证据：用户在真实移动端访问局域网地址后反馈“验收通过了”。本次用户验收覆盖移动端顶部“搜索物品 / 新增物品 / 新增位置 / 新增区域”入口、对应弹窗可打开、搜索/新增高频路径位置符合预期。
+- 2026-07-06 国内正式版认证与数据库迁移准备证据：新增 `dev-docs/stages/mainland-auth-db-migration.md`、`dev-docs/mainland-database-design.md`、`dev-docs/sql/mainland_initial_schema.sql`；补充 `.env.example` 的服务端专用 `DATABASE_URL` 和 `SESSION_SECRET` 占位符；新增 `src/server/auth/session-security.ts` 和测试，覆盖 URL-safe session token、HMAC token hash、session 过期/撤销判断；新增 `src/features/inventory/inventory-repository.ts` 和测试，先保留 Supabase adapter 并为后续 PostgreSQL adapter 留出边界；`AppDashboard` 写入类 CRUD 调用已改为通过 repository，未删除 Supabase，未连接真实 PostgreSQL，未接入真实云密钥。
+- 2026-07-06 本地验证证据：执行 `npm test`，exit code 0，Vitest 通过 9 个测试文件 / 55 个测试；执行 `npm run lint`，exit code 0，ESLint 无报错；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 构建成功，生成 `/`、`/_not-found`、`/app`、`/login`。
+- 2026-07-06 用户确认国内正式版认证与测试环境决策：密码哈希算法使用 bcrypt；session 默认有效期 30 天；测试阶段先不做邮箱验证和密码重置；阿里云测试环境可以先使用服务器 IP 访问。正式公开前仍必须补齐邮箱验证和密码重置，且未备案通过前不把正式域名解析到公开网站。
+- 2026-07-06 认证与权限本地雏形证据：新增依赖 `bcryptjs`；新增 `src/server/auth/password-security.ts` 和测试，覆盖 bcrypt cost、密码哈希、密码验证、短密码拒绝；补充 `src/server/auth/session-security.ts` 的 30 天默认 session 有效期；新增 `src/server/auth/authorization.ts` 和测试，覆盖用户必须属于 household、资源必须属于当前 household。当前未接入真实注册/登录/退出流程，未连接真实 PostgreSQL。
+- 2026-07-06 认证与权限本地雏形验证证据：执行 `npm test`，exit code 0，Vitest 通过 11 个测试文件 / 63 个测试；执行 `npm run lint`，exit code 0，ESLint 无报错；执行 `npm run build`，exit code 0，Next.js 16.2.10 / Turbopack 构建成功，生成 `/`、`/_not-found`、`/app`、`/login`；密钥扫描未命中非空 `DATABASE_URL`、非空 `SESSION_SECRET` 或 `service_role`。
+- 2026-07-07 自有 PostgreSQL 浏览器与 API 删除补证：本地浏览器流程已通过自有认证进入 `/app`，创建并编辑区域、位置和物品，服务端日志显示 `POST /api/auth/register`、`POST /api/inventory/areas`、`POST /api/inventory/locations`、`POST /api/inventory/items`、`PATCH /api/inventory/areas/:areaId`、`PATCH /api/inventory/locations/:locationId`、`PATCH /api/inventory/items/:itemId` 均返回 200。发现位置列表缺少删除入口后，补充 `src/features/inventory/AppDashboard.tsx` 的位置删除按钮和 `handleDeleteLocation`，并修复 `src/app/api/inventory/route-helpers.ts` 对无 body `DELETE` 请求的解析。HTTP 会话验证创建 area/location/item 后依次删除 item/location/area，最终 `GET /api/inventory/dashboard` 返回 `areasAfterDelete=0`、`locationsAfterDelete=0`、`itemsAfterDelete=0`。
+- 2026-07-07 自有 PostgreSQL 删除补证验证命令：新增 `src/features/inventory/AppDashboard.test.ts` 覆盖位置列表删除入口；新增 `src/app/api/inventory/route-helpers.test.ts` 空 body `DELETE` 回归测试。执行 `npm test`，exit code 0，Vitest 通过 28 个测试文件 / 169 个测试，2 个跳过；执行 `npm run test:postgres`，exit code 0，2 个 PostgreSQL 集成测试文件通过，2 个真实数据库测试通过，2 个占位跳过；执行 `npm run lint`，exit code 0；执行 `npm run build`，exit code 0，Next.js 16.2.10 / webpack 编译、TypeScript、静态生成均通过，生成库存 API 动态路由。
 
 后续每个阶段必须记录：
 
@@ -236,11 +514,11 @@
 
 ## 当前剩余未验证项
 
-- 真实浏览器中完整走一遍新增区域、带区域新增位置、新增物品、搜索、筛选、编辑、删除。
+- 真实浏览器中完整走一遍搜索、筛选和删除按钮点击确认；本轮已用浏览器验证自有认证下新增与编辑路径，并用 HTTP 会话补证删除路径。
 - 移动端完整操作体验和截图证据。
 - 位置编辑弹窗：重命名位置、修改所属区域、改为未分区、保存失败提示。
 - 位置列表区域筛选：全部区域、指定区域、无匹配位置空状态。
-- 真实登录后的浏览器验收：打开编辑位置弹窗、保存位置名称、修改所属区域、按区域筛选位置列表、刷新后仍保存。
+- 真实登录后的浏览器验收：修改位置为未分区、按区域筛选位置列表、刷新后仍保存。
 - 真实登录后的浏览器验收：新增/编辑物品时先选择区域，再确认位置下拉只显示该区域或未分区下的位置。
 
 ## 停止条件

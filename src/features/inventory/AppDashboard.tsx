@@ -4,6 +4,10 @@ import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  createInitialDashboardState,
+  type SelfHostedDashboardUser,
+} from "./app-dashboard-state";
+import {
   AreaRow,
   buildDashboardSummary,
   createDashboardHousehold,
@@ -20,18 +24,15 @@ import {
 } from "./dashboard-data";
 import { getOrCreateDefaultHouseholdId } from "./household-bootstrap";
 import {
-  createInventoryArea,
-  createInventoryItem,
-  createInventoryLocation,
-  deleteInventoryArea,
-  deleteInventoryItem,
-  updateInventoryArea,
-  updateInventoryItem,
-  updateInventoryLocation,
   validateAreaInput,
   validateInventoryItemInput,
   validateLocationInput,
+  type AreaInput,
+  type InventoryItemInput,
+  type LocationInput,
 } from "./inventory-actions";
+import { createSupabaseInventoryRepository } from "./inventory-repository";
+import { createSelfHostedInventoryClient } from "./self-hosted-inventory-client";
 
 type DashboardState =
   | { status: "loading" }
@@ -43,9 +44,50 @@ type MobileQuickPanel = "search" | "item" | "location" | "area" | null;
 
 const areaColors = ["#64748b", "#256f6b", "#7c3aed", "#c2410c", "#be123c"];
 
-export function AppDashboard() {
+function createDashboardWriteClient(
+  selfHostedUser: SelfHostedDashboardUser | null,
+) {
+  if (selfHostedUser) {
+    const inventory = createSelfHostedInventoryClient();
+
+    return {
+      createArea: (input: AreaInput & { householdId?: string }) =>
+        inventory.createArea(input),
+      updateArea: (input: AreaInput & { householdId?: string; areaId: string }) =>
+        inventory.updateArea(input),
+      deleteArea: (input: { householdId?: string; areaId: string }) =>
+        inventory.deleteArea(input),
+      createLocation: (input: LocationInput & { householdId?: string }) =>
+        inventory.createLocation(input),
+      updateLocation: (
+        input: LocationInput & { householdId?: string; locationId: string },
+      ) => inventory.updateLocation(input),
+      deleteLocation: (input: { householdId?: string; locationId: string }) =>
+        inventory.deleteLocation(input),
+      createItem: (
+        input: InventoryItemInput & { householdId?: string; createdBy?: string },
+      ) => inventory.createItem(input),
+      updateItem: (
+        input: InventoryItemInput & { householdId?: string; itemId: string },
+      ) => inventory.updateItem(input),
+      deleteItem: (input: { householdId?: string; itemId: string }) =>
+        inventory.deleteItem(input),
+    };
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  return createSupabaseInventoryRepository(supabase);
+}
+
+export function AppDashboard({
+  selfHostedUser = null,
+}: {
+  selfHostedUser?: SelfHostedDashboardUser | null;
+}) {
   const router = useRouter();
-  const [state, setState] = useState<DashboardState>({ status: "loading" });
+  const [state, setState] = useState<DashboardState>(() =>
+    createInitialDashboardState(selfHostedUser),
+  );
   const [areaForm, setAreaForm] = useState({ name: "", color: areaColors[0] });
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [locationForm, setLocationForm] = useState({ name: "", areaId: "" });
@@ -71,6 +113,20 @@ export function AppDashboard() {
   const loadDashboard = useCallback(
     async (shouldUpdate: () => boolean = () => true) => {
       try {
+        if (selfHostedUser) {
+          const data = await createSelfHostedInventoryClient().getDashboard();
+          const summary = buildDashboardSummary(data);
+
+          if (shouldUpdate()) {
+            setState({
+              status: "ready",
+              summary,
+              userId: selfHostedUser.userId,
+            });
+          }
+          return;
+        }
+
         const supabase = createSupabaseBrowserClient();
         const userResult = await supabase.auth.getUser();
 
@@ -156,7 +212,7 @@ export function AppDashboard() {
         }
       }
     },
-    [],
+    [selfHostedUser],
   );
 
   useEffect(() => {
@@ -167,7 +223,7 @@ export function AppDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [loadDashboard]);
+  }, [loadDashboard, selfHostedUser]);
 
   const visibleItems = useMemo(() => {
     if (state.status !== "ready") {
@@ -212,6 +268,12 @@ export function AppDashboard() {
   }, [itemForm.areaId, state]);
 
   async function handleSignOut() {
+    if (selfHostedUser) {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -279,16 +341,16 @@ export function AppDashboard() {
 
     setIsSaving(true);
     try {
-      const supabase = createSupabaseBrowserClient();
+      const inventory = createDashboardWriteClient(selfHostedUser);
       if (editingAreaId) {
-        await updateInventoryArea(supabase, {
+        await inventory.updateArea({
           householdId: state.summary.householdId,
           areaId: editingAreaId,
           ...validation.value,
         });
         setFormMessage("区域已更新");
       } else {
-        await createInventoryArea(supabase, {
+        await inventory.createArea({
           householdId: state.summary.householdId,
           ...validation.value,
         });
@@ -314,8 +376,8 @@ export function AppDashboard() {
     setIsSaving(true);
     setFormMessage(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      await deleteInventoryArea(supabase, {
+      const inventory = createDashboardWriteClient(selfHostedUser);
+      await inventory.deleteArea({
         householdId: state.summary.householdId,
         areaId,
       });
@@ -345,8 +407,8 @@ export function AppDashboard() {
 
     setIsSaving(true);
     try {
-      const supabase = createSupabaseBrowserClient();
-      await createInventoryLocation(supabase, {
+      const inventory = createDashboardWriteClient(selfHostedUser);
+      await inventory.createLocation({
         householdId: state.summary.householdId,
         ...validation.value,
       });
@@ -379,8 +441,8 @@ export function AppDashboard() {
 
     setIsSaving(true);
     try {
-      const supabase = createSupabaseBrowserClient();
-      await updateInventoryLocation(supabase, {
+      const inventory = createDashboardWriteClient(selfHostedUser);
+      await inventory.updateLocation({
         householdId: state.summary.householdId,
         locationId: editingLocationId,
         ...validation.value,
@@ -391,6 +453,28 @@ export function AppDashboard() {
       await loadDashboard();
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "位置保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteLocation(locationId: string) {
+    if (state.status !== "ready" || !window.confirm("确认删除这个位置？")) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormMessage(null);
+    try {
+      const inventory = createDashboardWriteClient(selfHostedUser);
+      await inventory.deleteLocation({
+        householdId: state.summary.householdId,
+        locationId,
+      });
+      setFormMessage("位置已删除");
+      await loadDashboard();
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "位置删除失败");
     } finally {
       setIsSaving(false);
     }
@@ -413,16 +497,16 @@ export function AppDashboard() {
 
     setIsSaving(true);
     try {
-      const supabase = createSupabaseBrowserClient();
+      const inventory = createDashboardWriteClient(selfHostedUser);
       if (editingItemId) {
-        await updateInventoryItem(supabase, {
+        await inventory.updateItem({
           householdId: state.summary.householdId,
           itemId: editingItemId,
           ...validation.value,
         });
         setFormMessage("物品已更新");
       } else {
-        await createInventoryItem(supabase, {
+        await inventory.createItem({
           householdId: state.summary.householdId,
           createdBy: state.userId,
           ...validation.value,
@@ -455,8 +539,8 @@ export function AppDashboard() {
     setIsSaving(true);
     setFormMessage(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      await deleteInventoryItem(supabase, {
+      const inventory = createDashboardWriteClient(selfHostedUser);
+      await inventory.deleteItem({
         householdId: state.summary.householdId,
         itemId,
       });
@@ -770,13 +854,22 @@ export function AppDashboard() {
                       {location.areaName}
                     </p>
                   </div>
-                  <button
-                    className="shrink-0 text-sm"
-                    onClick={() => startEditLocation(location)}
-                    type="button"
-                  >
-                    编辑
-                  </button>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      className="text-sm"
+                      onClick={() => startEditLocation(location)}
+                      type="button"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      className="text-sm text-red-600"
+                      onClick={() => handleDeleteLocation(location.id)}
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

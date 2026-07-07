@@ -102,13 +102,14 @@ type DeleteBuilder = {
   };
 };
 
-type InventoryActionClient = {
+export type InventoryActionClient = {
   from: {
     (table: "areas"): InsertBuilder<InventoryAreaRow> &
       UpdateBuilder<InventoryAreaRow> &
       DeleteBuilder;
     (table: "locations"): InsertBuilder<InventoryLocationRow> &
-      UpdateBuilder<InventoryLocationRow>;
+      UpdateBuilder<InventoryLocationRow> &
+      DeleteBuilder;
     (table: "items"): InsertBuilder<InventoryItemRow> &
       UpdateBuilder<InventoryItemRow> &
       DeleteBuilder;
@@ -240,6 +241,21 @@ export async function updateInventoryLocation(
   }
 
   return data;
+}
+
+export async function deleteInventoryLocation(
+  supabase: InventoryActionClient,
+  input: { householdId: string; locationId: string },
+): Promise<void> {
+  const { error } = await supabase
+    .from("locations")
+    .delete()
+    .eq("id", input.locationId)
+    .eq("household_id", input.householdId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function createInventoryArea(

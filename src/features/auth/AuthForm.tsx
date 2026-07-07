@@ -2,9 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { validateAuthCredentials } from "./auth-validation";
-import { initializeDefaultHousehold } from "./default-household";
+import { authenticateWithSelfHostedApi } from "./self-hosted-auth-client";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -28,27 +27,12 @@ export function AuthForm() {
 
     setIsSubmitting(true);
     try {
-      const supabase = createSupabaseBrowserClient();
-      const credentials = { email: email.trim(), password };
-      const result =
-        mode === "sign-in"
-          ? await supabase.auth.signInWithPassword(credentials)
-          : await supabase.auth.signUp(credentials);
-
-      if (result.error) {
-        setMessage(result.error.message);
-        return;
-      }
-
-      if (result.data.session) {
-        await initializeDefaultHousehold(supabase, credentials.email);
-        router.push("/app");
-        return;
-      }
-
-      setMessage(
-        mode === "sign-in" ? "登录成功" : "注册成功，请检查邮箱确认邮件",
-      );
+      await authenticateWithSelfHostedApi({
+        mode,
+        email,
+        password,
+      });
+      router.push("/app");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "认证请求失败");
     } finally {
