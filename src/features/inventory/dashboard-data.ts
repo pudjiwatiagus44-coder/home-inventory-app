@@ -127,11 +127,13 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
         ? (locationAreas.get(item.location_id) ?? null)
         : null;
 
+      const expireDate = normalizeDateOnly(item.expire_date);
+
       return {
         id: item.id,
         name: item.name,
         note: item.note,
-        expireDate: item.expire_date,
+        expireDate,
         locationId: item.location_id,
         locationName: item.location_id
           ? (locationNames.get(item.location_id) ?? "未知位置")
@@ -140,7 +142,7 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
         areaName: item.location_id
           ? areaNameForLocation(areaId, areaNames)
           : "未分区",
-        expirationStatus: getExpirationStatus(item.expire_date),
+        expirationStatus: getExpirationStatus(expireDate),
       };
     }),
   };
@@ -216,12 +218,16 @@ export function getExpirationStatus(
   expireDate: string | null,
   now: Date = new Date(),
 ): ExpirationStatus {
-  if (!expireDate) {
+  const normalizedExpireDate = normalizeDateOnly(expireDate);
+
+  if (!normalizedExpireDate) {
     return "none";
   }
 
   const today = startOfDay(now).getTime();
-  const target = startOfDay(new Date(`${expireDate}T00:00:00`)).getTime();
+  const target = startOfDay(
+    new Date(`${normalizedExpireDate}T00:00:00`),
+  ).getTime();
   const daysUntilExpiration = Math.floor(
     (target - today) / (24 * 60 * 60 * 1000),
   );
@@ -246,6 +252,31 @@ function areaNameForLocation(
   }
 
   return areaNames.get(areaId) ?? "未知区域";
+}
+
+function normalizeDateOnly(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const parsedDate = new Date(value);
+
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return formatLocalDate(parsedDate);
+    }
+  }
+
+  const dateOnlyMatch = value.match(/^\d{4}-\d{2}-\d{2}/);
+  return dateOnlyMatch?.[0] ?? value;
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function startOfDay(date: Date) {

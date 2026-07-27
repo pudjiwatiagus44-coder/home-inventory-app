@@ -1,5 +1,35 @@
 # Acceptance Truth
 
+## 2026-07-07 Expiration date UX and soon-expiring fix evidence
+
+- User feedback: Alibaba Cloud test site showed expiration values like `2026-07-31T16:00:00.000Z`, date entry still felt like manual typing, and soon-expiring items did not appear in the soon-expiring panel.
+- Root cause evidence: PostgreSQL date values can arrive in JSON as ISO timestamp strings such as `2026-07-30T16:00:00.000Z`; the old dashboard rendered that raw value and passed it into `getExpirationStatus`, which produced `normal` instead of `soon`.
+- Code evidence: updated `src/features/inventory/dashboard-data.ts` to normalize incoming expiration values to local `YYYY-MM-DD` before display and expiration grouping; updated `src/features/inventory/AppDashboard.tsx` so date inputs call native `showPicker()` on click/focus when the browser supports it.
+- TDD evidence: added failing tests in `src/features/inventory/dashboard-data.test.ts` for ISO timestamp display normalization, PostgreSQL UTC serialization date offsets, and soon classification; targeted tests first failed with raw ISO display / wrong local day / `normal`, then passed after implementation.
+- Validation evidence: `npm test -- src/features/inventory/dashboard-data.test.ts` passed 21 tests; `npm test` passed 28 files / 173 tests with 2 skipped; `npm run lint` passed; `npm run build` passed.
+- Deployment evidence: rebuilt and restarted Alibaba Cloud test service; `home-inventory-app.service` returned `active`.
+- Public smoke evidence: created a test item through public API with `expireDate=2026-07-31`; API returned stored value `2026-07-30T16:00:00.000Z`, and the deployed frontend normalization rule maps it to `2026-07-31`, 24 days from 2026-07-07, status `soon`.
+- Browser evidence: Playwright opened `http://120.24.93.226/login`, registered a temporary user, created area/location/item through the UI, confirmed the expiration input is `type=date` with `showPicker`, confirmed the API still returns `2026-07-30T16:00:00.000Z`, and confirmed the page displays `2026-07-31` with the item in `即将过期物品`.
+- Cleanup evidence: deleted `expire-smoke-%@example.com` and `browser-%@example.com` test users; remaining smoke users count is 0.
+- Remaining unverified: manual click feel on the user's actual browser/device, because Playwright headless cannot display the operating-system date picker overlay.
+
+## 2026-07-07 Alibaba Cloud test environment deployment evidence
+
+- Server evidence: Alibaba Cloud Lightweight Application Server `Ubuntu-fjwh` in `华南1（深圳）`, public IP `120.24.93.226`, private IP `172.17.13.25`, Ubuntu upgraded from 24.04.2 to 24.04.4 LTS after `apt-get update && apt-get upgrade -y` and reboot.
+- SSH evidence: `serverkey` is bound to the instance; Windows private key ACL was fixed to `Administrator:(R)` after OpenSSH rejected inherited `CodexSandboxUsers` read access; SSH login as `root@120.24.93.226` succeeded.
+- Runtime evidence: installed Node.js `v24.18.0`, npm `11.16.0`, Git `2.43.0`, Nginx `1.24.0`, PostgreSQL `16.14`; Nginx and PostgreSQL are enabled and active.
+- Network evidence: UFW is active with inbound `22/tcp` and `80/tcp`; PostgreSQL listens only on `127.0.0.1:5432`; Nginx listens on public `80`.
+- Database evidence: created PostgreSQL role `home_inventory_app`, database `home_inventory_test`, and applied `dev-docs/sql/mainland_initial_schema.sql`; tables present: `users`, `auth_sessions`, `profiles`, `households`, `household_members`, `areas`, `locations`, `items`.
+- Deployment evidence: code deployed to `/opt/home-inventory-app`, build ran as `deploy`, and `home-inventory-app.service` is enabled and active under systemd.
+- Nginx evidence: Nginx reverse proxy now serves Next.js on `http://120.24.93.226/`; public checks for `/login` and `/app` returned HTTP 200 with `X-Powered-By: Next.js`.
+- Cookie fix evidence: added `AUTH_COOKIE_SECURE=false` for the current IP + HTTP test environment only; test `src/app/api/auth/route-helpers.test.ts` first failed because production cookies stayed `Secure`, then passed after adding the explicit test override.
+- Public API smoke evidence: `POST /api/auth/register` returned 200 and set `home_inventory_session`; follow-up `GET /api/inventory/dashboard` returned 200 with default household and empty arrays; create area/location/item API smoke returned ok with dashboard counts `areas=1`, `locations=1`, `items=1`.
+- Cleanup evidence: deleted `deploy-smoke-%@example.com` test users; remaining smoke users count is 0.
+- Backup evidence: `pg_dump --format=custom` generated `/var/backups/home-inventory-app/home_inventory_test_20260707_211902.dump`.
+- Local validation evidence after cookie fix: `npm test` passed 28 files / 170 tests with 2 skipped; `npm run lint` exit code 0; `npm run build` exit code 0.
+- Safety evidence: real database password, `SESSION_SECRET`, private key contents, full public key, and `.env.local` were not written to repository documents; server env values are stored in `/etc/home-inventory-app/app.env` with `root:deploy 640`.
+- Remaining unverified: browser click-through on a real mobile/desktop browser at `http://120.24.93.226`, HTTPS/domain/ICP flow, email verification, password reset, and production-grade backup restore drill.
+
 ## 2026-07-07 Browser self-hosted auth and inventory CRUD evidence
 
 - Code evidence: added `src/features/auth/self-hosted-auth-client.ts` and `src/features/auth/self-hosted-auth-client.test.ts`; updated `src/features/auth/AuthForm.tsx` to call `/api/auth/login` and `/api/auth/register` instead of Supabase browser auth.
@@ -283,8 +313,8 @@
 | 数据影响 | 数据创建、更新、删除证据 | 已有代码、用户反馈和 RLS 负例证据；仍需完整浏览器陪跑 |
 | 权限安全 | RLS 设计、migration、真实 Supabase 用户 A/B 负例 | 已验证，13 项通过 / 0 项失败 |
 | 第三方 | Supabase 官方文档和 sandbox/API 证据 | 部分确认 |
-| 部署路线 | `dev-docs/deployment-route.md` 已确认 Vercel 免费层 + Supabase 免费层 | 已确认路线；尚未部署验证 |
-| 中国大陆正式版路线 | `dev-docs/deployment-route.md` 和 `dev-docs/stages/mainland-production-route.md` 已记录 | 已确认目标；实施未开始 |
+| 部署路线 | `dev-docs/deployment-route.md` 已确认；阿里云测试环境已部署 | 阿里云测试 URL 已完成公网 API smoke；完整浏览器点击验收未完成 |
+| 中国大陆正式版路线 | `dev-docs/deployment-route.md` 和 `dev-docs/stages/mainland-production-route.md` 已记录 | 已确认目标；测试环境已跑通，正式 HTTPS/备案/生产验收未完成 |
 | UI | 截图、响应式、空/加载/错误状态 | 基础浏览器证据已记录；完整移动端操作体验未验证 |
 | Git | `.gitignore`、私有资料、checkpoint | 已有 checkpoint；本次文档收口由本轮 Git 提交记录 |
 

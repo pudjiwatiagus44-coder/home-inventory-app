@@ -41,6 +41,7 @@ type DashboardState =
   | { status: "ready"; summary: DashboardSummary; userId: string };
 
 type MobileQuickPanel = "search" | "item" | "location" | "area" | null;
+type ItemSortMode = "expireSoon" | "expireLate" | "name";
 
 const areaColors = ["#64748b", "#256f6b", "#7c3aed", "#c2410c", "#be123c"];
 
@@ -89,8 +90,11 @@ export function AppDashboard({
     createInitialDashboardState(selfHostedUser),
   );
   const [areaForm, setAreaForm] = useState({ name: "", color: areaColors[0] });
+  const [showAreaComposer, setShowAreaComposer] = useState(false);
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [locationForm, setLocationForm] = useState({ name: "", areaId: "" });
+  const [locationColor, setLocationColor] = useState(areaColors[1]);
+  const [showLocationComposer, setShowLocationComposer] = useState(false);
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [locationAreaFilter, setLocationAreaFilter] = useState("");
   const [itemForm, setItemForm] = useState({
@@ -107,6 +111,7 @@ export function AppDashboard({
     areaId: "",
     locationId: "",
   });
+  const [itemSortMode, setItemSortMode] = useState<ItemSortMode>("expireSoon");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -230,8 +235,11 @@ export function AppDashboard({
       return [];
     }
 
-    return filterInventoryItems(state.summary.items, filters);
-  }, [filters, state]);
+    return sortDashboardItems(
+      filterInventoryItems(state.summary.items, filters),
+      itemSortMode,
+    );
+  }, [filters, itemSortMode, state]);
 
   const expirationHighlights = useMemo(() => {
     if (state.status !== "ready") {
@@ -290,6 +298,7 @@ export function AppDashboard({
     if (panel === "location") {
       setEditingLocationId(null);
       setLocationForm({ name: "", areaId: "" });
+      setLocationColor(areaColors[1]);
     }
 
     if (panel === "item") {
@@ -358,6 +367,7 @@ export function AppDashboard({
       }
       setAreaForm({ name: "", color: areaColors[0] });
       setEditingAreaId(null);
+      setShowAreaComposer(false);
       await loadDashboard();
       return true;
     } catch (error) {
@@ -413,6 +423,8 @@ export function AppDashboard({
         ...validation.value,
       });
       setLocationForm({ name: "", areaId: "" });
+      setLocationColor(areaColors[1]);
+      setShowLocationComposer(false);
       setFormMessage("位置已保存");
       await loadDashboard();
       return true;
@@ -449,6 +461,7 @@ export function AppDashboard({
       });
       setLocationForm({ name: "", areaId: "" });
       setEditingLocationId(null);
+      setShowLocationComposer(false);
       setFormMessage("位置已更新");
       await loadDashboard();
     } catch (error) {
@@ -553,13 +566,30 @@ export function AppDashboard({
     }
   }
 
+  function openDatePicker(input: HTMLInputElement) {
+    try {
+      input.showPicker?.();
+    } catch {
+      // Some browsers only allow showPicker during direct user activation.
+    }
+  }
+
   function startEditArea(area: DashboardSummary["areas"][number]) {
+    setFormMessage(null);
+    setShowAreaComposer(false);
     setEditingAreaId(area.id);
     setAreaForm({ name: area.name, color: area.color });
   }
 
+  function cancelAreaEdit() {
+    setFormMessage(null);
+    setEditingAreaId(null);
+    setAreaForm({ name: "", color: areaColors[0] });
+  }
+
   function startEditLocation(location: DashboardSummary["locations"][number]) {
     setFormMessage(null);
+    setShowLocationComposer(false);
     setEditingLocationId(location.id);
     setLocationForm({ name: location.name, areaId: location.areaId ?? "" });
   }
@@ -567,6 +597,7 @@ export function AppDashboard({
   function cancelLocationEdit() {
     setFormMessage(null);
     setEditingLocationId(null);
+    setShowLocationComposer(false);
     setLocationForm({ name: "", areaId: "" });
   }
 
@@ -576,6 +607,7 @@ export function AppDashboard({
     }
 
     setEditingItemId(item.id);
+    setMobileQuickPanel("item");
     setItemForm({
       name: item.name,
       areaId: getLocationAreaFilterValue(state.summary.locations, item.locationId),
@@ -621,83 +653,352 @@ export function AppDashboard({
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div>
-            <p className="text-sm text-[var(--muted-foreground)]">家庭空间</p>
-            <h1 className="text-xl font-semibold">{state.summary.householdName}</h1>
+      <header className="border-b border-[var(--border)] bg-[var(--surface)]/95">
+        <div className="mx-auto flex min-h-16 max-w-[1760px] items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:grid lg:grid-cols-[minmax(180px,280px)_minmax(320px,520px)_minmax(180px,1fr)] xl:grid-cols-[minmax(180px,280px)_minmax(320px,520px)_minmax(180px,1fr)]">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--primary)] text-[13px] font-semibold text-white">
+              家
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-[18px] font-semibold leading-6">家中清单</h1>
+            </div>
           </div>
-          <button
-            className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
-            onClick={handleSignOut}
-            type="button"
-          >
-            退出
-          </button>
-        </div>
-      </header>
-
-      <section className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:px-6 xl:hidden">
-        <div className="mx-auto grid max-w-7xl gap-3">
-          <div>
-            <p className="text-xs text-[var(--muted-foreground)]">快捷操作</p>
-            <p className="truncate text-sm font-medium">
-              {filters.search ? `正在搜索：${filters.search}` : "搜索或新增常用内容"}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="hidden h-10 min-w-0 items-center gap-2 lg:flex">
+            <label className="relative min-w-0 flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--muted-foreground)]">
+                搜索
+              </span>
+              <input
+                className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-14 !text-[13px] shadow-sm outline-none focus:border-[var(--primary)]"
+                data-testid="global-item-search"
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, search: event.target.value }))
+                }
+                placeholder="搜索物品（名称 / 备注 / 位置）"
+                value={filters.search}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--muted-foreground)]">
+                ⌘ K
+              </span>
+            </label>
             <button
-              className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white"
-              onClick={() => openMobileQuickPanel("search")}
-              type="button"
-            >
-              搜索物品
-            </button>
-            <button
-              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              className="h-10 shrink-0 rounded-md bg-[var(--primary)] px-3 text-[13px] font-medium text-white shadow-sm"
+              data-testid="top-add-item-button"
               onClick={() => openMobileQuickPanel("item")}
               type="button"
             >
-              新增物品
+              + 新增物品
             </button>
+          </div>
+          <div className="flex items-center justify-end gap-2">
             <button
-              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-              onClick={() => openMobileQuickPanel("location")}
+              className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
               type="button"
             >
-              新增位置
+              提醒
             </button>
             <button
-              className="h-10 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-              onClick={() => openMobileQuickPanel("area")}
+              className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
               type="button"
             >
-              新增区域
+              设置
+            </button>
+            <button
+              className="h-9 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-[13px] font-medium shadow-sm"
+              onClick={handleSignOut}
+              type="button"
+            >
+              退出
             </button>
           </div>
         </div>
+      </header>
+
+      <section
+        className="mx-auto grid h-[calc(100dvh-65px)] max-w-[720px] grid-rows-[40px_88px_72px_minmax(0,1fr)] gap-1.5 overflow-hidden px-4 py-1.5 sm:px-6 lg:hidden"
+        data-testid="mobile-dashboard"
+      >
+        <label className="relative block">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-[var(--muted-foreground)]">
+            ⌕
+          </span>
+          <input
+            className="h-10 w-full rounded-[12px] border-0 bg-[var(--surface-muted)] px-10 !text-[13px] font-medium shadow-inner outline-none placeholder:text-[var(--muted-foreground)] focus:ring-2 focus:ring-[var(--primary)]/35"
+            data-testid="mobile-search-field"
+            onChange={(event) =>
+              setFilters((current) => ({ ...current, search: event.target.value }))
+            }
+            placeholder="搜索物品（名称 / 类别 / 位置 / 备注）"
+            value={filters.search}
+          />
+        </label>
+
+        <section className="min-w-0 rounded-[12px] border border-[var(--border)] bg-[var(--surface-elevated)] p-1.5 shadow-sm">
+          <div className="mb-0.5 flex items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold leading-4">区域</h2>
+          </div>
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1"
+            data-testid="mobile-area-strip"
+          >
+            {state.summary.areas.map((area) => {
+              const itemCount = state.summary.items.filter(
+                (item) => item.areaId === area.id,
+              ).length;
+              const isSelected = filters.areaId === area.id;
+
+              return (
+                <button
+                  className={`grid h-10 min-w-20 place-items-center rounded-[9px] border px-1.5 text-center transition ${
+                    isSelected
+                      ? "border-[var(--primary)] bg-[#eef5ef] text-[var(--primary)]"
+                      : "border-[var(--border)] bg-white text-[var(--foreground)]"
+                  }`}
+                  key={area.id}
+                  onClick={() => {
+                    setFilters((current) => ({
+                      ...current,
+                      areaId: area.id,
+                      locationId: "",
+                    }));
+                    setLocationAreaFilter(area.id);
+                  }}
+                  type="button"
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: area.color }}
+                  />
+                  <span className="text-[12px] font-semibold leading-3">{area.name}</span>
+                  <span className="text-[10px] leading-3 text-[var(--muted-foreground)]">
+                    {itemCount}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              className="grid h-10 min-w-20 place-items-center rounded-[9px] border border-[var(--border)] bg-white px-1.5 text-center text-[var(--muted-foreground)]"
+              onClick={() => openMobileQuickPanel("area")}
+              type="button"
+            >
+              <span className="text-base leading-none">+</span>
+              <span className="text-[10px]">新增区域</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="min-w-0 rounded-[12px] border border-[var(--border)] bg-[var(--surface-elevated)] p-1.5 shadow-sm">
+          <div className="mb-0.5 flex items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold leading-4">位置</h2>
+            {filters.areaId ? (
+              <button
+                className="text-[12px] font-medium text-[var(--primary)]"
+                onClick={() => {
+                  setFilters((current) => ({
+                    ...current,
+                    areaId: "",
+                    locationId: "",
+                  }));
+                  setLocationAreaFilter("");
+                }}
+                type="button"
+              >
+                全部区域
+              </button>
+            ) : null}
+          </div>
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1"
+            data-testid="mobile-location-strip"
+          >
+            {visibleLocations.map((location) => {
+              const itemCount = state.summary.items.filter(
+                (item) => item.locationId === location.id,
+              ).length;
+              const isSelected = filters.locationId === location.id;
+
+              return (
+                <button
+                  className={`grid h-9 min-w-20 place-items-center rounded-[9px] border px-1.5 text-center transition ${
+                    isSelected
+                      ? "border-[var(--primary)] bg-[#eef5ef] text-[var(--primary)]"
+                      : "border-[var(--border)] bg-white text-[var(--foreground)]"
+                  }`}
+                  key={location.id}
+                  onClick={() => {
+                    setFilters((current) => ({
+                      ...current,
+                      areaId: location.areaId ?? "",
+                      locationId: location.id,
+                    }));
+                    setLocationAreaFilter(location.areaId ?? "");
+                  }}
+                  type="button"
+                >
+                  <span className="text-[12px] font-semibold leading-3">
+                    {location.name}
+                  </span>
+                  <span className="text-[10px] leading-3 text-[var(--muted-foreground)]">
+                    {itemCount}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              className="grid h-9 min-w-20 place-items-center rounded-[9px] border border-[var(--border)] bg-white px-1.5 text-center text-[var(--muted-foreground)]"
+              onClick={() => openMobileQuickPanel("location")}
+              type="button"
+            >
+              <span className="text-base leading-none">+</span>
+              <span className="text-[10px]">新增位置</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="flex min-h-0 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface-elevated)] p-2 shadow-sm">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="text-[16px] font-semibold leading-5">物品</h2>
+            <select
+              className="h-7 rounded-md border-0 bg-transparent px-1 !text-[12px] text-[var(--muted-foreground)] outline-none"
+              onChange={(event) => setItemSortMode(event.target.value as ItemSortMode)}
+              value={itemSortMode}
+            >
+              <option value="expireSoon">按过期日 ↑</option>
+              <option value="expireLate">按过期日 ↓</option>
+              <option value="name">按名称</option>
+            </select>
+          </div>
+
+          <div
+            className="min-h-0 overflow-y-auto overscroll-y-contain"
+            data-testid="mobile-item-scroll"
+          >
+            {state.summary.isEmpty ? (
+              <EmptyState text="先创建区域和位置，再添加第一个物品。" />
+            ) : visibleItems.length === 0 ? (
+              <EmptyState text="没有匹配的物品。" />
+            ) : (
+              <ul className="divide-y divide-[var(--border)]">
+                {visibleItems.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      className="grid h-[44px] w-full grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 text-left"
+                      onClick={() => startEditItem(item)}
+                      type="button"
+                    >
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-muted)] text-[12px] font-semibold text-[var(--primary)]"
+                        data-testid="mobile-item-thumbnail"
+                      >
+                        {item.name.slice(0, 1)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-semibold leading-4">
+                          {item.name}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] leading-3 text-[var(--muted-foreground)]">
+                          {item.locationName}
+                          {item.note ? ` · ${item.note}` : ""}
+                        </span>
+                      </span>
+                      <span className="grid justify-items-end gap-0 text-[11px] leading-3 text-[var(--muted-foreground)]">
+                        <span>{item.expireDate || "-"}</span>
+                        <span>{item.expirationStatus === "expired" ? "已过期" : item.expirationStatus === "soon" ? "即将过期" : "正常"}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <button
+          aria-label="新增物品"
+          className="fixed bottom-5 right-4 z-40 flex h-14 w-14 flex-col items-center justify-center rounded-full bg-[var(--primary)] text-sm font-semibold text-white shadow-xl shadow-black/20"
+          data-testid="mobile-add-item-button"
+          onClick={() => openMobileQuickPanel("item")}
+          type="button"
+        >
+          <span className="text-2xl leading-5">+</span>
+          <span className="text-[12px] leading-4">新增</span>
+        </button>
       </section>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 xl:grid-cols-[320px_1fr]">
-        <aside className="order-1 space-y-4">
-          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="mb-4 text-sm font-semibold">概览</h2>
-            <div className="grid grid-cols-3 gap-3 xl:grid-cols-1">
-              <Metric label="区域" value={state.summary.areaCount} />
-              <Metric label="位置" value={state.summary.locationCount} />
-              <Metric label="物品" value={state.summary.itemCount} />
+      <main
+        className="mx-auto hidden h-[calc(100vh-65px)] overflow-hidden w-full max-w-[1760px] gap-0 border-t border-[var(--border)] px-4 py-0 sm:px-6 lg:grid lg:grid-cols-[260px_260px_minmax(420px,1fr)] xl:grid-cols-[260px_260px_minmax(420px,1fr)] 2xl:grid-cols-[280px_280px_minmax(640px,1fr)]"
+        data-testid="desktop-inventory-shell"
+      >
+        <section
+          className="order-1 flex min-h-0 flex-col border-x border-[var(--border)] bg-[var(--surface)] p-3"
+          data-testid="area-panel"
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-semibold leading-6">区域</h2>
             </div>
-          </section>
+            <button
+              className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-[13px] font-medium"
+              data-testid="area-add-button"
+              onClick={() => {
+                setEditingAreaId(null);
+                setAreaForm({ name: "", color: areaColors[0] });
+                setShowAreaComposer((current) => !current);
+              }}
+              type="button"
+            >
+              + 新增区域
+            </button>
+          </div>
 
-          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold">区域</h2>
+          {showAreaComposer ? (
+          <form className="mb-3 grid gap-2 border-b border-[var(--border)] pb-3" onSubmit={handleSaveArea}>
+            <label className="grid gap-1.5 text-[13px] font-medium">
+              区域名称
+              <input
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
+                maxLength={80}
+                onChange={(event) =>
+                  setAreaForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="例如：厨房"
+                value={areaForm.name}
+              />
+            </label>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup">
+              {areaColors.map((color) => (
+                <button
+                  aria-label={`区域颜色 ${color}`}
+                  className="h-7 w-7 rounded-full border-2 shadow-sm"
+                  key={color}
+                  onClick={() => setAreaForm((current) => ({ ...current, color }))}
+                  style={{
+                    backgroundColor: color,
+                    borderColor:
+                      areaForm.color === color ? "var(--foreground)" : "white",
+                  }}
+                  type="button"
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <button
+                className="h-9 rounded-md bg-[var(--primary)] px-3 text-[14px] font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                {editingAreaId ? "保存区域" : "新增区域"}
+              </button>
               {editingAreaId ? (
                 <button
-                  className="text-sm text-[var(--muted-foreground)]"
+                  className="h-9 rounded-md border border-[var(--border)] px-3 text-[14px]"
                   onClick={() => {
                     setEditingAreaId(null);
                     setAreaForm({ name: "", color: areaColors[0] });
+                    setShowAreaComposer(false);
                   }}
                   type="button"
                 >
@@ -705,89 +1006,119 @@ export function AppDashboard({
                 </button>
               ) : null}
             </div>
+          </form>
+          ) : null}
 
-            <form className="grid gap-3" onSubmit={handleSaveArea}>
-              <label className="grid gap-2 text-sm font-medium">
-                区域名称
-                <input
-                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
-                  maxLength={80}
-                  onChange={(event) =>
-                    setAreaForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="例如：厨房"
-                  value={areaForm.name}
-                />
-              </label>
-              <div className="flex flex-wrap gap-2" role="radiogroup">
-                {areaColors.map((color) => (
-                  <button
-                    aria-label={`区域颜色 ${color}`}
-                    className="h-8 w-8 rounded-full border-2"
-                    key={color}
-                    onClick={() =>
-                      setAreaForm((current) => ({ ...current, color }))
-                    }
-                    style={{
-                      backgroundColor: color,
-                      borderColor:
-                        areaForm.color === color ? "var(--foreground)" : "white",
-                    }}
-                    type="button"
-                  />
-                ))}
-              </div>
-              <button
-                className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white disabled:opacity-60"
-                disabled={isSaving}
-                type="submit"
-              >
-                {editingAreaId ? "保存区域" : "新增区域"}
-              </button>
-            </form>
+          <div className="min-h-0 flex-1 overflow-y-auto" data-testid="area-list-scroll">
+            <ul className="mt-3 space-y-1.5 pr-1">
+              {state.summary.areas.map((area) => {
+                const itemCount = state.summary.items.filter(
+                  (item) => item.areaId === area.id,
+                ).length;
+                const isSelected = filters.areaId === area.id;
 
-            <ul className="mt-4 divide-y divide-[var(--border)]">
-              {state.summary.areas.map((area) => (
-                <li className="flex items-center justify-between gap-3 py-3" key={area.id}>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: area.color }}
-                      />
-                      <p className="truncate text-sm font-medium">{area.name}</p>
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                      {area.locationCount} 个位置
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button className="text-sm" onClick={() => startEditArea(area)} type="button">
-                      编辑
-                    </button>
-                    <button
-                      className="text-sm text-red-600"
-                      onClick={() => handleDeleteArea(area.id)}
-                      type="button"
+                return (
+                  <li key={area.id}>
+                    <div
+                      className={`w-full rounded-md border px-3 py-2 text-left transition ${
+                        isSelected
+                          ? "border-[var(--primary)] bg-[var(--surface-elevated)] shadow-sm"
+                          : "border-transparent hover:border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                      }`}
+                      data-testid="area-list-item-main"
+                      onClick={() => {
+                        setFilters((current) => ({
+                          ...current,
+                          areaId: area.id,
+                          locationId: "",
+                        }));
+                        setLocationAreaFilter(area.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setFilters((current) => ({
+                            ...current,
+                            areaId: area.id,
+                            locationId: "",
+                          }));
+                          setLocationAreaFilter(area.id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
-                      删除
-                    </button>
-                  </div>
-                </li>
-              ))}
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: area.color }}
+                          />
+                          <span
+                            className="truncate text-[14px] font-semibold leading-5"
+                            onDoubleClick={() => startEditArea(area)}
+                          >
+                            {area.name}
+                          </span>
+                          <span className="shrink-0 text-[13px] text-[var(--muted-foreground)]">
+                            {area.locationCount} 个位置
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="text-[13px] text-[var(--muted-foreground)]">
+                            {itemCount} 件
+                          </span>
+                          <button
+                            aria-label="删除区域"
+                            className="flex h-5 w-5 items-center justify-center rounded-full text-[13px] text-[var(--danger)] hover:bg-[var(--surface-muted)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteArea(area.id);
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
-          </section>
+          </div>
+        </section>
 
-          <section className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="mb-4 text-sm font-semibold">位置</h2>
-            <form className="grid gap-3" onSubmit={handleCreateLocation}>
-              <label className="grid gap-2 text-sm font-medium">
+        <section
+          className="order-2 flex min-h-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-3"
+          data-testid="location-panel"
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-semibold leading-6">位置</h2>
+            </div>
+            <button
+              className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-[13px] font-medium"
+              data-testid="location-add-button"
+              onClick={() => {
+                setEditingLocationId(null);
+                setLocationForm({ name: "", areaId: "" });
+                setLocationColor(areaColors[1]);
+                setShowLocationComposer((current) => !current);
+              }}
+              type="button"
+            >
+              + 新增位置
+            </button>
+          </div>
+
+          {showLocationComposer ? (
+          <form className="mb-3 grid gap-2 border-b border-[var(--border)] pb-3" onSubmit={handleCreateLocation}>
+            <div className="grid gap-2 sm:grid-cols-2" data-testid="location-composer-fields">
+              <label className="grid gap-1.5 text-[13px] font-medium">
                 位置名称
                 <input
-                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                   maxLength={80}
                   onChange={(event) =>
                     setLocationForm((current) => ({
@@ -795,14 +1126,14 @@ export function AppDashboard({
                       name: event.target.value,
                     }))
                   }
-                  placeholder="例如：上层抽屉"
+                  placeholder="例如：冰箱上层"
                   value={locationForm.name}
                 />
               </label>
-              <label className="grid gap-2 text-sm font-medium">
+              <label className="grid gap-1.5 text-[13px] font-medium">
                 所属区域
                 <select
-                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                   onChange={(event) =>
                     setLocationForm((current) => ({
                       ...current,
@@ -819,146 +1150,144 @@ export function AppDashboard({
                   ))}
                 </select>
               </label>
-              <button
-                className="h-10 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-white disabled:opacity-60"
-                disabled={isSaving}
-                type="submit"
-              >
-                保存位置
-              </button>
-            </form>
-
-            <label className="mt-4 grid gap-2 text-sm font-medium">
-              显示区域
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
-                onChange={(event) => setLocationAreaFilter(event.target.value)}
-                value={locationAreaFilter}
-              >
-                <option value="">全部区域</option>
-                <option value="__unassigned__">未分区</option>
-                {state.summary.areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <ul className="mt-4 divide-y divide-[var(--border)]">
-              {visibleLocations.map((location) => (
-                <li className="flex items-center justify-between gap-3 py-3" key={location.id}>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{location.name}</p>
-                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                      {location.areaName}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      className="text-sm"
-                      onClick={() => startEditLocation(location)}
-                      type="button"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      className="text-sm text-red-600"
-                      onClick={() => handleDeleteLocation(location.id)}
-                      type="button"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </li>
+            </div>
+            <div className="flex flex-wrap gap-1.5" data-testid="location-color-picker" role="radiogroup">
+              {areaColors.map((color) => (
+                <button
+                  aria-label={`位置颜色 ${color}`}
+                  className="h-7 w-7 rounded-full border-2 shadow-sm"
+                  key={color}
+                  onClick={() => setLocationColor(color)}
+                  style={{
+                    backgroundColor: color,
+                    borderColor:
+                      locationColor === color ? "var(--foreground)" : "white",
+                  }}
+                  type="button"
+                />
               ))}
+            </div>
+            <button
+              className="h-9 rounded-md bg-[var(--secondary)] px-3 text-[14px] font-medium text-white disabled:opacity-60"
+              disabled={isSaving}
+              type="submit"
+            >
+              保存位置
+            </button>
+          </form>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto" data-testid="location-list-scroll">
+            <ul className="mt-3 space-y-1.5 pr-1">
+              {visibleLocations.map((location) => {
+                const itemCount = state.summary.items.filter(
+                  (item) => item.locationId === location.id,
+                ).length;
+                const isSelected = filters.locationId === location.id;
+
+                return (
+                  <li key={location.id}>
+                    <div
+                      className={`w-full rounded-md border px-3 py-2 text-left transition ${
+                        isSelected
+                          ? "border-[var(--secondary)] bg-[var(--surface-elevated)] shadow-sm"
+                          : "border-transparent hover:border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                      }`}
+                      data-testid="location-list-item-main"
+                      onClick={() =>
+                        setFilters((current) => ({
+                          ...current,
+                          areaId: location.areaId ?? "",
+                          locationId: location.id,
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setFilters((current) => ({
+                            ...current,
+                            areaId: location.areaId ?? "",
+                            locationId: location.id,
+                          }));
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="truncate text-[14px] font-semibold leading-5"
+                            onDoubleClick={() => startEditLocation(location)}
+                          >
+                            {location.name}
+                          </span>
+                          <span className="truncate text-[13px] text-[var(--muted-foreground)]">
+                            {location.areaName}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="text-[13px] text-[var(--muted-foreground)]">
+                            {itemCount} 件
+                          </span>
+                          <button
+                            aria-label="删除位置"
+                            className="flex h-5 w-5 items-center justify-center rounded-full text-[13px] text-[var(--danger)] hover:bg-[var(--surface-muted)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteLocation(location.id);
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
             {visibleLocations.length === 0 ? (
-              <p className="mt-4 rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+              <p className="mt-3 rounded-md bg-[var(--surface-muted)] p-2.5 text-sm text-[var(--muted-foreground)]">
                 当前区域暂无位置。
               </p>
             ) : null}
-          </section>
-        </aside>
-
-        <section className="order-2 min-h-[560px] rounded-md border border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex flex-col gap-3 border-b border-[var(--border)] p-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">物品清单</h2>
-              <p className="text-sm text-[var(--muted-foreground)]">
-                {visibleItems.length} / {state.summary.itemCount} 个物品
-              </p>
-            </div>
-            <div className="hidden gap-2 xl:grid xl:grid-cols-3">
-              <input
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
-                onChange={(event) =>
-                  setFilters((current) => ({ ...current, search: event.target.value }))
-                }
-                placeholder="搜索名称或备注"
-                value={filters.search}
-              />
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    areaId: event.target.value,
-                    locationId: "",
-                  }))
-                }
-                value={filters.areaId}
-              >
-                <option value="">全部区域</option>
-                {state.summary.areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    locationId: event.target.value,
-                  }))
-                }
-                value={filters.locationId}
-              >
-                <option value="">全部位置</option>
-                {filteredLocations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
+        </section>
 
-          <div className="grid gap-3 border-b border-[var(--border)] p-4 lg:grid-cols-2">
-            <ExpirationPanel
-              emptyText="暂无即将过期物品"
-              items={expirationHighlights.soonItems}
-              title="即将过期物品"
-              tone="soon"
-            />
-            <ExpirationPanel
-              emptyText="暂无已过期物品"
-              items={expirationHighlights.expiredItems}
-              title="已过期物品"
-              tone="expired"
-            />
+        <section className="order-3 flex min-h-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
+          <div className="grid gap-3 border-b border-[var(--border)] px-4 py-3">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-[16px] font-semibold leading-6">物品</h2>
+                <p className="text-[13px] text-[var(--muted-foreground)]">
+                  共 {visibleItems.length} 件
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-8 rounded-md border border-[var(--border)] bg-white px-2 !text-[13px] outline-none focus:border-[var(--primary)]"
+                  data-testid="item-sort"
+                  onChange={(event) => setItemSortMode(event.target.value as ItemSortMode)}
+                  value={itemSortMode}
+                >
+                  <option value="expireSoon">按过期日 ↑</option>
+                  <option value="expireLate">按过期日 ↓</option>
+                  <option value="name">按名称</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <form
-            className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-2 xl:grid-cols-[1fr_160px_180px_1fr_160px_auto]"
+            className="hidden"
             onSubmit={handleSaveItem}
           >
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid gap-1.5 text-[13px] font-medium">
               物品名称
               <input
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                 maxLength={120}
                 onChange={(event) =>
                   setItemForm((current) => ({ ...current, name: event.target.value }))
@@ -967,10 +1296,10 @@ export function AppDashboard({
                 value={itemForm.name}
               />
             </label>
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid gap-1.5 text-[13px] font-medium">
               区域
               <select
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                 onChange={(event) =>
                   setItemForm((current) => ({
                     ...current,
@@ -989,10 +1318,10 @@ export function AppDashboard({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid gap-1.5 text-[13px] font-medium">
               位置
               <select
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                 disabled={!itemForm.areaId}
                 onChange={(event) =>
                   setItemForm((current) => ({
@@ -1016,10 +1345,10 @@ export function AppDashboard({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid gap-1.5 text-[13px] font-medium">
               备注
               <input
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
                 maxLength={1000}
                 onChange={(event) =>
                   setItemForm((current) => ({ ...current, note: event.target.value }))
@@ -1028,10 +1357,12 @@ export function AppDashboard({
                 value={itemForm.note}
               />
             </label>
-            <label className="grid gap-2 text-sm font-medium">
+            <label className="grid gap-1.5 text-[13px] font-medium">
               过期日
               <input
-                className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
+                onClick={(event) => openDatePicker(event.currentTarget)}
+                onFocus={(event) => openDatePicker(event.currentTarget)}
                 onChange={(event) =>
                   setItemForm((current) => ({
                     ...current,
@@ -1043,7 +1374,7 @@ export function AppDashboard({
               />
             </label>
             <button
-              className="h-10 self-end rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+              className="h-9 self-end rounded-md bg-[var(--primary)] px-4 text-[14px] font-medium text-white disabled:opacity-60 xl:col-start-3"
               disabled={isSaving}
               type="submit"
             >
@@ -1051,67 +1382,143 @@ export function AppDashboard({
             </button>
           </form>
 
-          {editingItemId ? (
-            <div className="border-b border-[var(--border)] px-4 py-3">
-              <button
-                className="text-sm text-[var(--muted-foreground)]"
-                onClick={() => {
-                  setEditingItemId(null);
-                  setItemForm({
-                    name: "",
-                    areaId: "",
-                    locationId: "",
-                    note: "",
-                    expireDate: "",
-                  });
-                }}
-                type="button"
-              >
-                取消编辑
-              </button>
-            </div>
-          ) : null}
+          <div
+            className="hidden"
+            data-testid="item-search"
+          >
+            <input
+              className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, search: event.target.value }))
+              }
+              placeholder="搜索名称或备注"
+              value={filters.search}
+            />
+            <select
+              className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  areaId: event.target.value,
+                  locationId: "",
+                }))
+              }
+              value={filters.areaId}
+            >
+              <option value="">全部区域</option>
+              {state.summary.areas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-9 rounded-md border border-[var(--border)] bg-white px-3 !text-[14px] outline-none focus:border-[var(--primary)]"
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  locationId: event.target.value,
+                }))
+              }
+              value={filters.locationId}
+            >
+              <option value="">全部位置</option>
+              {filteredLocations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            className="hidden"
+            data-testid="item-expiration"
+          >
+            <ExpirationPanel
+              emptyText="暂无即将过期物品"
+              items={expirationHighlights.soonItems}
+              title="即将过期物品"
+              tone="soon"
+            />
+            <ExpirationPanel
+              emptyText="暂无已过期物品"
+              items={expirationHighlights.expiredItems}
+              title="已过期物品"
+              tone="expired"
+            />
+          </div>
 
           {formMessage ? (
-            <p className="border-b border-[var(--border)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+            <p className="border-b border-[var(--border)] px-3 py-2 text-[13px] text-[var(--muted-foreground)]">
               {formMessage}
             </p>
           ) : null}
 
-          {state.summary.isEmpty ? (
-            <EmptyState text="先创建区域和位置，再添加第一个物品。" />
-          ) : visibleItems.length === 0 ? (
-            <EmptyState text="没有匹配的物品。" />
-          ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto" data-testid="item-list-scroll">
+            {state.summary.isEmpty ? (
+              <EmptyState text="先创建区域和位置，再添加第一个物品。" />
+            ) : visibleItems.length === 0 ? (
+              <EmptyState text="没有匹配的物品。" />
+            ) : (
+              <div data-testid="item-table">
+              <div className="grid grid-cols-[1.2fr_1fr_120px_44px] border-b border-[var(--border)] px-4 py-2 text-[12px] text-[var(--muted-foreground)]">
+                <span>物品名称</span>
+                <span>备注</span>
+                <span>过期日</span>
+                <span className="text-right">操作</span>
+              </div>
             <ul className="divide-y divide-[var(--border)]">
               {visibleItems.map((item) => (
-                <li className="p-4" key={item.id}>
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                        {item.areaName} / {item.locationName}
-                        {item.note ? ` · ${item.note}` : " · 无备注"}
-                      </p>
-                      <ExpirationBadge item={item} />
+                <li className="px-4 py-2 transition hover:bg-[var(--surface-muted)]/45" key={item.id}>
+                  <div className="grid items-center gap-3 lg:grid-cols-[1.2fr_1fr_120px_44px]">
+                    <div className="flex min-w-0 gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] text-xs font-semibold text-[var(--primary)]">
+                        {item.name.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p
+                            className="truncate text-[14px] font-semibold leading-5"
+                            onDoubleClick={() => startEditItem(item)}
+                          >
+                            {item.name}
+                          </p>
+                          <span className="truncate text-[12px] text-[var(--muted-foreground)]">
+                            {item.areaName} / {item.locationName}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 gap-3">
-                      <button className="text-sm" onClick={() => startEditItem(item)} type="button">
-                        编辑
-                      </button>
+                    <p
+                      className="truncate text-[13px] text-[var(--muted-foreground)]"
+                      onDoubleClick={() => startEditItem(item)}
+                    >
+                      {item.note || "无备注"}
+                    </p>
+                    <p
+                      className="text-[13px] text-[var(--muted-foreground)]"
+                      onDoubleClick={() => startEditItem(item)}
+                    >
+                      {item.expireDate || "-"}
+                    </p>
+                    <div className="flex shrink-0 justify-end">
                       <button
-                        className="text-sm text-red-600"
+                        aria-label="删除物品"
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-[13px] text-[var(--danger)] hover:bg-[var(--surface-muted)]"
                         onClick={() => handleDeleteItem(item.id)}
                         type="button"
                       >
-                        删除
+                        ×
                       </button>
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
-          )}
+              </div>
+            )}
+          </div>
         </section>
       </main>
 
@@ -1224,17 +1631,29 @@ export function AppDashboard({
         >
           <section className="max-h-[88vh] w-full overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg sm:max-w-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
-              <h2 className="text-base font-semibold">新增物品</h2>
+              <h2 className="text-base font-semibold">
+                {editingItemId ? "编辑物品" : "新增物品"}
+              </h2>
               <button
                 className="text-sm text-[var(--muted-foreground)]"
-                onClick={() => setMobileQuickPanel(null)}
+                onClick={() => {
+                  setEditingItemId(null);
+                  setMobileQuickPanel(null);
+                  setItemForm({
+                    name: "",
+                    areaId: "",
+                    locationId: "",
+                    note: "",
+                    expireDate: "",
+                  });
+                }}
                 type="button"
               >
                 关闭
               </button>
             </div>
 
-            <form className="grid gap-3 p-4" onSubmit={handleMobileSaveItem}>
+            <form className="grid gap-3 p-4" data-testid="item-composer" onSubmit={handleMobileSaveItem}>
               <label className="grid gap-2 text-sm font-medium">
                 物品名称
                 <input
@@ -1312,6 +1731,8 @@ export function AppDashboard({
                 过期日
                 <input
                   className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  onClick={(event) => openDatePicker(event.currentTarget)}
+                  onFocus={(event) => openDatePicker(event.currentTarget)}
                   onChange={(event) =>
                     setItemForm((current) => ({
                       ...current,
@@ -1332,7 +1753,7 @@ export function AppDashboard({
                 disabled={isSaving}
                 type="submit"
               >
-                保存物品
+                {editingItemId ? "保存修改" : "保存物品"}
               </button>
             </form>
           </section>
@@ -1479,6 +1900,83 @@ export function AppDashboard({
         </div>
       ) : null}
 
+      {editingAreaId ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+        >
+          <section className="w-full max-w-md rounded-md border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">编辑区域</h2>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={cancelAreaEdit}
+                type="button"
+              >
+                取消
+              </button>
+            </div>
+
+            <form className="grid gap-3" onSubmit={handleSaveArea}>
+              <label className="grid gap-2 text-sm font-medium">
+                区域名称
+                <input
+                  className="h-10 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                  maxLength={80}
+                  onChange={(event) =>
+                    setAreaForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  value={areaForm.name}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2" role="radiogroup">
+                {areaColors.map((color) => (
+                  <button
+                    aria-label={`区域颜色 ${color}`}
+                    className="h-8 w-8 rounded-full border-2"
+                    key={color}
+                    onClick={() =>
+                      setAreaForm((current) => ({ ...current, color }))
+                    }
+                    style={{
+                      backgroundColor: color,
+                      borderColor:
+                        areaForm.color === color ? "var(--foreground)" : "white",
+                    }}
+                    type="button"
+                  />
+                ))}
+              </div>
+              {formMessage ? (
+                <p className="rounded-md bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted-foreground)]">
+                  {formMessage}
+                </p>
+              ) : null}
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+                  onClick={cancelAreaEdit}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                  disabled={isSaving}
+                  type="submit"
+                >
+                  保存修改
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
       {editingLocationId ? (
         <div
           aria-modal="true"
@@ -1571,21 +2069,30 @@ function DashboardShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md bg-[var(--surface-muted)] p-3">
-      <p className="text-sm text-[var(--muted-foreground)]">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
-  );
+function sortDashboardItems(items: DashboardItem[], sortMode: ItemSortMode) {
+  const expirationTime = (item: DashboardItem) =>
+    item.expireDate ? new Date(`${item.expireDate}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
+
+  return [...items].sort((left, right) => {
+    if (sortMode === "name") {
+      return left.name.localeCompare(right.name, "zh-CN");
+    }
+
+    const leftTime = expirationTime(left);
+    const rightTime = expirationTime(right);
+    const byExpiration =
+      sortMode === "expireLate" ? rightTime - leftTime : leftTime - rightTime;
+
+    return byExpiration || left.name.localeCompare(right.name, "zh-CN");
+  });
 }
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex min-h-[300px] items-center justify-center p-6">
+    <div className="flex min-h-[220px] items-center justify-center p-4">
       <div className="max-w-sm text-center">
         <h3 className="text-base font-semibold">暂无内容</h3>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm leading-5 text-[var(--muted-foreground)]">
           {text}
         </p>
       </div>
@@ -1606,26 +2113,26 @@ function ExpirationPanel({
 }) {
   const toneClass =
     tone === "expired"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : "border-amber-200 bg-amber-50 text-amber-800";
+      ? "border-[#e6b8b3] bg-[#fff3f1] text-[var(--danger)]"
+      : "border-[#ead2a8] bg-[#fff8ea] text-[var(--warning)]";
 
   return (
-    <section className={`rounded-md border p-3 ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3">
+    <section className={`rounded-md border p-2.5 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         <span className="text-xs font-medium">{items.length} 个</span>
       </div>
       {items.length === 0 ? (
-        <p className="mt-3 text-sm opacity-80">{emptyText}</p>
+        <p className="mt-2 text-sm opacity-80">{emptyText}</p>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-2 space-y-1.5">
           {items.slice(0, 5).map((item) => (
-            <li className="rounded-md bg-white/70 p-2" key={item.id}>
-              <div className="flex items-start justify-between gap-3">
+            <li className="rounded-md bg-white/70 p-1.5" key={item.id}>
+              <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-medium">{item.name}</p>
                 <time className="shrink-0 text-xs font-medium">{item.expireDate}</time>
               </div>
-              <p className="mt-1 truncate text-xs opacity-80">
+              <p className="mt-0.5 truncate text-xs opacity-80">
                 {item.areaName} / {item.locationName}
               </p>
             </li>
@@ -1637,24 +2144,4 @@ function ExpirationPanel({
       ) : null}
     </section>
   );
-}
-
-function ExpirationBadge({ item }: { item: DashboardItem }) {
-  if (item.expirationStatus === "none") {
-    return null;
-  }
-
-  const labels = {
-    expired: `已过期 ${item.expireDate}`,
-    soon: `即将过期 ${item.expireDate}`,
-    normal: `到期 ${item.expireDate}`,
-  };
-  const className =
-    item.expirationStatus === "expired"
-      ? "text-red-700"
-      : item.expirationStatus === "soon"
-        ? "text-amber-700"
-        : "text-[var(--muted-foreground)]";
-
-  return <p className={`mt-2 text-sm ${className}`}>{labels[item.expirationStatus]}</p>;
 }

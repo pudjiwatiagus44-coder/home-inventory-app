@@ -18,6 +18,14 @@ import type { createAuthService as createAuthServiceType } from "../../../server
 
 export const AUTH_SESSION_COOKIE = "home_inventory_session";
 
+function shouldUseSecureAuthCookie() {
+  if (process.env.AUTH_COOKIE_SECURE === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 type JsonBody = {
   email?: unknown;
   password?: unknown;
@@ -71,7 +79,7 @@ export function createAuthSuccessResponse(input: {
   response.cookies.set(AUTH_SESSION_COOKIE, input.sessionToken, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureAuthCookie(),
     path: "/",
     expires: input.expiresAt,
   });
@@ -99,7 +107,7 @@ export function createLogoutSuccessResponse() {
   response.cookies.set(AUTH_SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureAuthCookie(),
     path: "/",
     maxAge: 0,
   });

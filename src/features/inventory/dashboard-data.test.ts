@@ -187,6 +187,50 @@ describe("buildDashboardSummary", () => {
       areaName: "未分区",
     });
   });
+
+  it("normalizes PostgreSQL timestamp date values for display and expiration grouping", () => {
+    const summary = buildDashboardSummary({
+      household: { id: "household-1", name: "我的家庭" },
+      areas: [],
+      locations: [],
+      items: [
+        {
+          id: "item-1",
+          name: "牛奶",
+          note: "",
+          expire_date: "2026-07-31T16:00:00.000Z",
+          location_id: null,
+        },
+      ],
+    });
+
+    expect(summary.items[0]).toMatchObject({
+      expireDate: "2026-08-01",
+      expirationStatus: "soon",
+    });
+  });
+
+  it("keeps the selected local calendar day when PostgreSQL serializes dates as UTC timestamps", () => {
+    const summary = buildDashboardSummary({
+      household: { id: "household-1", name: "我的家庭" },
+      areas: [],
+      locations: [],
+      items: [
+        {
+          id: "item-1",
+          name: "牛奶",
+          note: "",
+          expire_date: "2026-07-30T16:00:00.000Z",
+          location_id: null,
+        },
+      ],
+    });
+
+    expect(summary.items[0]).toMatchObject({
+      expireDate: "2026-07-31",
+      expirationStatus: "soon",
+    });
+  });
 });
 
 describe("filterInventoryItems", () => {
@@ -376,6 +420,15 @@ describe("getExpirationStatus", () => {
     expect(
       getExpirationStatus("2026-09-01", new Date("2026-07-03T00:00:00")),
     ).toBe("normal");
+  });
+
+  it("classifies ISO timestamp dates by their calendar day", () => {
+    expect(
+      getExpirationStatus(
+        "2026-07-31T16:00:00.000Z",
+        new Date("2026-07-03T00:00:00"),
+      ),
+    ).toBe("soon");
   });
 });
 

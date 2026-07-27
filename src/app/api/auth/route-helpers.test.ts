@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import {
   createAuthErrorResponse,
+  createAuthSuccessResponse,
+  createLogoutSuccessResponse,
   createRouteAuthService,
   getCurrentUserFromRequest,
 } from "./route-helpers";
@@ -114,5 +116,27 @@ describe("auth route helpers", () => {
     });
 
     expect(seenTokens).toEqual(["plain-session-token"]);
+  });
+
+  it("allows the test server to opt out of secure auth cookies over HTTP", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalAuthCookieSecure = process.env.AUTH_COOKIE_SECURE;
+    process.env.NODE_ENV = "production";
+    process.env.AUTH_COOKIE_SECURE = "false";
+
+    try {
+      const loginResponse = createAuthSuccessResponse({
+        userId: "user-1",
+        sessionToken: "plain-session-token",
+        expiresAt: new Date("2026-08-05T00:00:00.000Z"),
+      });
+      const logoutResponse = createLogoutSuccessResponse();
+
+      expect(loginResponse.headers.get("set-cookie")).not.toContain("Secure");
+      expect(logoutResponse.headers.get("set-cookie")).not.toContain("Secure");
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.AUTH_COOKIE_SECURE = originalAuthCookieSecure;
+    }
   });
 });
