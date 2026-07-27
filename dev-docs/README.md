@@ -10,7 +10,7 @@
 - `database-design.md` - Supabase schema、对象关系、RLS 策略和权限负例。
 - `mainland-database-design.md` - 中国大陆正式版 PostgreSQL schema 草案和服务端权限边界。
 - `deployment-route.md` - 已确认部署路线、免费层边界、中国大陆正式版路线、环境变量和上线前检查。
-- `aliyun-test-env-deployment-checklist.md` - 阿里云测试环境部署清单，覆盖服务器、Ubuntu、Node、PostgreSQL、Nginx/systemd、端口、安全组、环境变量、备份和回滚。
+- `aliyun-test-env-deployment-checklist.md` - 阿里云测试环境部署清单，覆盖服务器、Ubuntu、Node、PostgreSQL、Nginx/systemd、HTTPS 证书、端口、安全组、环境变量、备份和回滚。
 - `stages/mvp-first-loop.md` - 第一阶段实施计划：位置、物品 CRUD、搜索和权限负例。
 - `stages/mainland-production-route.md` - 中国大陆正式版实施路线：备案、国内云、数据库、认证、权限和发布验收。
 - `stages/mainland-auth-db-migration.md` - 国内正式版认证、数据库、权限和部署迁移拆分；不影响当前 Vercel/Supabase 临时版。
@@ -34,7 +34,7 @@
 
 ## 当前阶段
 
-项目处于 MVP 基础搭建阶段。已创建 Next.js 启动基线、Supabase public env 骨架、登录页 UI、登录后 `/app` 应用首页、数据库设计草案和初始 migration；用户已在 Supabase 项目中执行 migration 成功。用户 A/B 权限负例验证尚未完成。
+项目处于 MVP 基础搭建与阿里云测试环境部署阶段。已完成 Next.js 启动基线、自有认证/权限层雏形、国内 PostgreSQL 测试环境部署、HTTPS 域名接入（`https://homestorag.xyz`）和 ICP 备案号页面展示；用户已在 Supabase 项目中执行 migration 成功，用户 A/B 权限负例在 Supabase 临时路线已完成，在国内 PostgreSQL 路线仍需补齐。当前阿里云测试环境已可通过域名 HTTPS 访问，但正式生产级备份恢复、监控、日志、公安联网备案、邮箱验证、密码重置、隐私政策和用户协议尚未补齐。
 
 部署路线已确认两阶段：Vercel 免费层 + Supabase 免费层仅作为临时测试版；用户已在 2026-07-05 确认要直接推进中国大陆正式版，后续需要国内云平台、域名备案、国内 PostgreSQL、自有认证/权限层和正式发布验收。
 

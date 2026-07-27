@@ -170,6 +170,19 @@ Vercel 只配置 public client 所需变量：
 
 中国大陆正式版回滚方案需要在迁移实施阶段单独设计，不能复用 Vercel/Supabase 的回滚方案。
 
+## HTTPS 与域名接入状态
+
+- 证书颁发机构：Let's Encrypt。
+- 证书域名：`homestorag.xyz`、`www.homestorag.xyz`。
+- 证书有效期：2026-07-27 至 2026-10-25。
+- Nginx 配置：监听 `443` 并提供 HTTPS；HTTP（80）请求通过 Certbot 规则 301 重定向到 HTTPS。
+- 服务器防火墙（ufw）：已开放 `80/tcp`、`443/tcp`、`OpenSSH`。
+- 阿里云安全组：用户已确认开放 `80/tcp`、`443/tcp` 用于 Web 访问，`22/tcp` 用于 SSH，`3000/tcp` 和 `5432/tcp` 不对公网开放。
+- 域名解析：`homestorag.xyz` 和 `www.homestorag.xyz` 均解析到 `120.24.93.226`。
+- ICP 备案号：已在 `src/app/layout.tsx` 页面底部展示，并链接到 `https://beian.miit.gov.cn/`。
+- 当前访问地址：`https://homestorag.xyz/login`、`https://www.homestorag.xyz/login`。
+- 注意：当前仍为阿里云测试环境，正式生产级备份恢复、监控、日志和公安联网备案等仍需补齐。
+
 ## 当前未验证项
 
 - Vercel 项目已创建并接入 GitHub；当前仍存在 Vercel 访问保护和中国大陆访问稳定性问题。
@@ -180,7 +193,7 @@ Vercel 只配置 public client 所需变量：
 - 域名实名认证已通过。
 - 中国内地云资源已购买并完成测试部署：阿里云轻量应用服务器，`华南1（深圳）`，Ubuntu 24.04，公网 IP `120.24.93.226`。
 - 阿里云账号个人实名认证已由用户确认完成。
-- ICP 备案号已由用户提供：`粤ICP备2026094933号`；上线前页面底部必须展示该备案号，并链接到工信部备案查询站 `https://beian.miit.gov.cn/`。
+- ICP 备案号已由用户提供：`粤ICP备2026094933号`；已在页面底部展示并链接到工信部备案查询站 `https://beian.miit.gov.cn/`。
 - 公安联网备案状态仍需确认；如网站正式开通后触发要求，需按规定继续完成公安联网备案。
-- 国内 PostgreSQL 和自有认证测试路线已在阿里云测试环境跑通；正式生产级 HTTPS、备份恢复、账号安全和运维策略仍需补齐。
+- 国内 PostgreSQL 和自有认证测试路线已在阿里云测试环境跑通；HTTPS、域名、ICP 备案号展示已补齐；正式生产级备份恢复、账号安全、运维策略和公安联网备案仍需补齐。
 - Supabase 到中国大陆正式版的数据迁移尚未设计。

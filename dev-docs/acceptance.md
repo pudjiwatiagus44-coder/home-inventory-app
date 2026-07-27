@@ -1,5 +1,21 @@
 # Acceptance Truth
 
+## 2026-07-27 HTTPS 与域名上线证据
+
+- 背景：用户确认已持有阿里云轻量应用服务器，SSL 证书和 Nginx 配置已在上一阶段完成；本轮继续开放 443 端口、同步最新代码、验证 HTTPS 域名访问、补齐 ICP 备案号展示，并把所有处理结果写回真源文档。
+- SSL 证书证据：服务器 `/etc/letsencrypt/live/homestorag.xyz/` 存在由 Let's Encrypt 颁发的证书；`openssl x509` 显示证书域名 `DNS:homestorag.xyz, DNS:www.homestorag.xyz`，有效期 `Not Before: Jul 27 08:15:19 2026 GMT`，`Not After: Oct 25 08:15:18 2026 GMT`。
+- Nginx 配置证据：当前生效配置 `/etc/nginx/sites-available/home-inventory-app` 监听 `443 ssl`，使用 `/etc/letsencrypt/live/homestorag.xyz/fullchain.pem` 和 `privkey.pem`，并包含 Certbot 提供的 SSL 选项；HTTP（80） server 块通过 Certbot 规则将 `homestorag.xyz` 和 `www.homestorag.xyz` 301 重定向到 HTTPS；历史 HTTP 配置已备份为 `/etc/nginx/sites-available/home-inventory-app.bak.20260727_171323`。
+- 防火墙证据：服务器 `ufw` 已重新加载，状态显示 `OpenSSH`、`80/tcp`、`443/tcp` 均 ALLOW；`443/tcp` 规则为本轮新增。
+- 安全组证据：用户已确认阿里云控制台安全组开放 `80/tcp`、`443/tcp` 用于 Web 访问，`22/tcp` 用于 SSH；`3000/tcp` 和 `5432/tcp` 不对公网开放。
+- 域名解析证据：`nslookup` 显示 `homestorag.xyz` 和 `www.homestorag.xyz` 均解析到 `120.24.93.226`；权威 nameserver 为 `dns21.hichina.com` / `dns22.hichina.com`。
+- HTTPS 访问验证：`curl --resolve homestorag.xyz:443:120.24.93.226 https://homestorag.xyz/login` 返回 `HTTP:200`；`curl --resolve www.homestorag.xyz:443:120.24.93.226 https://www.homestorag.xyz/login` 返回 `HTTP:200`；`curl -k https://120.24.93.226/login` 返回 `HTTP:200`（IP 直接访问因证书域名不匹配会触发浏览器警告，但 TLS 连接本身可用）。
+- ICP 备案号展示证据：`src/app/layout.tsx` 已在页面底部渲染 `粤ICP备2026094933号` 链接，指向 `https://beian.miit.gov.cn/`；本地 `npm run build` 通过，布局变更已随本轮提交 `844fc64` 推送至 GitHub。
+- 代码同步证据：本地提交 `844fc64` 已推送至 `origin main`；服务器通过 `git clone` 拉取最新代码到 `/opt/home-inventory-app-new`，执行 `npm ci` 和 `npm run build` 后，将 `/opt/home-inventory-app` 备份为 `/opt/home-inventory-app.bak.20260727_174049`，新构建目录重命名为 `/opt/home-inventory-app` 并重启 `home-inventory-app.service`。
+- 服务状态证据：部署完成后 `systemctl status home-inventory-app` 显示 `active (running)`，主进程为 `npm start` -> `next-server (v16.2.10)`，监听 `127.0.0.1:3000`；Nginx 反向代理后域名 HTTPS 访问返回 `HTTP 200`。
+- 本地验证证据：`npm run lint` 退出码 0；`npm run build` 退出码 0，Next.js 16.2.10 / webpack 编译成功，生成 `/`、`/_not-found`、`/app`、`/login` 及库存 API 动态路由；`npm test` 通过 28 个测试文件 / 184 个测试，4 个 PostgreSQL 集成测试因本地未启动 PostgreSQL 被跳过。
+- 真源同步证据：`dev-docs/deployment-route.md` 新增 `HTTPS 与域名接入状态` 章节并更新 `当前未验证项`；`dev-docs/aliyun-test-env-deployment-checklist.md` 更新 Nginx、端口、访问方式、验证状态；`dev-docs/acceptance.md` 新增本证据段。
+- 剩余未验证：公安联网备案状态仍需确认；Supabase 到中国大陆正式版的数据迁移尚未设计；正式生产级备份恢复、监控、日志、账号安全策略、邮箱验证、密码重置、隐私政策和用户协议仍需补齐；浏览器完整登录和 CRUD 点击验收在 HTTPS 域名上尚未完成。
+
 ## 2026-07-07 Expiration date UX and soon-expiring fix evidence
 
 - User feedback: Alibaba Cloud test site showed expiration values like `2026-07-31T16:00:00.000Z`, date entry still felt like manual typing, and soon-expiring items did not appear in the soon-expiring panel.
