@@ -375,6 +375,7 @@ sudo systemctl reload nginx
 - Let's Encrypt 证书：已获取，证书域名 `homestorag.xyz`、`www.homestorag.xyz`，有效期 2026-07-27 至 2026-10-25。
 - 域名解析：`homestorag.xyz` 和 `www.homestorag.xyz` 均解析到 `120.24.93.226`。
 - ICP 备案号展示：已在 `src/app/layout.tsx` 页面底部展示 `粤ICP备2026094933号`，链接到 `https://beian.miit.gov.cn/`。
+- 公安联网备案：用户已确认已完成。
 - systemd 启动验证：已通过，`home-inventory-app.service` enabled + active。
 - PostgreSQL 备份演练：已通过，备份文件 `/var/backups/home-inventory-app/home_inventory_test_20260707_211902.dump`。
 - 公网 API 验证：已通过，注册、dashboard、区域/位置/物品创建 smoke test 成功；测试账号已清理。
@@ -382,4 +383,3 @@ sudo systemctl reload nginx
 仍未验证：
 - PostgreSQL 备份恢复到独立 restore 库的演练。
 - 浏览器完整登录和 CRUD 验收：未验证。
-- HTTPS、域名、ICP 备案和正式公开访问。

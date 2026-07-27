@@ -14,7 +14,8 @@
 - 服务状态证据：部署完成后 `systemctl status home-inventory-app` 显示 `active (running)`，主进程为 `npm start` -> `next-server (v16.2.10)`，监听 `127.0.0.1:3000`；Nginx 反向代理后域名 HTTPS 访问返回 `HTTP 200`。
 - 本地验证证据：`npm run lint` 退出码 0；`npm run build` 退出码 0，Next.js 16.2.10 / webpack 编译成功，生成 `/`、`/_not-found`、`/app`、`/login` 及库存 API 动态路由；`npm test` 通过 28 个测试文件 / 184 个测试，4 个 PostgreSQL 集成测试因本地未启动 PostgreSQL 被跳过。
 - 真源同步证据：`dev-docs/deployment-route.md` 新增 `HTTPS 与域名接入状态` 章节并更新 `当前未验证项`；`dev-docs/aliyun-test-env-deployment-checklist.md` 更新 Nginx、端口、访问方式、验证状态；`dev-docs/acceptance.md` 新增本证据段。
-- 剩余未验证：公安联网备案状态仍需确认；Supabase 到中国大陆正式版的数据迁移尚未设计；正式生产级备份恢复、监控、日志、账号安全策略、邮箱验证、密码重置、隐私政策和用户协议仍需补齐；浏览器完整登录和 CRUD 点击验收在 HTTPS 域名上尚未完成。
+- 公安联网备案证据：用户确认已完成公安联网备案，已在真源文档 `dev-docs/deployment-route.md` 和 `dev-docs/aliyun-test-env-deployment-checklist.md` 中记录。
+- 剩余未验证：Supabase 到中国大陆正式版的数据迁移尚未设计；正式生产级备份恢复、监控、日志、账号安全策略、邮箱验证、密码重置、隐私政策和用户协议仍需补齐；浏览器完整登录和 CRUD 点击验收在 HTTPS 域名上尚未完成。
 
 ## 2026-07-07 Expiration date UX and soon-expiring fix evidence
 
