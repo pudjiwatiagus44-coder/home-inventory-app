@@ -4,20 +4,74 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.homeinventory.app.core.network.NetworkModule
+import com.homeinventory.app.core.session.InMemorySessionStore
+import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.ui.inventory.InventoryScreen
 import com.homeinventory.app.ui.inventory.InventoryViewModel
+import com.homeinventory.app.ui.login.LoginScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppRoot(
     viewModel: InventoryViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val sessionStore = remember { InMemorySessionStore() }
+    val authRepository = remember {
+        AuthRepository(
+            api = NetworkModule.createApi(sessionStore),
+            sessionStore = sessionStore,
+        )
+    }
+    var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme {
-        InventoryScreen(
-            state = state,
-            onAddOfflineItem = viewModel::addOfflineDraft,
-        )
+        if (isLoggedIn) {
+            InventoryScreen(
+                state = state,
+                onAddOfflineItem = viewModel::addOfflineDraft,
+            )
+        } else {
+            LoginScreen(
+                email = email,
+                password = password,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                onEmailChange = {
+                    email = it
+                    errorMessage = null
+                },
+                onPasswordChange = {
+                    password = it
+                    errorMessage = null
+                },
+                onLogin = {
+                    isLoading = true
+                    errorMessage = null
+                    scope.launch {
+                        authRepository.login(email, password)
+                            .onSuccess {
+                                password = ""
+                                isLoggedIn = true
+                            }
+                            .onFailure { error ->
+                                errorMessage = error.message ?: "登录失败"
+                            }
+                        isLoading = false
+                    }
+                },
+            )
+        }
     }
 }

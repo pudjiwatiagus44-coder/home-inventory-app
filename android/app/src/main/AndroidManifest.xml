@@ -6,6 +6,7 @@
         android:name=".HomeInventoryApplication"
         android:allowBackup="false"
         android:label="Home Inventory"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.HomeInventory">
         <activity
             android:name=".MainActivity"
