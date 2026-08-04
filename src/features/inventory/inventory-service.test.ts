@@ -13,12 +13,20 @@ function createRepository(overrides: Partial<InventoryRepository> = {}) {
   const repository: InventoryRepository = {
     getDashboardForUser: async () => ({
       household: { id: "household-1", name: "Home" },
-      areas: [{ id: "area-1", name: "Kitchen", color: "#64748b" }],
+      areas: [
+        {
+          id: "area-1",
+          name: "Kitchen",
+          color: "#64748b",
+          updatedAt: "2026-08-04T00:00:00.000Z",
+        },
+      ],
       locations: [
         {
           id: "location-1",
           name: "Shelf",
           area_id: null,
+          updatedAt: "2026-08-04T00:00:00.000Z",
         },
       ],
       items: [
@@ -28,6 +36,7 @@ function createRepository(overrides: Partial<InventoryRepository> = {}) {
           note: "",
           expire_date: null,
           location_id: "location-1",
+          updatedAt: "2026-08-04T00:00:00.000Z",
         },
       ],
     }),
@@ -658,6 +667,204 @@ describe("createInventoryService", () => {
       }),
     ).rejects.toBeInstanceOf(ItemOutsideCurrentHouseholdError);
     expect(deleteCalled).toBe(false);
+  });
+
+  it("syncs an offline item create in the current user's household", async () => {
+    const { calls, repository } = createRepository({
+      createItem: async (input) => {
+        calls.push(["createItem", input]);
+        return {
+          id: "server-item-1",
+          name: input.name.trim(),
+          note: input.note.trim(),
+          expire_date: input.expireDate,
+          location_id: input.locationId,
+          updatedAt: "2026-08-04T01:00:00.000Z",
+        };
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-item-create",
+            entity: "item",
+            action: "create",
+            localId: "local-item-1",
+            payload: {
+              name: " Flashlight ",
+              note: " Hall drawer ",
+              expireDate: null,
+              locationId: "location-1",
+            },
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-item-create",
+          status: "applied",
+          entity: "item",
+          localId: "local-item-1",
+          serverId: "server-item-1",
+          serverUpdatedAt: "2026-08-04T01:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(calls).toContainEqual([
+      "createItem",
+      {
+        householdId: "household-1",
+        createdBy: "user-1",
+        name: "Flashlight",
+        note: "Hall drawer",
+        expireDate: null,
+        locationId: "location-1",
+      },
+    ]);
+  });
+
+  it("returns an item update conflict when the server version changed", async () => {
+    let updateCalled = false;
+    const { repository } = createRepository({
+      updateItem: async () => {
+        updateCalled = true;
+        return {
+          id: "item-1",
+          name: "Battery pack",
+          note: "",
+          expire_date: null,
+          location_id: null,
+        };
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-item-update",
+            entity: "item",
+            action: "update",
+            serverId: "item-1",
+            baseServerUpdatedAt: "2026-08-03T00:00:00.000Z",
+            payload: {
+              name: "Battery pack",
+              note: "",
+              expireDate: null,
+              locationId: null,
+            },
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-item-update",
+          status: "conflict",
+          entity: "item",
+          serverId: "item-1",
+          message: "Server item changed since the operation was queued",
+        },
+      ],
+    });
+    expect(updateCalled).toBe(false);
+  });
+
+  it("returns an item delete conflict when the server row is missing", async () => {
+    let deleteCalled = false;
+    const { repository } = createRepository({
+      deleteItem: async () => {
+        deleteCalled = true;
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-item-delete",
+            entity: "item",
+            action: "delete",
+            serverId: "missing-item",
+            baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-item-delete",
+          status: "conflict",
+          entity: "item",
+          serverId: "missing-item",
+          message: "Server item is missing",
+        },
+      ],
+    });
+    expect(deleteCalled).toBe(false);
+  });
+
+  it("syncs an offline location update when the server version matches", async () => {
+    const { calls, repository } = createRepository({
+      updateLocation: async (input) => {
+        calls.push(["updateLocation", input]);
+        return {
+          id: input.locationId,
+          name: input.name.trim(),
+          updatedAt: "2026-08-04T02:00:00.000Z",
+        };
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-location-update",
+            entity: "location",
+            action: "update",
+            serverId: "location-1",
+            baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+            payload: {
+              name: " Pantry ",
+              areaId: "area-1",
+            },
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-location-update",
+          status: "applied",
+          entity: "location",
+          serverId: "location-1",
+          serverUpdatedAt: "2026-08-04T02:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(calls).toContainEqual([
+      "updateLocation",
+      {
+        householdId: "household-1",
+        locationId: "location-1",
+        name: "Pantry",
+        areaId: "area-1",
+      },
+    ]);
   });
 
   it("previews Excel import without writing to the repository", async () => {

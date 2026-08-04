@@ -1,12 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUserFromRequest } from "../../../auth/route-helpers";
+import { createRouteInventoryService } from "../../../inventory/route-helpers";
 import {
   parseMobileSyncRequest,
   type MobileSyncOperation,
   type MobileSyncResponse,
 } from "../../../../../features/inventory/mobile-sync";
+import {
+  PostgresInventoryRepositoryNotConnectedError,
+} from "../../../../../features/inventory/inventory-repository";
 import type { createAuthService } from "../../../../../server/auth/auth-service";
+import {
+  PostgresDatabaseNotConfiguredError,
+  type PostgresEnv,
+  type PostgresQueryClientFactoryOptions,
+} from "../../../../../server/db/postgres";
 
 type CurrentUserAuthService = Pick<
   ReturnType<typeof createAuthService>,
@@ -23,21 +32,15 @@ type MobileInventorySyncService = {
 type MobileSyncDependencies = {
   authService?: CurrentUserAuthService;
   inventoryService?: MobileInventorySyncService;
+  env?: PostgresEnv;
+  createPool?: PostgresQueryClientFactoryOptions["createPool"];
 };
 
-class MobileInventorySyncServiceNotConnectedError extends Error {
-  constructor() {
-    super("Mobile inventory sync service is not connected yet");
-    this.name = "MobileInventorySyncServiceNotConnectedError";
-  }
-}
-
-function createRouteMobileInventorySyncService(): MobileInventorySyncService {
-  return {
-    async syncQueuedOperationsForCurrentUser() {
-      throw new MobileInventorySyncServiceNotConnectedError();
-    },
-  };
+function createRouteMobileInventorySyncService(
+  env: PostgresEnv = process.env,
+  overrides: PostgresQueryClientFactoryOptions = {},
+): MobileInventorySyncService {
+  return createRouteInventoryService(env, overrides);
 }
 
 export function createMobileSyncHandlers(
@@ -60,7 +63,10 @@ export function createMobileSyncHandlers(
 
         const syncRequest = parseMobileSyncRequest(await request.json());
         const service =
-          dependencies.inventoryService ?? createRouteMobileInventorySyncService();
+          dependencies.inventoryService ??
+          createRouteMobileInventorySyncService(dependencies.env, {
+            createPool: dependencies.createPool,
+          });
         const data = await service.syncQueuedOperationsForCurrentUser({
           userId: currentUser.userId,
           operations: syncRequest.operations,
@@ -75,9 +81,22 @@ export function createMobileSyncHandlers(
 }
 
 function createMobileSyncErrorResponse(error: unknown) {
-  if (error instanceof MobileInventorySyncServiceNotConnectedError) {
+  if (error instanceof PostgresDatabaseNotConfiguredError) {
     return NextResponse.json(
-      { ok: false, message: error.message },
+      {
+        ok: false,
+        message: "DATABASE_URL is required for PostgreSQL inventory",
+      },
+      { status: 501 },
+    );
+  }
+
+  if (error instanceof PostgresInventoryRepositoryNotConnectedError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "PostgreSQL inventory repository is not connected yet",
+      },
       { status: 501 },
     );
   }

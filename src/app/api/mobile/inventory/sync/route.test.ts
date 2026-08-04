@@ -98,9 +98,10 @@ describe("POST /api/mobile/inventory/sync", () => {
     ]);
   });
 
-  it("returns 501 until the real mobile sync service is connected", async () => {
+  it("returns 501 when the default sync service cannot be configured", async () => {
     const { POST } = createMobileSyncHandlers({
       authService: { getCurrentUser: async () => ({ userId: "user-1" }) },
+      env: {},
     });
 
     const response = await POST(
@@ -116,8 +117,37 @@ describe("POST /api/mobile/inventory/sync", () => {
 
     await expect(response.json()).resolves.toEqual({
       ok: false,
-      message: "Mobile inventory sync service is not connected yet",
+      message: "DATABASE_URL is required for PostgreSQL inventory",
     });
     expect(response.status).toBe(501);
+  });
+
+  it("uses the default route service when PostgreSQL can be configured", async () => {
+    const { POST } = createMobileSyncHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-1" }) },
+      env: { DATABASE_URL: "postgres://inventory.test/db" },
+      createPool: () => ({
+        query: async () => {
+          throw new Error("empty sync should not query the database");
+        },
+      }),
+    });
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/mobile/inventory/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "home_inventory_session=session-token",
+        },
+        body: JSON.stringify({ operations: [] }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      data: { results: [] },
+    });
+    expect(response.status).toBe(200);
   });
 });

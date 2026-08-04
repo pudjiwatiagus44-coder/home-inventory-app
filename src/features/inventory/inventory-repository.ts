@@ -156,11 +156,12 @@ export function createPostgresInventoryRepository(
         id: string;
         name: string;
         color: string;
+        updatedAt: string;
       }>(
         `
           insert into areas (household_id, name, color)
           values ($1, $2, $3)
-          returning id, name, color
+          returning id, name, color, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -187,6 +188,7 @@ export function createPostgresInventoryRepository(
         id: string;
         name: string;
         color: string;
+        updatedAt: string;
       }>(
         `
           update areas
@@ -196,7 +198,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name, color
+          returning id, name, color, updated_at as "updatedAt"
         `,
         [
           input.areaId,
@@ -230,11 +232,15 @@ export function createPostgresInventoryRepository(
         throw new Error(validation.error);
       }
 
-      const result = await client.query<{ id: string; name: string }>(
+      const result = await client.query<{
+        id: string;
+        name: string;
+        updatedAt: string;
+      }>(
         `
           insert into locations (household_id, area_id, name)
           values ($1, $2, $3)
-          returning id, name
+          returning id, name, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -257,7 +263,11 @@ export function createPostgresInventoryRepository(
         throw new Error(validation.error);
       }
 
-      const result = await client.query<{ id: string; name: string }>(
+      const result = await client.query<{
+        id: string;
+        name: string;
+        updatedAt: string;
+      }>(
         `
           update locations
           set
@@ -266,7 +276,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name
+          returning id, name, updated_at as "updatedAt"
         `,
         [
           input.locationId,
@@ -306,6 +316,7 @@ export function createPostgresInventoryRepository(
         note: string;
         expire_date: string | null;
         location_id: string | null;
+        updatedAt: string;
       }>(
         `
           insert into items (
@@ -317,7 +328,7 @@ export function createPostgresInventoryRepository(
             created_by
           )
           values ($1, $2, $3, $4, $5, $6)
-          returning id, name, note, expire_date, location_id
+          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -349,6 +360,7 @@ export function createPostgresInventoryRepository(
         note: string;
         expire_date: string | null;
         location_id: string | null;
+        updatedAt: string;
       }>(
         `
           update items
@@ -360,7 +372,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name, note, expire_date, location_id
+          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
         `,
         [
           input.itemId,

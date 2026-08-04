@@ -16,6 +16,15 @@ import {
   type InventoryImportSummary,
 } from "./excel-backup";
 import type { InventoryRepository } from "./inventory-repository";
+import type {
+  MobileAreaPayload,
+  MobileItemPayload,
+  MobileLocationPayload,
+  MobileSyncEntity,
+  MobileSyncOperation,
+  MobileSyncOperationResult,
+  MobileSyncResponse,
+} from "./mobile-sync";
 
 type InventoryServiceDependencies = {
   repository: Pick<
@@ -74,7 +83,7 @@ export function createInventoryService({
     return dashboard;
   }
 
-  return {
+  const service = {
     async previewImportForCurrentUser(input: {
       userId: string;
       rows: InventoryBackupRow[];
@@ -303,7 +312,261 @@ export function createInventoryService({
         itemId: input.itemId,
       });
     },
+
+    async syncQueuedOperationsForCurrentUser(input: {
+      userId: string;
+      operations: MobileSyncOperation[];
+    }): Promise<Omit<MobileSyncResponse, "ok">> {
+      const results: MobileSyncOperationResult[] = [];
+
+      for (const operation of input.operations) {
+        results.push(
+          await syncQueuedOperationForCurrentUser(input.userId, operation),
+        );
+      }
+
+      return { results };
+    },
   };
+
+  async function syncQueuedOperationForCurrentUser(
+    userId: string,
+    operation: MobileSyncOperation,
+  ): Promise<MobileSyncOperationResult> {
+    try {
+      if (operation.action === "create") {
+        return await applyCreateOperation(userId, operation);
+      }
+
+      const serverId = operation.serverId;
+      if (!serverId) {
+        return failedResult(operation, "serverId is required");
+      }
+
+      const dashboard = await loadDashboard(userId);
+      const currentEntity = findVersionedEntity(
+        dashboard,
+        operation.entity,
+        serverId,
+      );
+
+      if (!currentEntity) {
+        return conflictResult(operation, `Server ${operation.entity} is missing`);
+      }
+
+      if (currentEntity.updatedAt !== operation.baseServerUpdatedAt) {
+        return conflictResult(
+          operation,
+          `Server ${operation.entity} changed since the operation was queued`,
+        );
+      }
+
+      if (operation.action === "update") {
+        return await applyUpdateOperation(userId, operation);
+      }
+
+      return await applyDeleteOperation(userId, operation);
+    } catch (error) {
+      return failedResult(
+        operation,
+        error instanceof Error ? error.message : "Unknown sync operation error",
+      );
+    }
+  }
+
+  async function applyCreateOperation(
+    userId: string,
+    operation: MobileSyncOperation,
+  ): Promise<MobileSyncOperationResult> {
+    if (operation.entity === "area") {
+      const area = await service.createAreaForCurrentUser({
+        userId,
+        ...requireAreaPayload(operation),
+      });
+      return appliedResult(operation, area.id, readServerUpdatedAt(area));
+    }
+
+    if (operation.entity === "location") {
+      const location = await service.createLocationForCurrentUser({
+        userId,
+        ...requireLocationPayload(operation),
+      });
+      return appliedResult(operation, location.id, readServerUpdatedAt(location));
+    }
+
+    const item = await service.createItemForCurrentUser({
+      userId,
+      ...requireItemPayload(operation),
+    });
+    return appliedResult(operation, item.id, readServerUpdatedAt(item));
+  }
+
+  async function applyUpdateOperation(
+    userId: string,
+    operation: MobileSyncOperation,
+  ): Promise<MobileSyncOperationResult> {
+    const serverId = requireServerId(operation);
+
+    if (operation.entity === "area") {
+      const area = await service.updateAreaForCurrentUser({
+        userId,
+        areaId: serverId,
+        ...requireAreaPayload(operation),
+      });
+      return appliedResult(operation, area.id, readServerUpdatedAt(area));
+    }
+
+    if (operation.entity === "location") {
+      const location = await service.updateLocationForCurrentUser({
+        userId,
+        locationId: serverId,
+        ...requireLocationPayload(operation),
+      });
+      return appliedResult(operation, location.id, readServerUpdatedAt(location));
+    }
+
+    const item = await service.updateItemForCurrentUser({
+      userId,
+      itemId: serverId,
+      ...requireItemPayload(operation),
+    });
+    return appliedResult(operation, item.id, readServerUpdatedAt(item));
+  }
+
+  async function applyDeleteOperation(
+    userId: string,
+    operation: MobileSyncOperation,
+  ): Promise<MobileSyncOperationResult> {
+    const serverId = requireServerId(operation);
+
+    if (operation.entity === "area") {
+      await service.deleteAreaForCurrentUser({ userId, areaId: serverId });
+    } else if (operation.entity === "location") {
+      await service.deleteLocationForCurrentUser({ userId, locationId: serverId });
+    } else {
+      await service.deleteItemForCurrentUser({ userId, itemId: serverId });
+    }
+
+    return appliedResult(operation, serverId, new Date().toISOString());
+  }
+
+  return service;
+}
+
+type VersionedEntity = {
+  id: string;
+  updatedAt?: string;
+};
+
+function findVersionedEntity(
+  dashboard: DashboardData,
+  entity: MobileSyncEntity,
+  serverId: string,
+): VersionedEntity | undefined {
+  if (entity === "area") {
+    return dashboard.areas.find((area) => area.id === serverId);
+  }
+
+  if (entity === "location") {
+    return dashboard.locations.find((location) => location.id === serverId);
+  }
+
+  return dashboard.items.find((item) => item.id === serverId);
+}
+
+function appliedResult(
+  operation: MobileSyncOperation,
+  serverId: string,
+  serverUpdatedAt: string,
+): MobileSyncOperationResult {
+  return removeUndefinedResultFields({
+    clientOperationId: operation.clientOperationId,
+    status: "applied",
+    entity: operation.entity,
+    localId: operation.localId,
+    serverId,
+    serverUpdatedAt,
+  });
+}
+
+function conflictResult(
+  operation: MobileSyncOperation,
+  message: string,
+): MobileSyncOperationResult {
+  return removeUndefinedResultFields({
+    clientOperationId: operation.clientOperationId,
+    status: "conflict",
+    entity: operation.entity,
+    serverId: operation.serverId,
+    message,
+  });
+}
+
+function failedResult(
+  operation: MobileSyncOperation,
+  message: string,
+): MobileSyncOperationResult {
+  return removeUndefinedResultFields({
+    clientOperationId: operation.clientOperationId,
+    status: "failed",
+    entity: operation.entity,
+    serverId: operation.serverId,
+    message,
+  });
+}
+
+function requireAreaPayload(operation: MobileSyncOperation): MobileAreaPayload {
+  if (!operation.payload || !("color" in operation.payload)) {
+    throw new Error("area payload is required");
+  }
+
+  return operation.payload;
+}
+
+function requireLocationPayload(
+  operation: MobileSyncOperation,
+): MobileLocationPayload {
+  if (!operation.payload || !("areaId" in operation.payload)) {
+    throw new Error("location payload is required");
+  }
+
+  return operation.payload;
+}
+
+function requireItemPayload(operation: MobileSyncOperation): MobileItemPayload {
+  if (!operation.payload || !("locationId" in operation.payload)) {
+    throw new Error("item payload is required");
+  }
+
+  return operation.payload;
+}
+
+function requireServerId(operation: MobileSyncOperation) {
+  if (!operation.serverId) {
+    throw new Error("serverId is required");
+  }
+
+  return operation.serverId;
+}
+
+function readServerUpdatedAt(row: unknown) {
+  if (row && typeof row === "object" && "updatedAt" in row) {
+    const updatedAt = (row as { updatedAt?: unknown }).updatedAt;
+
+    if (typeof updatedAt === "string" && updatedAt.trim()) {
+      return updatedAt;
+    }
+  }
+
+  return new Date().toISOString();
+}
+
+function removeUndefinedResultFields<T extends MobileSyncOperationResult>(
+  result: T,
+): T {
+  return Object.fromEntries(
+    Object.entries(result).filter(([, value]) => value !== undefined),
+  ) as T;
 }
 
 const defaultAreaColors = [
