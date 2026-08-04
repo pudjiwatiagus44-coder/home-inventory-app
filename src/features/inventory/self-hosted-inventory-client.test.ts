@@ -126,6 +126,98 @@ describe("createSelfHostedInventoryClient", () => {
       "Selected item does not belong to current user",
     );
   });
+
+  it("previews and commits Excel imports through self-hosted API routes", async () => {
+    const requests: unknown[] = [];
+    const client = createSelfHostedInventoryClient({
+      fetch: async (input, init) => {
+        requests.push({
+          input,
+          init: {
+            ...init,
+            body:
+              typeof init?.body === "string"
+                ? JSON.parse(init.body)
+                : init?.body instanceof FormData
+                  ? "form-data"
+                  : init?.body,
+          },
+        });
+
+        if (String(input).includes("mode=preview")) {
+          return jsonResponse({
+            ok: true,
+            data: {
+              rows: [],
+              creates: [],
+              skipped: [],
+              conflicts: [],
+              errors: [],
+            },
+          });
+        }
+
+        return jsonResponse({
+          ok: true,
+          data: {
+            createdAreas: 0,
+            createdLocations: 0,
+            createdItems: 0,
+            keptConflictItems: 0,
+            overwrittenItems: 1,
+            skippedItems: 0,
+            errors: [],
+          },
+        });
+      },
+    });
+    const file = new File(["content"], "items.xlsx");
+
+    await client.previewImport(file);
+    await client.commitImport({
+      rows: [
+        {
+          index: 2,
+          name: "Battery",
+          locationName: "A1",
+          areaName: "A",
+          note: "fresh",
+          expireDate: "2028-02-03",
+        },
+      ],
+      conflictResolutions: { "2:item-1": "overwrite" },
+    });
+
+    expect(requests).toEqual([
+      {
+        input: "/api/inventory/import?mode=preview",
+        init: {
+          method: "POST",
+          body: "form-data",
+        },
+      },
+      {
+        input: "/api/inventory/import?mode=commit",
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: {
+            rows: [
+              {
+                index: 2,
+                name: "Battery",
+                locationName: "A1",
+                areaName: "A",
+                note: "fresh",
+                expireDate: "2028-02-03",
+              },
+            ],
+            conflictResolutions: { "2:item-1": "overwrite" },
+          },
+        },
+      },
+    ]);
+  });
 });
 
 function jsonResponse(body: unknown, status = 200) {

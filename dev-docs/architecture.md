@@ -156,3 +156,11 @@ auth.users
 - API/数据库验证：检查 Supabase 表数据。
 - 权限负例：用户 B 不能读写用户 A 的 household 数据。
 - Git checkpoint：第一阶段文档和代码分别小步提交。
+
+## 2026-08-04 Excel 批量备份与导入架构
+
+- Excel 解析、备份文件生成、导入预检和冲突数据结构由前端特性层 `src/features/inventory/excel-backup.ts` 拥有。
+- 导入提交必须通过登录态 API route 和 `createInventoryService` 执行，服务端根据当前 session 解析用户和 household，不接受客户端传入 `householdId`。
+- 导入预检以当前用户 dashboard 数据作为对比基准，不查询或暴露其他用户数据。
+- 提交导入时允许的动作只有 `create`、`keep`、`overwrite`、`skip`：`create` 新增物品并按需创建区域/位置；`keep` 保留差异重复项为一条新物品；`overwrite` 只更新已有物品备注和有效期；`skip` 不写入。
+- API route 文件只能导出 Next.js 允许的 HTTP 方法和 route 配置，不导出业务常量。

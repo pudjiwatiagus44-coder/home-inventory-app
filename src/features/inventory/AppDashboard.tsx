@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -33,6 +33,16 @@ import {
 } from "./inventory-actions";
 import { createSupabaseInventoryRepository } from "./inventory-repository";
 import { createSelfHostedInventoryClient } from "./self-hosted-inventory-client";
+import type {
+  InventoryConflictResolution,
+  InventoryImportPlan,
+  InventoryImportSummary,
+} from "./excel-backup";
+import {
+  writeInventoryBackupWorkbookToBuffer,
+  downloadInventoryBackupBuffer,
+  generateInventoryBackupFilename,
+} from "./excel-backup";
 
 type DashboardState =
   | { status: "loading" }
@@ -73,11 +83,93 @@ function createDashboardWriteClient(
       ) => inventory.updateItem(input),
       deleteItem: (input: { householdId?: string; itemId: string }) =>
         inventory.deleteItem(input),
+      importItems: (file: File) => inventory.importItems(file),
+      previewImport: (file: File) => inventory.previewImport(file),
+      commitImport: (input: {
+        rows: InventoryImportPlan["rows"];
+        conflictResolutions: Record<string, InventoryConflictResolution>;
+      }) => inventory.commitImport(input),
     };
   }
 
   const supabase = createSupabaseBrowserClient();
-  return createSupabaseInventoryRepository(supabase);
+  const repository = createSupabaseInventoryRepository(supabase);
+
+  return {
+    createArea: (input: AreaInput & { householdId?: string }) =>
+      repository.createArea({
+        householdId: input.householdId ?? "",
+        name: input.name,
+        color: input.color ?? areaColors[0],
+      }),
+    updateArea: (input: AreaInput & { householdId?: string; areaId: string }) =>
+      repository.updateArea({
+        householdId: input.householdId ?? "",
+        areaId: input.areaId,
+        name: input.name,
+        color: input.color ?? areaColors[0],
+      }),
+    deleteArea: (input: { householdId?: string; areaId: string }) =>
+      repository.deleteArea({
+        householdId: input.householdId ?? "",
+        areaId: input.areaId,
+      }),
+    createLocation: (input: LocationInput & { householdId?: string }) =>
+      repository.createLocation({
+        householdId: input.householdId ?? "",
+        name: input.name,
+        areaId: input.areaId ?? null,
+      }),
+    updateLocation: (
+      input: LocationInput & { householdId?: string; locationId: string },
+    ) =>
+      repository.updateLocation({
+        householdId: input.householdId ?? "",
+        locationId: input.locationId,
+        name: input.name,
+        areaId: input.areaId ?? null,
+      }),
+    deleteLocation: (input: { householdId?: string; locationId: string }) =>
+      repository.deleteLocation({
+        householdId: input.householdId ?? "",
+        locationId: input.locationId,
+      }),
+    createItem: (
+      input: InventoryItemInput & { householdId?: string; createdBy?: string },
+    ) =>
+      repository.createItem({
+        householdId: input.householdId ?? "",
+        name: input.name,
+        note: input.note,
+        expireDate: input.expireDate,
+        locationId: input.locationId,
+      }),
+    updateItem: (
+      input: InventoryItemInput & { householdId?: string; itemId: string },
+    ) =>
+      repository.updateItem({
+        householdId: input.householdId ?? "",
+        itemId: input.itemId,
+        name: input.name,
+        note: input.note,
+        expireDate: input.expireDate,
+        locationId: input.locationId,
+      }),
+    deleteItem: (input: { householdId?: string; itemId: string }) =>
+      repository.deleteItem({
+        householdId: input.householdId ?? "",
+        itemId: input.itemId,
+      }),
+    importItems: async () => {
+      throw new Error("批量导入当前仅在自托管部署模式可用");
+    },
+    previewImport: async () => {
+      throw new Error("批量导入当前仅在自托管部署模式可用");
+    },
+    commitImport: async () => {
+      throw new Error("批量导入当前仅在自托管部署模式可用");
+    },
+  };
 }
 
 export function AppDashboard({
@@ -114,6 +206,20 @@ export function AppDashboard({
   const [itemSortMode, setItemSortMode] = useState<ItemSortMode>("expireSoon");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [importStatus, setImportStatus] = useState<
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "preview"; plan: InventoryImportPlan }
+    | {
+        status: "success";
+        summary: InventoryImportSummary;
+      }
+    | { status: "error"; message: string }
+  >({ status: "idle" });
+  const [conflictResolutions, setConflictResolutions] = useState<
+    Record<string, InventoryConflictResolution>
+  >({});
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const loadDashboard = useCallback(
     async (shouldUpdate: () => boolean = () => true) => {
@@ -285,6 +391,136 @@ export function AppDashboard({
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  function handleExport() {
+    if (state.status !== "ready") {
+      setFormMessage("请先等待清单加载完成");
+      return;
+    }
+
+    try {
+      const buffer = writeInventoryBackupWorkbookToBuffer({
+        household: {
+          id: state.summary.householdId,
+          name: state.summary.householdName,
+        },
+        areas: state.summary.areas.map((area) => ({
+          id: area.id,
+          name: area.name,
+          color: area.color,
+        })),
+        locations: state.summary.locations.map((location) => ({
+          id: location.id,
+          name: location.name,
+          area_id: location.areaId,
+        })),
+        items: state.summary.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          note: item.note,
+          expire_date: item.expireDate,
+          location_id: item.locationId,
+        })),
+      });
+      downloadInventoryBackupBuffer(buffer, generateInventoryBackupFilename());
+      setFormMessage(null);
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "备份导出失败");
+    }
+  }
+
+  function handleImportClick() {
+    if (state.status !== "ready") {
+      setFormMessage("请先等待清单加载完成");
+      return;
+    }
+
+    importInputRef.current?.click();
+  }
+
+  async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    event.target.value = "";
+    setImportStatus({ status: "loading" });
+    setConflictResolutions({});
+    setFormMessage(null);
+
+    try {
+      const writeClient = createDashboardWriteClient(selfHostedUser);
+      const plan = await writeClient.previewImport(file);
+      const defaultResolutions = Object.fromEntries(
+        plan.conflicts.map((conflict) => [conflict.id, "skip" as const]),
+      );
+      setConflictResolutions(defaultResolutions);
+
+      if (plan.conflicts.length > 0 || plan.errors.length > 0) {
+        setImportStatus({ status: "preview", plan });
+        setFormMessage(
+          `发现 ${plan.conflicts.length} 个差异重复项，${plan.errors.length} 行需要处理。`,
+        );
+        return;
+      }
+
+      const summary = await writeClient.commitImport({
+        rows: plan.rows,
+        conflictResolutions: {},
+      });
+      setImportStatus({ status: "success", summary });
+      setFormMessage(formatImportSummary(summary));
+      await loadDashboard();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "导入失败";
+      setImportStatus({ status: "error", message });
+      setFormMessage(message);
+    }
+  }
+
+  async function handleCommitImport() {
+    if (importStatus.status !== "preview") {
+      return;
+    }
+
+    setIsSaving(true);
+    setFormMessage(null);
+
+    try {
+      const writeClient = createDashboardWriteClient(selfHostedUser);
+      const summary = await writeClient.commitImport({
+        rows: importStatus.plan.rows,
+        conflictResolutions,
+      });
+      setImportStatus({ status: "success", summary });
+      setConflictResolutions({});
+      setFormMessage(formatImportSummary(summary));
+      await loadDashboard();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "导入失败";
+      setImportStatus({ status: "error", message });
+      setFormMessage(message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function closeImportPreview() {
+    setImportStatus({ status: "idle" });
+    setConflictResolutions({});
+  }
+
+  function setConflictResolution(
+    conflictId: string,
+    resolution: InventoryConflictResolution,
+  ) {
+    setConflictResolutions((current) => ({
+      ...current,
+      [conflictId]: resolution,
+    }));
   }
 
   function openMobileQuickPanel(panel: Exclude<MobileQuickPanel, null>) {
@@ -691,6 +927,42 @@ export function AppDashboard({
             </button>
           </div>
           <div className="flex items-center justify-end gap-2">
+            <button
+              className="h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:hidden"
+              onClick={handleExport}
+              type="button"
+            >
+              备份
+            </button>
+            <button
+              className="h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:hidden"
+              onClick={handleImportClick}
+              type="button"
+            >
+              导入
+            </button>
+            <button
+              className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
+              onClick={handleExport}
+              type="button"
+            >
+              备份
+            </button>
+            <button
+              className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
+              onClick={handleImportClick}
+              type="button"
+            >
+              导入
+            </button>
+            <input
+              ref={importInputRef}
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              data-testid="import-file-input"
+              onChange={handleImportFileChange}
+              type="file"
+            />
             <button
               className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
               type="button"
@@ -1522,6 +1794,130 @@ export function AppDashboard({
         </section>
       </main>
 
+      {importStatus.status === "preview" ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          data-testid="import-conflict-dialog"
+          role="dialog"
+        >
+          <section className="flex max-h-[82vh] w-full max-w-3xl flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+              <div>
+                <h2 className="text-base font-semibold">确认批量导入</h2>
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  新增 {importStatus.plan.creates.length} 项，自动跳过{" "}
+                  {importStatus.plan.skipped.length} 项，差异重复{" "}
+                  {importStatus.plan.conflicts.length} 项，错误{" "}
+                  {importStatus.plan.errors.length} 行。
+                </p>
+              </div>
+              <button
+                className="text-sm text-[var(--muted-foreground)]"
+                onClick={closeImportPreview}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {importStatus.plan.conflicts.length > 0 ? (
+                <div className="grid gap-3">
+                  {importStatus.plan.conflicts.map((conflict) => (
+                    <section
+                      className="rounded-md border border-[var(--border)] p-3"
+                      key={conflict.id}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold">
+                            {conflict.row.areaName} / {conflict.row.locationName} /{" "}
+                            {conflict.row.name}
+                          </h3>
+                          <div className="mt-2 grid gap-2 text-[13px] text-[var(--muted-foreground)] sm:grid-cols-2">
+                            <div className="rounded-md bg-[var(--surface-muted)] p-2">
+                              <p className="font-medium text-[var(--foreground)]">
+                                当前
+                              </p>
+                              <p>备注：{conflict.existingItem.note || "空"}</p>
+                              <p>
+                                有效期：{conflict.existingItem.expireDate || "空"}
+                              </p>
+                            </div>
+                            <div className="rounded-md bg-[var(--surface-muted)] p-2">
+                              <p className="font-medium text-[var(--foreground)]">
+                                Excel
+                              </p>
+                              <p>备注：{conflict.row.note || "空"}</p>
+                              <p>有效期：{conflict.row.expireDate || "空"}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid min-w-[168px] gap-2">
+                          {(["skip", "keep", "overwrite"] as const).map(
+                            (resolution) => (
+                              <label
+                                className="flex items-center gap-2 text-sm"
+                                key={resolution}
+                              >
+                                <input
+                                  checked={
+                                    (conflictResolutions[conflict.id] ?? "skip") ===
+                                    resolution
+                                  }
+                                  onChange={() =>
+                                    setConflictResolution(conflict.id, resolution)
+                                  }
+                                  type="radio"
+                                />
+                                {resolution === "skip"
+                                  ? "跳过"
+                                  : resolution === "keep"
+                                    ? "都保留"
+                                    : "覆盖"}
+                              </label>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : null}
+
+              {importStatus.plan.errors.length > 0 ? (
+                <div className="mt-3 rounded-md border border-[#e6b8b3] bg-[#fff3f1] p-3 text-sm text-[var(--danger)]">
+                  {importStatus.plan.errors.map((error) => (
+                    <p key={`${error.row}:${error.message}`}>
+                      第 {error.row} 行：{error.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-[var(--border)] p-4">
+              <button
+                className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+                onClick={closeImportPreview}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-medium text-white disabled:opacity-60"
+                disabled={isSaving}
+                onClick={handleCommitImport}
+                type="button"
+              >
+                确认导入
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {mobileQuickPanel === "search" ? (
         <div
           aria-modal="true"
@@ -2085,6 +2481,10 @@ function sortDashboardItems(items: DashboardItem[], sortMode: ItemSortMode) {
 
     return byExpiration || left.name.localeCompare(right.name, "zh-CN");
   });
+}
+
+function formatImportSummary(summary: InventoryImportSummary) {
+  return `导入完成：新增 ${summary.createdItems} 个物品，覆盖 ${summary.overwrittenItems} 个，保留 ${summary.keptConflictItems} 个差异重复项，跳过 ${summary.skippedItems} 个，新增 ${summary.createdAreas} 个区域，${summary.createdLocations} 个位置，失败 ${summary.errors.length} 行。`;
 }
 
 function EmptyState({ text }: { text: string }) {

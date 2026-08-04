@@ -1,5 +1,11 @@
 import type { AreaInput, InventoryItemInput, LocationInput } from "./inventory-actions";
 import type { DashboardData } from "./dashboard-data";
+import type {
+  InventoryBackupRow,
+  InventoryConflictResolution,
+  InventoryImportPlan,
+  InventoryImportSummary,
+} from "./excel-backup";
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -95,6 +101,34 @@ export function createSelfHostedInventoryClient({
         `/api/inventory/items/${encodeURIComponent(input.itemId)}`,
         jsonInit("DELETE"),
       );
+    },
+
+    previewImport(file: File) {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      return request<InventoryImportPlan>("/api/inventory/import?mode=preview", {
+        method: "POST",
+        body: formData,
+      });
+    },
+
+    commitImport(input: {
+      rows: InventoryBackupRow[];
+      conflictResolutions: Record<string, InventoryConflictResolution>;
+    }) {
+      return request<InventoryImportSummary>(
+        "/api/inventory/import?mode=commit",
+        jsonInit("POST", input),
+      );
+    },
+
+    async importItems(file: File) {
+      const preview = await this.previewImport(file);
+      return this.commitImport({
+        rows: preview.rows,
+        conflictResolutions: {},
+      });
     },
   };
 

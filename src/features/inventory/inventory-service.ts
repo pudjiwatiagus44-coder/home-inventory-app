@@ -6,6 +6,15 @@ import {
   type InventoryItemInput,
   type LocationInput,
 } from "./inventory-actions";
+import type { DashboardData } from "./dashboard-data";
+import {
+  normalizeAreaName,
+  normalizeLocationName,
+  planInventoryImport,
+  type InventoryBackupRow,
+  type InventoryConflictResolution,
+  type InventoryImportSummary,
+} from "./excel-backup";
 import type { InventoryRepository } from "./inventory-repository";
 
 type InventoryServiceDependencies = {
@@ -55,7 +64,56 @@ export class ItemOutsideCurrentHouseholdError extends Error {
 export function createInventoryService({
   repository,
 }: InventoryServiceDependencies) {
+  async function loadDashboard(userId: string) {
+    const dashboard = await repository.getDashboardForUser(userId);
+
+    if (!dashboard) {
+      throw new CurrentUserHouseholdNotFoundError();
+    }
+
+    return dashboard;
+  }
+
   return {
+    async previewImportForCurrentUser(input: {
+      userId: string;
+      rows: InventoryBackupRow[];
+    }) {
+      const dashboard = await loadDashboard(input.userId);
+      return planInventoryImport({ dashboard, rows: input.rows });
+    },
+
+    async commitImportForCurrentUser(input: {
+      userId: string;
+      rows: InventoryBackupRow[];
+      conflictResolutions: Record<string, InventoryConflictResolution>;
+    }) {
+      const dashboard = await loadDashboard(input.userId);
+
+      return commitInventoryImportRows({
+        userId: input.userId,
+        dashboard,
+        rows: input.rows,
+        conflictResolutions: input.conflictResolutions,
+        repository,
+      });
+    },
+
+    async importItemsForCurrentUser(input: {
+      userId: string;
+      rows: InventoryBackupRow[];
+    }) {
+      const dashboard = await loadDashboard(input.userId);
+
+      return commitInventoryImportRows({
+        userId: input.userId,
+        dashboard,
+        rows: input.rows,
+        conflictResolutions: {},
+        repository,
+      });
+    },
+
     async createAreaForCurrentUser(input: AreaInput & { userId: string }) {
       const validation = validateAreaInput(input);
 
@@ -63,11 +121,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       return repository.createArea({
         householdId: dashboard.household.id,
@@ -84,11 +138,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -102,11 +152,7 @@ export function createInventoryService({
     },
 
     async deleteAreaForCurrentUser(input: { userId: string; areaId: string }) {
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -127,11 +173,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (
         validation.value.areaId &&
@@ -155,17 +197,9 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
+      const dashboard = await loadDashboard(input.userId);
 
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
-
-      if (
-        !dashboard.locations.some(
-          (location) => location.id === input.locationId,
-        )
-      ) {
+      if (!dashboard.locations.some((location) => location.id === input.locationId)) {
         throw new LocationOutsideCurrentHouseholdError();
       }
 
@@ -187,17 +221,9 @@ export function createInventoryService({
       userId: string;
       locationId: string;
     }) {
-      const dashboard = await repository.getDashboardForUser(input.userId);
+      const dashboard = await loadDashboard(input.userId);
 
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
-
-      if (
-        !dashboard.locations.some(
-          (location) => location.id === input.locationId,
-        )
-      ) {
+      if (!dashboard.locations.some((location) => location.id === input.locationId)) {
         throw new LocationOutsideCurrentHouseholdError();
       }
 
@@ -216,11 +242,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (
         validation.value.locationId &&
@@ -247,11 +269,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
         throw new ItemOutsideCurrentHouseholdError();
@@ -274,11 +292,7 @@ export function createInventoryService({
     },
 
     async deleteItemForCurrentUser(input: { userId: string; itemId: string }) {
-      const dashboard = await repository.getDashboardForUser(input.userId);
-
-      if (!dashboard) {
-        throw new CurrentUserHouseholdNotFoundError();
-      }
+      const dashboard = await loadDashboard(input.userId);
 
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
         throw new ItemOutsideCurrentHouseholdError();
@@ -290,4 +304,159 @@ export function createInventoryService({
       });
     },
   };
+}
+
+const defaultAreaColors = [
+  "#64748b",
+  "#256f6b",
+  "#7c3aed",
+  "#c2410c",
+  "#be123c",
+  "#0f766e",
+  "#4338ca",
+  "#b45309",
+];
+
+async function commitInventoryImportRows({
+  userId,
+  dashboard,
+  rows,
+  conflictResolutions,
+  repository,
+}: {
+  userId: string;
+  dashboard: DashboardData;
+  rows: InventoryBackupRow[];
+  conflictResolutions: Record<string, InventoryConflictResolution>;
+  repository: InventoryServiceDependencies["repository"];
+}): Promise<InventoryImportSummary> {
+  const plan = planInventoryImport({ dashboard, rows });
+  const householdId = dashboard.household.id;
+  const areaByName = new Map(dashboard.areas.map((area) => [area.name, area]));
+  const locationByKey = new Map(
+    dashboard.locations.map((location) => {
+      const areaName =
+        dashboard.areas.find((area) => area.id === location.area_id)?.name ?? "";
+      return [`${normalizeAreaName(areaName)}:${location.name}`, location] as const;
+    }),
+  );
+  const summary: InventoryImportSummary = {
+    createdAreas: 0,
+    createdLocations: 0,
+    createdItems: 0,
+    keptConflictItems: 0,
+    overwrittenItems: 0,
+    skippedItems: plan.skipped.length,
+    errors: [...plan.errors],
+  };
+
+  for (const create of plan.creates) {
+    await createItemFromImportRow({
+      userId,
+      householdId,
+      row: create.row,
+      areaByName,
+      locationByKey,
+      repository,
+      summary,
+    });
+    summary.createdItems += 1;
+  }
+
+  for (const conflict of plan.conflicts) {
+    const resolution = conflictResolutions[conflict.id] ?? "skip";
+
+    if (resolution === "skip") {
+      summary.skippedItems += 1;
+      continue;
+    }
+
+    if (resolution === "overwrite") {
+      const existingLocation = dashboard.locations.find(
+        (location) => location.name === conflict.existingItem.locationName,
+      );
+      await repository.updateItem({
+        householdId,
+        itemId: conflict.existingItem.id,
+        name: conflict.existingItem.name,
+        note: conflict.row.note,
+        expireDate: conflict.row.expireDate,
+        locationId: existingLocation?.id ?? null,
+      });
+      summary.overwrittenItems += 1;
+      continue;
+    }
+
+    await createItemFromImportRow({
+      userId,
+      householdId,
+      row: conflict.row,
+      areaByName,
+      locationByKey,
+      repository,
+      summary,
+    });
+    summary.createdItems += 1;
+    summary.keptConflictItems += 1;
+  }
+
+  return summary;
+}
+
+async function createItemFromImportRow({
+  userId,
+  householdId,
+  row,
+  areaByName,
+  locationByKey,
+  repository,
+  summary,
+}: {
+  userId: string;
+  householdId: string;
+  row: InventoryBackupRow;
+  areaByName: Map<string, { id: string; name: string; color: string }>;
+  locationByKey: Map<string, { id: string; name: string; area_id?: string | null }>;
+  repository: InventoryServiceDependencies["repository"];
+  summary: Pick<InventoryImportSummary, "createdAreas" | "createdLocations">;
+}) {
+  const areaName = normalizeAreaName(row.areaName);
+  let area = areaByName.get(areaName);
+
+  if (!area) {
+    area = await repository.createArea({
+      householdId,
+      name: areaName,
+      color: defaultAreaColors[areaByName.size % defaultAreaColors.length],
+    });
+    areaByName.set(areaName, area);
+    summary.createdAreas += 1;
+  }
+
+  const locationName = normalizeLocationName(row.locationName);
+  const locationKey = `${areaName}:${locationName}`;
+  let location = locationByKey.get(locationKey);
+
+  if (!location) {
+    location = await repository.createLocation({
+      householdId,
+      name: locationName,
+      areaId: area.id,
+    });
+    locationByKey.set(locationKey, {
+      id: location.id,
+      name: location.name,
+      area_id: area.id,
+    });
+    summary.createdLocations += 1;
+  }
+
+  await repository.createItem({
+    householdId,
+    createdBy: userId,
+    name: row.name,
+    note: row.note,
+    expireDate: row.expireDate,
+    locationId: location.id,
+  });
 }

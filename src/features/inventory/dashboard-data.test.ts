@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildDashboardSummary,
   createDashboardHousehold,
@@ -9,6 +9,15 @@ import {
   getLocationAreaFilterValue,
   isMissingAuthSessionError,
 } from "./dashboard-data";
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-07T12:00:00"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("buildDashboardSummary", () => {
   it("summarizes household, areas, locations, and items for the dashboard", () => {

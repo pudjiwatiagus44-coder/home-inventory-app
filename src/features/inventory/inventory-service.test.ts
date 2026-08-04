@@ -659,4 +659,158 @@ describe("createInventoryService", () => {
     ).rejects.toBeInstanceOf(ItemOutsideCurrentHouseholdError);
     expect(deleteCalled).toBe(false);
   });
+
+  it("previews Excel import without writing to the repository", async () => {
+    const { calls, repository } = createRepository();
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.previewImportForCurrentUser({
+        userId: "user-1",
+        rows: [
+          {
+            index: 1,
+            name: "Battery",
+            locationName: "Shelf",
+            areaName: "未分区",
+            note: "",
+            expireDate: null,
+          },
+          {
+            index: 2,
+            name: "Battery",
+            locationName: "Shelf",
+            areaName: "未分区",
+            note: "fresh",
+            expireDate: "2028-02-03",
+          },
+          {
+            index: 3,
+            name: "Tape",
+            locationName: "Drawer",
+            areaName: "Tools",
+            note: "",
+            expireDate: null,
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      skipped: [{ row: 1, reason: "identical" }],
+      conflicts: [
+        {
+          id: "2:item-1",
+          existingItem: {
+            id: "item-1",
+            name: "Battery",
+            note: "",
+            expireDate: null,
+            locationName: "Shelf",
+            areaName: "未分区",
+          },
+        },
+      ],
+      creates: [
+        {
+          row: {
+            index: 3,
+            name: "Tape",
+            locationName: "Drawer",
+            areaName: "Tools",
+            note: "",
+            expireDate: null,
+          },
+        },
+      ],
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("commits Excel import actions for the current user's household", async () => {
+    let areaSequence = 1;
+    let locationSequence = 1;
+    const { calls, repository } = createRepository({
+      createArea: async (input) => {
+        calls.push(["createArea", input]);
+        return {
+          id: `new-area-${areaSequence++}`,
+          name: input.name,
+          color: input.color ?? "#64748b",
+        };
+      },
+      createLocation: async (input) => {
+        calls.push(["createLocation", input]);
+        return {
+          id: `new-location-${locationSequence++}`,
+          name: input.name,
+        };
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.commitImportForCurrentUser({
+        userId: "user-1",
+        rows: [
+          {
+            index: 1,
+            name: "Battery",
+            locationName: "Shelf",
+            areaName: "未分区",
+            note: "",
+            expireDate: null,
+          },
+          {
+            index: 2,
+            name: "Battery",
+            locationName: "Shelf",
+            areaName: "未分区",
+            note: "fresh",
+            expireDate: "2028-02-03",
+          },
+          {
+            index: 3,
+            name: "Tape",
+            locationName: "Drawer",
+            areaName: "Tools",
+            note: "",
+            expireDate: null,
+          },
+        ],
+        conflictResolutions: {
+          "2:item-1": "overwrite",
+        },
+      }),
+    ).resolves.toMatchObject({
+      createdAreas: 1,
+      createdLocations: 1,
+      createdItems: 1,
+      keptConflictItems: 0,
+      overwrittenItems: 1,
+      skippedItems: 1,
+      errors: [],
+    });
+
+    expect(calls).toContainEqual([
+      "updateItem",
+      {
+        householdId: "household-1",
+        itemId: "item-1",
+        name: "Battery",
+        note: "fresh",
+        expireDate: "2028-02-03",
+        locationId: "location-1",
+      },
+    ]);
+    expect(calls).toContainEqual([
+      "createItem",
+      {
+        householdId: "household-1",
+        createdBy: "user-1",
+        name: "Tape",
+        note: "",
+        expireDate: null,
+        locationId: "new-location-1",
+      },
+    ]);
+  });
 });

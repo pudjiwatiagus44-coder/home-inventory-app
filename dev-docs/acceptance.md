@@ -575,3 +575,13 @@
 - 不能在没有用户确认技术选型时 scaffold 代码。
 - 不能把 mock 数据包装成真实 Supabase 功能。
 - 不能把真实 Supabase secret、service role key 或用户数据提交到 Git。
+
+## 2026-08-04 Excel 批量备份与导入证据
+
+- 用户确认规则：导入以 `所在区域 + 格子编号 + 名称` 判断同格同名物品；备注和有效期完全相同则自动跳过；备注或有效期不同则在弹窗中对比当前数据和 Excel 数据，由用户选择跳过、都保留或覆盖；全新物品自动导入并按需创建缺失区域和格子。
+- 参考文件证据：已检查 `C:\Users\Administrator\Desktop\置物管理系统\Excel备份\物品清单_2026-08-03_17-02-39.xlsx`，工作表为 `物品清单`，表头为 `序号 / 名称 / 格子编号 / 所在区域 / 备注 / 有效期`，共 290 行物品；样例中存在 `2028-10` 这种只有年月的有效期，导入预检会自动按 `2028-10-01` 处理。
+- 代码证据：新增/修复 `src/features/inventory/excel-backup.ts`，覆盖 Excel 备份生成、参考表头解析、日期解析、导入预检、完全重复跳过和差异冲突识别；新增 `src/app/api/inventory/import/handlers.ts` 并保持 `route.ts` 只导出 Next.js 允许的 HTTP 方法；更新 `src/features/inventory/inventory-service.ts`，新增 `previewImportForCurrentUser` 和 `commitImportForCurrentUser`；更新 `src/features/inventory/self-hosted-inventory-client.ts` 和 `src/features/inventory/AppDashboard.tsx`，接入预检弹窗和冲突选择。
+- 权限边界证据：导入预检和提交均通过当前 session 解析用户，服务端从当前用户 dashboard 推导 household；客户端不提交也不信任 `householdId`；覆盖只更新已有物品的备注和有效期。
+- TDD 证据：先新增失败测试 `src/features/inventory/excel-backup.test.ts`、`src/features/inventory/inventory-service.test.ts`、`src/app/api/inventory/import/route.test.ts`、`src/features/inventory/self-hosted-inventory-client.test.ts` 和 `src/features/inventory/AppDashboard.test.ts`，确认缺少预检、提交和 route handler 边界后再实现。
+- 验证证据：`npm test -- src/features/inventory/excel-backup.test.ts src/features/inventory/inventory-service.test.ts src/features/inventory/self-hosted-inventory-client.test.ts src/app/api/inventory/import/route.test.ts src/features/inventory/AppDashboard.test.ts` 通过 5 个测试文件 / 55 个测试；临时清空 `TEST_DATABASE_URL` 后执行 `npm test` 通过 30 个测试文件 / 199 个测试，2 个 PostgreSQL 集成占位测试跳过；`npm run lint` 通过；`npm run build` 通过并生成 `/api/inventory/import` 动态路由。
+- 当前环境限制：当前 shell 中 `TEST_DATABASE_URL` 和 `DATABASE_URL` 指向 `postgres://postgres@localhost:5432/home_inventory_test`，但 `pg_isready -h localhost -p 5432` 返回 `localhost:5432 - no response`，因此带真实 PostgreSQL 环境变量直接运行 `npm test` 时，PostgreSQL 集成测试会因本机数据库未启动而失败。

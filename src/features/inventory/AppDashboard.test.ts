@@ -144,6 +144,17 @@ describe("AppDashboard location actions", () => {
     expect(source).not.toContain("查看区域");
   });
 
+  it("uses a two-step Excel import preview before committing conflicts", () => {
+    const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
+
+    expect(source).toContain("previewImport(file)");
+    expect(source).toContain("commitImport({");
+    expect(source).toContain('data-testid="import-conflict-dialog"');
+    expect(source).toContain("setConflictResolution");
+    expect(source).toContain("都保留");
+    expect(source).toContain("覆盖");
+  });
+
   it("keeps the mobile dashboard compact with independent scrolling zones", () => {
     const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
 
