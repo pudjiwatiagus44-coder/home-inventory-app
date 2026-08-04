@@ -20,10 +20,10 @@ import type {
   MobileAreaPayload,
   MobileItemPayload,
   MobileLocationPayload,
+  MobileSyncData,
   MobileSyncEntity,
   MobileSyncOperation,
   MobileSyncOperationResult,
-  MobileSyncResponse,
 } from "./mobile-sync";
 
 type InventoryServiceDependencies = {
@@ -32,13 +32,19 @@ type InventoryServiceDependencies = {
     | "getDashboardForUser"
     | "createArea"
     | "updateArea"
+    | "updateAreaIfVersionMatches"
     | "deleteArea"
+    | "deleteAreaIfVersionMatches"
     | "createLocation"
     | "updateLocation"
+    | "updateLocationIfVersionMatches"
     | "deleteLocation"
+    | "deleteLocationIfVersionMatches"
     | "createItem"
     | "updateItem"
+    | "updateItemIfVersionMatches"
     | "deleteItem"
+    | "deleteItemIfVersionMatches"
   >;
 };
 
@@ -316,7 +322,7 @@ export function createInventoryService({
     async syncQueuedOperationsForCurrentUser(input: {
       userId: string;
       operations: MobileSyncOperation[];
-    }): Promise<Omit<MobileSyncResponse, "ok">> {
+    }): Promise<MobileSyncData> {
       const results: MobileSyncOperationResult[] = [];
 
       for (const operation of input.operations) {
@@ -362,10 +368,10 @@ export function createInventoryService({
       }
 
       if (operation.action === "update") {
-        return await applyUpdateOperation(userId, operation);
+        return await applyUpdateOperation(operation, dashboard);
       }
 
-      return await applyDeleteOperation(userId, operation);
+      return await applyDeleteOperation(operation, dashboard);
     } catch (error) {
       return failedResult(
         operation,
@@ -402,54 +408,131 @@ export function createInventoryService({
   }
 
   async function applyUpdateOperation(
-    userId: string,
     operation: MobileSyncOperation,
+    dashboard: DashboardData,
   ): Promise<MobileSyncOperationResult> {
     const serverId = requireServerId(operation);
+    const householdId = dashboard.household.id;
 
     if (operation.entity === "area") {
-      const area = await service.updateAreaForCurrentUser({
-        userId,
+      const validation = validateAreaInput(requireAreaPayload(operation));
+
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      const area = await requireAtomicUpdateArea(repository)({
+        householdId,
         areaId: serverId,
-        ...requireAreaPayload(operation),
+        baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+        ...validation.value,
       });
+      if (!area) {
+        return conflictResult(
+          operation,
+          `Server ${operation.entity} changed since the operation was queued`,
+        );
+      }
       return appliedResult(operation, area.id, readServerUpdatedAt(area));
     }
 
     if (operation.entity === "location") {
-      const location = await service.updateLocationForCurrentUser({
-        userId,
+      const validation = validateLocationInput(requireLocationPayload(operation));
+
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      if (
+        validation.value.areaId &&
+        !dashboard.areas.some((area) => area.id === validation.value.areaId)
+      ) {
+        throw new AreaOutsideCurrentHouseholdError();
+      }
+
+      const location = await requireAtomicUpdateLocation(repository)({
+        householdId,
         locationId: serverId,
-        ...requireLocationPayload(operation),
+        baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+        ...validation.value,
       });
+      if (!location) {
+        return conflictResult(
+          operation,
+          `Server ${operation.entity} changed since the operation was queued`,
+        );
+      }
       return appliedResult(operation, location.id, readServerUpdatedAt(location));
     }
 
-    const item = await service.updateItemForCurrentUser({
-      userId,
+    const validation = validateInventoryItemInput(requireItemPayload(operation));
+
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+
+    if (
+      validation.value.locationId &&
+      !dashboard.locations.some(
+        (location) => location.id === validation.value.locationId,
+      )
+    ) {
+      throw new LocationOutsideCurrentHouseholdError();
+    }
+
+    const item = await requireAtomicUpdateItem(repository)({
+      householdId,
       itemId: serverId,
-      ...requireItemPayload(operation),
+      baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+      ...validation.value,
     });
+    if (!item) {
+      return conflictResult(
+        operation,
+        `Server ${operation.entity} changed since the operation was queued`,
+      );
+    }
     return appliedResult(operation, item.id, readServerUpdatedAt(item));
   }
 
   async function applyDeleteOperation(
-    userId: string,
     operation: MobileSyncOperation,
+    dashboard: DashboardData,
   ): Promise<MobileSyncOperationResult> {
     const serverId = requireServerId(operation);
+    const householdId = dashboard.household.id;
+
+    let deleted = true;
 
     if (operation.entity === "area") {
-      await service.deleteAreaForCurrentUser({ userId, areaId: serverId });
+      deleted = await requireAtomicDeleteArea(repository)({
+        householdId,
+        areaId: serverId,
+        baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+      });
     } else if (operation.entity === "location") {
-      await service.deleteLocationForCurrentUser({ userId, locationId: serverId });
+      deleted = await requireAtomicDeleteLocation(repository)({
+        householdId,
+        locationId: serverId,
+        baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+      });
     } else {
-      await service.deleteItemForCurrentUser({ userId, itemId: serverId });
+      deleted = await requireAtomicDeleteItem(repository)({
+        householdId,
+        itemId: serverId,
+        baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
+      });
+    }
+
+    if (!deleted) {
+      return conflictResult(
+        operation,
+        `Server ${operation.entity} changed since the operation was queued`,
+      );
     }
 
     return appliedResult(operation, serverId, new Date().toISOString());
   }
-
   return service;
 }
 
@@ -547,6 +630,74 @@ function requireServerId(operation: MobileSyncOperation) {
   }
 
   return operation.serverId;
+}
+
+function requireBaseServerUpdatedAt(operation: MobileSyncOperation) {
+  if (!operation.baseServerUpdatedAt) {
+    throw new Error("baseServerUpdatedAt is required");
+  }
+
+  return operation.baseServerUpdatedAt;
+}
+
+function requireAtomicUpdateArea(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.updateAreaIfVersionMatches) {
+    throw new Error("Conflict-aware area update is not available");
+  }
+
+  return repository.updateAreaIfVersionMatches;
+}
+
+function requireAtomicDeleteArea(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.deleteAreaIfVersionMatches) {
+    throw new Error("Conflict-aware area delete is not available");
+  }
+
+  return repository.deleteAreaIfVersionMatches;
+}
+
+function requireAtomicUpdateLocation(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.updateLocationIfVersionMatches) {
+    throw new Error("Conflict-aware location update is not available");
+  }
+
+  return repository.updateLocationIfVersionMatches;
+}
+
+function requireAtomicDeleteLocation(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.deleteLocationIfVersionMatches) {
+    throw new Error("Conflict-aware location delete is not available");
+  }
+
+  return repository.deleteLocationIfVersionMatches;
+}
+
+function requireAtomicUpdateItem(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.updateItemIfVersionMatches) {
+    throw new Error("Conflict-aware item update is not available");
+  }
+
+  return repository.updateItemIfVersionMatches;
+}
+
+function requireAtomicDeleteItem(
+  repository: InventoryServiceDependencies["repository"],
+) {
+  if (!repository.deleteItemIfVersionMatches) {
+    throw new Error("Conflict-aware item delete is not available");
+  }
+
+  return repository.deleteItemIfVersionMatches;
 }
 
 function readServerUpdatedAt(row: unknown) {

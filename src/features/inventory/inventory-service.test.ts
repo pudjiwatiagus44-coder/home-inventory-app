@@ -56,8 +56,21 @@ function createRepository(overrides: Partial<InventoryRepository> = {}) {
         color: input.color ?? "#64748b",
       };
     },
+    updateAreaIfVersionMatches: async (input) => {
+      calls.push(["updateAreaIfVersionMatches", input]);
+      return {
+        id: input.areaId,
+        name: input.name.trim(),
+        color: input.color ?? "#64748b",
+        updatedAt: "2026-08-04T00:30:00.000Z",
+      };
+    },
     deleteArea: async (input) => {
       calls.push(["deleteArea", input]);
+    },
+    deleteAreaIfVersionMatches: async (input) => {
+      calls.push(["deleteAreaIfVersionMatches", input]);
+      return true;
     },
     createLocation: async (input) => {
       calls.push(["createLocation", input]);
@@ -67,8 +80,21 @@ function createRepository(overrides: Partial<InventoryRepository> = {}) {
       calls.push(["updateLocation", input]);
       return { id: input.locationId, name: input.name.trim() };
     },
+    updateLocationIfVersionMatches: async (input) => {
+      calls.push(["updateLocationIfVersionMatches", input]);
+      return {
+        id: input.locationId,
+        name: input.name.trim(),
+        area_id: input.areaId ?? null,
+        updatedAt: "2026-08-04T00:30:00.000Z",
+      };
+    },
     deleteLocation: async (input) => {
       calls.push(["deleteLocation", input]);
+    },
+    deleteLocationIfVersionMatches: async (input) => {
+      calls.push(["deleteLocationIfVersionMatches", input]);
+      return true;
     },
     createItem: async (input) => {
       calls.push(["createItem", input]);
@@ -90,8 +116,23 @@ function createRepository(overrides: Partial<InventoryRepository> = {}) {
         location_id: input.locationId,
       };
     },
+    updateItemIfVersionMatches: async (input) => {
+      calls.push(["updateItemIfVersionMatches", input]);
+      return {
+        id: input.itemId,
+        name: input.name.trim(),
+        note: input.note.trim(),
+        expire_date: input.expireDate,
+        location_id: input.locationId,
+        updatedAt: "2026-08-04T00:30:00.000Z",
+      };
+    },
     deleteItem: async (input) => {
       calls.push(["deleteItem", input]);
+    },
+    deleteItemIfVersionMatches: async (input) => {
+      calls.push(["deleteItemIfVersionMatches", input]);
+      return true;
     },
     ...overrides,
   };
@@ -778,6 +819,55 @@ describe("createInventoryService", () => {
     expect(updateCalled).toBe(false);
   });
 
+  it("returns an item update conflict when the atomic repository update misses", async () => {
+    let updateCalled = false;
+    let atomicUpdateCalled = false;
+    const { repository } = createRepository({
+      updateItem: async () => {
+        updateCalled = true;
+        throw new Error("non-atomic update should not be used for mobile sync");
+      },
+      updateItemIfVersionMatches: async () => {
+        atomicUpdateCalled = true;
+        return null;
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-item-update-atomic",
+            entity: "item",
+            action: "update",
+            serverId: "item-1",
+            baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+            payload: {
+              name: "Battery pack",
+              note: "",
+              expireDate: null,
+              locationId: null,
+            },
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-item-update-atomic",
+          status: "conflict",
+          entity: "item",
+          serverId: "item-1",
+          message: "Server item changed since the operation was queued",
+        },
+      ],
+    });
+    expect(atomicUpdateCalled).toBe(true);
+    expect(updateCalled).toBe(false);
+  });
+
   it("returns an item delete conflict when the server row is missing", async () => {
     let deleteCalled = false;
     const { repository } = createRepository({
@@ -814,13 +904,56 @@ describe("createInventoryService", () => {
     expect(deleteCalled).toBe(false);
   });
 
+  it("returns an item delete conflict when the atomic repository delete misses", async () => {
+    let deleteCalled = false;
+    let atomicDeleteCalled = false;
+    const { repository } = createRepository({
+      deleteItem: async () => {
+        deleteCalled = true;
+      },
+      deleteItemIfVersionMatches: async () => {
+        atomicDeleteCalled = true;
+        return false;
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.syncQueuedOperationsForCurrentUser({
+        userId: "user-1",
+        operations: [
+          {
+            clientOperationId: "op-item-delete-atomic",
+            entity: "item",
+            action: "delete",
+            serverId: "item-1",
+            baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      results: [
+        {
+          clientOperationId: "op-item-delete-atomic",
+          status: "conflict",
+          entity: "item",
+          serverId: "item-1",
+          message: "Server item changed since the operation was queued",
+        },
+      ],
+    });
+    expect(atomicDeleteCalled).toBe(true);
+    expect(deleteCalled).toBe(false);
+  });
+
   it("syncs an offline location update when the server version matches", async () => {
     const { calls, repository } = createRepository({
-      updateLocation: async (input) => {
-        calls.push(["updateLocation", input]);
+      updateLocationIfVersionMatches: async (input) => {
+        calls.push(["updateLocationIfVersionMatches", input]);
         return {
           id: input.locationId,
           name: input.name.trim(),
+          area_id: input.areaId,
           updatedAt: "2026-08-04T02:00:00.000Z",
         };
       },
@@ -857,10 +990,11 @@ describe("createInventoryService", () => {
     });
 
     expect(calls).toContainEqual([
-      "updateLocation",
+      "updateLocationIfVersionMatches",
       {
         householdId: "household-1",
         locationId: "location-1",
+        baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
         name: "Pantry",
         areaId: "area-1",
       },

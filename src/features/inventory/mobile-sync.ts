@@ -54,9 +54,13 @@ export type MobileSyncOperationResult =
       message: string;
     };
 
+export type MobileSyncData = {
+  results: MobileSyncOperationResult[];
+};
+
 export type MobileSyncResponse = {
   ok: true;
-  results: MobileSyncOperationResult[];
+  data: MobileSyncData;
 };
 
 export function parseMobileSyncRequest(input: unknown): MobileSyncRequest {

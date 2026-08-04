@@ -16,8 +16,21 @@ import {
   updateInventoryItem,
   updateInventoryLocation,
 } from "./inventory-actions";
-import type { DashboardData } from "./dashboard-data";
+import type {
+  AreaRow,
+  DashboardData,
+  ItemRow,
+  LocationRow,
+} from "./dashboard-data";
 import type { PostgresQueryClient } from "../../server/auth/postgres-auth-repository";
+
+type VersionMatchInput = {
+  baseServerUpdatedAt: string;
+};
+
+type VersionedAreaRow = AreaRow & { updatedAt: string };
+type VersionedLocationRow = LocationRow & { updatedAt: string };
+type VersionedItemRow = ItemRow & { updatedAt: string };
 
 export type InventoryRepository = {
   getDashboardForUser: (userId: string) => Promise<DashboardData | null>;
@@ -27,30 +40,66 @@ export type InventoryRepository = {
   updateArea: (
     input: AreaInput & { householdId: string; areaId: string },
   ) => ReturnType<typeof updateInventoryArea>;
+  updateAreaIfVersionMatches?: (
+    input: AreaInput & {
+      householdId: string;
+      areaId: string;
+    } & VersionMatchInput,
+  ) => Promise<VersionedAreaRow | null>;
   deleteArea: (input: {
     householdId: string;
     areaId: string;
   }) => ReturnType<typeof deleteInventoryArea>;
+  deleteAreaIfVersionMatches?: (
+    input: {
+      householdId: string;
+      areaId: string;
+    } & VersionMatchInput,
+  ) => Promise<boolean>;
   createLocation: (
     input: LocationInput & { householdId: string },
   ) => ReturnType<typeof createInventoryLocation>;
   updateLocation: (
     input: LocationInput & { householdId: string; locationId: string },
   ) => ReturnType<typeof updateInventoryLocation>;
+  updateLocationIfVersionMatches?: (
+    input: LocationInput & {
+      householdId: string;
+      locationId: string;
+    } & VersionMatchInput,
+  ) => Promise<VersionedLocationRow | null>;
   deleteLocation: (input: {
     householdId: string;
     locationId: string;
   }) => ReturnType<typeof deleteInventoryLocation>;
+  deleteLocationIfVersionMatches?: (
+    input: {
+      householdId: string;
+      locationId: string;
+    } & VersionMatchInput,
+  ) => Promise<boolean>;
   createItem: (
     input: InventoryItemInput & { householdId: string },
   ) => ReturnType<typeof createInventoryItem>;
   updateItem: (
     input: InventoryItemInput & { householdId: string; itemId: string },
   ) => ReturnType<typeof updateInventoryItem>;
+  updateItemIfVersionMatches?: (
+    input: InventoryItemInput & {
+      householdId: string;
+      itemId: string;
+    } & VersionMatchInput,
+  ) => Promise<VersionedItemRow | null>;
   deleteItem: (input: {
     householdId: string;
     itemId: string;
   }) => ReturnType<typeof deleteInventoryItem>;
+  deleteItemIfVersionMatches?: (
+    input: {
+      householdId: string;
+      itemId: string;
+    } & VersionMatchInput,
+  ) => Promise<boolean>;
 };
 
 export function createSupabaseInventoryRepository(
@@ -109,7 +158,7 @@ export function createPostgresInventoryRepository(
       }
 
       const [areasResult, locationsResult, itemsResult] = await Promise.all([
-        client.query<DashboardData["areas"][number]>(
+        client.query<PostgresAreaRow>(
           `
             select id, name, color, updated_at as "updatedAt"
             from areas
@@ -118,7 +167,7 @@ export function createPostgresInventoryRepository(
           `,
           [household.id],
         ),
-        client.query<DashboardData["locations"][number]>(
+        client.query<PostgresLocationRow>(
           `
             select id, name, area_id, updated_at as "updatedAt"
             from locations
@@ -127,7 +176,7 @@ export function createPostgresInventoryRepository(
           `,
           [household.id],
         ),
-        client.query<DashboardData["items"][number]>(
+        client.query<PostgresItemRow>(
           `
             select id, name, note, expire_date, location_id, updated_at as "updatedAt"
             from items
@@ -140,9 +189,9 @@ export function createPostgresInventoryRepository(
 
       return {
         household,
-        areas: areasResult.rows,
-        locations: locationsResult.rows,
-        items: itemsResult.rows,
+        areas: areasResult.rows.map(normalizeVersionedRow),
+        locations: locationsResult.rows.map(normalizeVersionedRow),
+        items: itemsResult.rows.map(normalizeVersionedRow),
       };
     },
     createArea: async (input) => {
@@ -175,7 +224,7 @@ export function createPostgresInventoryRepository(
         throw new Error("areas insert did not return a row");
       }
 
-      return area;
+      return normalizeVersionedRow(area);
     },
     updateArea: async (input) => {
       const validation = validateAreaInput(input);
@@ -213,7 +262,38 @@ export function createPostgresInventoryRepository(
         throw new Error("areas update did not return a row");
       }
 
-      return area;
+      return normalizeVersionedRow(area);
+    },
+    updateAreaIfVersionMatches: async (input) => {
+      const validation = validateAreaInput(input);
+
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      const result = await client.query<PostgresAreaRow>(
+        `
+          update areas
+          set
+            name = $3,
+            color = $4,
+            updated_at = now()
+          where id = $1
+            and household_id = $2
+            and updated_at = $5::timestamptz
+          returning id, name, color, updated_at as "updatedAt"
+        `,
+        [
+          input.areaId,
+          input.householdId,
+          validation.value.name,
+          validation.value.color,
+          input.baseServerUpdatedAt,
+        ],
+      );
+      const area = result.rows[0];
+
+      return area ? normalizeVersionedRow(area) : null;
     },
     deleteArea: async (input) => {
       await client.query(
@@ -224,6 +304,20 @@ export function createPostgresInventoryRepository(
         `,
         [input.areaId, input.householdId],
       );
+    },
+    deleteAreaIfVersionMatches: async (input) => {
+      const result = await client.query<{ id: string }>(
+        `
+          delete from areas
+          where id = $1
+            and household_id = $2
+            and updated_at = $3::timestamptz
+          returning id
+        `,
+        [input.areaId, input.householdId, input.baseServerUpdatedAt],
+      );
+
+      return result.rows.length > 0;
     },
     createLocation: async (input) => {
       const validation = validateLocationInput(input);
@@ -254,7 +348,7 @@ export function createPostgresInventoryRepository(
         throw new Error("locations insert did not return a row");
       }
 
-      return location;
+      return normalizeVersionedRow(location);
     },
     updateLocation: async (input) => {
       const validation = validateLocationInput(input);
@@ -291,7 +385,38 @@ export function createPostgresInventoryRepository(
         throw new Error("locations update did not return a row");
       }
 
-      return location;
+      return normalizeVersionedRow(location);
+    },
+    updateLocationIfVersionMatches: async (input) => {
+      const validation = validateLocationInput(input);
+
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      const result = await client.query<PostgresLocationRow>(
+        `
+          update locations
+          set
+            area_id = $3,
+            name = $4,
+            updated_at = now()
+          where id = $1
+            and household_id = $2
+            and updated_at = $5::timestamptz
+          returning id, name, area_id, updated_at as "updatedAt"
+        `,
+        [
+          input.locationId,
+          input.householdId,
+          validation.value.areaId,
+          validation.value.name,
+          input.baseServerUpdatedAt,
+        ],
+      );
+      const location = result.rows[0];
+
+      return location ? normalizeVersionedRow(location) : null;
     },
     deleteLocation: async (input) => {
       await client.query(
@@ -302,6 +427,20 @@ export function createPostgresInventoryRepository(
         `,
         [input.locationId, input.householdId],
       );
+    },
+    deleteLocationIfVersionMatches: async (input) => {
+      const result = await client.query<{ id: string }>(
+        `
+          delete from locations
+          where id = $1
+            and household_id = $2
+            and updated_at = $3::timestamptz
+          returning id
+        `,
+        [input.locationId, input.householdId, input.baseServerUpdatedAt],
+      );
+
+      return result.rows.length > 0;
     },
     createItem: async (input) => {
       const validation = validateInventoryItemInput(input);
@@ -345,7 +484,7 @@ export function createPostgresInventoryRepository(
         throw new Error("items insert did not return a row");
       }
 
-      return item;
+      return normalizeVersionedRow(item);
     },
     updateItem: async (input) => {
       const validation = validateInventoryItemInput(input);
@@ -389,7 +528,42 @@ export function createPostgresInventoryRepository(
         throw new Error("items update did not return a row");
       }
 
-      return item;
+      return normalizeVersionedRow(item);
+    },
+    updateItemIfVersionMatches: async (input) => {
+      const validation = validateInventoryItemInput(input);
+
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      const result = await client.query<PostgresItemRow>(
+        `
+          update items
+          set
+            location_id = $3,
+            name = $4,
+            note = $5,
+            expire_date = $6,
+            updated_at = now()
+          where id = $1
+            and household_id = $2
+            and updated_at = $7::timestamptz
+          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
+        `,
+        [
+          input.itemId,
+          input.householdId,
+          validation.value.locationId,
+          validation.value.name,
+          validation.value.note,
+          validation.value.expireDate,
+          input.baseServerUpdatedAt,
+        ],
+      );
+      const item = result.rows[0];
+
+      return item ? normalizeVersionedRow(item) : null;
     },
     deleteItem: async (input) => {
       await client.query(
@@ -400,6 +574,20 @@ export function createPostgresInventoryRepository(
         `,
         [input.itemId, input.householdId],
       );
+    },
+    deleteItemIfVersionMatches: async (input) => {
+      const result = await client.query<{ id: string }>(
+        `
+          delete from items
+          where id = $1
+            and household_id = $2
+            and updated_at = $3::timestamptz
+          returning id
+        `,
+        [input.itemId, input.householdId, input.baseServerUpdatedAt],
+      );
+
+      return result.rows.length > 0;
     },
   };
 }
@@ -415,7 +603,13 @@ function createNotConnectedPostgresInventoryRepository(): InventoryRepository {
     updateArea: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
+    updateAreaIfVersionMatches: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
     deleteArea: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
+    deleteAreaIfVersionMatches: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
     createLocation: async () => {
@@ -424,7 +618,13 @@ function createNotConnectedPostgresInventoryRepository(): InventoryRepository {
     updateLocation: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
+    updateLocationIfVersionMatches: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
     deleteLocation: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
+    deleteLocationIfVersionMatches: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
     createItem: async () => {
@@ -433,8 +633,33 @@ function createNotConnectedPostgresInventoryRepository(): InventoryRepository {
     updateItem: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
+    updateItemIfVersionMatches: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
     deleteItem: async () => {
       throw new PostgresInventoryRepositoryNotConnectedError();
     },
+    deleteItemIfVersionMatches: async () => {
+      throw new PostgresInventoryRepositoryNotConnectedError();
+    },
   };
+}
+
+type PostgresVersionedField = {
+  updatedAt?: string | Date;
+};
+
+type PostgresAreaRow = Omit<AreaRow, "updatedAt"> & PostgresVersionedField;
+type PostgresLocationRow = Omit<LocationRow, "updatedAt"> &
+  PostgresVersionedField;
+type PostgresItemRow = Omit<ItemRow, "updatedAt"> & PostgresVersionedField;
+
+function normalizeVersionedRow<Row extends PostgresVersionedField>(
+  row: Row,
+): Omit<Row, "updatedAt"> & { updatedAt?: string } {
+  if (row.updatedAt instanceof Date) {
+    return { ...row, updatedAt: row.updatedAt.toISOString() };
+  }
+
+  return row as Omit<Row, "updatedAt"> & { updatedAt?: string };
 }

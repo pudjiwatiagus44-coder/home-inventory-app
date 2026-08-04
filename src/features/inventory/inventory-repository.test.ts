@@ -278,6 +278,56 @@ describe("createPostgresInventoryRepository", () => {
     expect(calls[3].text).toContain('updated_at as "updatedAt"');
   });
 
+  it("normalizes Date dashboard update versions to ISO strings", async () => {
+    const areaUpdatedAt = new Date("2026-08-01T10:00:00.000Z");
+    const locationUpdatedAt = new Date("2026-08-01T10:01:00.000Z");
+    const itemUpdatedAt = new Date("2026-08-01T10:02:00.000Z");
+    const results = [
+      { rows: [{ id: "household-1", name: "Home" }] },
+      {
+        rows: [
+          {
+            id: "area-1",
+            name: "Kitchen",
+            color: "#256f6b",
+            updatedAt: areaUpdatedAt,
+          },
+        ],
+      },
+      {
+        rows: [
+          {
+            id: "location-1",
+            name: "Shelf",
+            area_id: "area-1",
+            updatedAt: locationUpdatedAt,
+          },
+        ],
+      },
+      {
+        rows: [
+          {
+            id: "item-1",
+            name: "Battery",
+            note: "",
+            expire_date: null,
+            location_id: "location-1",
+            updatedAt: itemUpdatedAt,
+          },
+        ],
+      },
+    ];
+    const repository = createTypedPostgresInventoryRepository({
+      query: async () => results.shift() ?? { rows: [] },
+    });
+
+    await expect(repository.getDashboardForUser("user-1")).resolves.toMatchObject({
+      areas: [{ updatedAt: "2026-08-01T10:00:00.000Z" }],
+      locations: [{ updatedAt: "2026-08-01T10:01:00.000Z" }],
+      items: [{ updatedAt: "2026-08-01T10:02:00.000Z" }],
+    });
+  });
+
   it("returns null when the current user has no household membership", async () => {
     const repository = createTypedPostgresInventoryRepository({
       query: async () => ({ rows: [] }),
@@ -562,6 +612,76 @@ describe("createPostgresInventoryRepository", () => {
     expect(calls[0].text).toContain("household_id = $2");
   });
 
+  it("atomically updates an item only when the base version matches", async () => {
+    const calls: Array<{ text: string; values?: unknown[] }> = [];
+    const repository = createTypedPostgresInventoryRepository({
+      query: async (text, values) => {
+        calls.push({ text, values });
+        return {
+          rows: [
+            {
+              id: "item-1",
+              name: "Battery pack",
+              note: "Fresh",
+              expire_date: null,
+              location_id: null,
+              updatedAt: new Date("2026-08-04T02:00:00.000Z"),
+            },
+          ],
+        };
+      },
+    });
+
+    await expect(
+      repository.updateItemIfVersionMatches?.({
+        householdId: "household-1",
+        itemId: "item-1",
+        baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+        name: " Battery pack ",
+        note: " Fresh ",
+        expireDate: null,
+        locationId: null,
+      }),
+    ).resolves.toEqual({
+      id: "item-1",
+      name: "Battery pack",
+      note: "Fresh",
+      expire_date: null,
+      location_id: null,
+      updatedAt: "2026-08-04T02:00:00.000Z",
+    });
+
+    expect(calls[0].text).toContain("updated_at = $7::timestamptz");
+    expect(calls[0].text).toContain('updated_at as "updatedAt"');
+    expect(calls[0].values).toEqual([
+      "item-1",
+      "household-1",
+      null,
+      "Battery pack",
+      "Fresh",
+      null,
+      "2026-08-04T00:00:00.000Z",
+    ]);
+  });
+
+  it("returns null when an atomic item update version does not match", async () => {
+    const repository = createTypedPostgresInventoryRepository({
+      query: async () => ({ rows: [] }),
+    });
+
+    await expect(
+      repository.updateItemIfVersionMatches?.({
+        householdId: "household-1",
+        itemId: "item-1",
+        baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+        name: "Battery pack",
+        note: "",
+        expireDate: null,
+        locationId: null,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("deletes an item scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
     const repository = createTypedPostgresInventoryRepository({
@@ -586,5 +706,45 @@ describe("createPostgresInventoryRepository", () => {
     ]);
     expect(calls[0].text).toContain("where id = $1");
     expect(calls[0].text).toContain("household_id = $2");
+  });
+
+  it("atomically deletes an item only when the base version matches", async () => {
+    const calls: Array<{ text: string; values?: unknown[] }> = [];
+    const repository = createTypedPostgresInventoryRepository({
+      query: async (text, values) => {
+        calls.push({ text, values });
+        return { rows: [{ id: "item-1" }] };
+      },
+    });
+
+    await expect(
+      repository.deleteItemIfVersionMatches?.({
+        householdId: "household-1",
+        itemId: "item-1",
+        baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+      }),
+    ).resolves.toBe(true);
+
+    expect(calls[0].text).toContain("updated_at = $3::timestamptz");
+    expect(calls[0].text).toContain("returning id");
+    expect(calls[0].values).toEqual([
+      "item-1",
+      "household-1",
+      "2026-08-04T00:00:00.000Z",
+    ]);
+  });
+
+  it("returns false when an atomic item delete version does not match", async () => {
+    const repository = createTypedPostgresInventoryRepository({
+      query: async () => ({ rows: [] }),
+    });
+
+    await expect(
+      repository.deleteItemIfVersionMatches?.({
+        householdId: "household-1",
+        itemId: "item-1",
+        baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+      }),
+    ).resolves.toBe(false);
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseMobileSyncRequest,
   type MobileSyncRequest,
+  type MobileSyncResponse,
 } from "./mobile-sync";
 
 describe("parseMobileSyncRequest", () => {
@@ -124,5 +125,17 @@ describe("parseMobileSyncRequest", () => {
         ],
       }),
     ).toThrow("area payload color");
+  });
+
+  it("types the API response with sync results under data", () => {
+    const response: MobileSyncResponse = {
+      ok: true,
+      data: { results: [] },
+    };
+
+    expect(response).toEqual({
+      ok: true,
+      data: { results: [] },
+    });
   });
 });

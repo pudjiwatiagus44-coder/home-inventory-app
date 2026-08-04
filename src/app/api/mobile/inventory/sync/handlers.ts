@@ -4,8 +4,8 @@ import { getCurrentUserFromRequest } from "../../../auth/route-helpers";
 import { createRouteInventoryService } from "../../../inventory/route-helpers";
 import {
   parseMobileSyncRequest,
+  type MobileSyncData,
   type MobileSyncOperation,
-  type MobileSyncResponse,
 } from "../../../../../features/inventory/mobile-sync";
 import {
   PostgresInventoryRepositoryNotConnectedError,
@@ -26,7 +26,7 @@ type MobileInventorySyncService = {
   syncQueuedOperationsForCurrentUser(input: {
     userId: string;
     operations: MobileSyncOperation[];
-  }): Promise<Omit<MobileSyncResponse, "ok">>;
+  }): Promise<MobileSyncData>;
 };
 
 type MobileSyncDependencies = {
