@@ -1,6 +1,7 @@
 package com.homeinventory.app.data.remote
 
 import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
 
 data class ApiEnvelope<T>(
     val ok: Boolean,
@@ -50,4 +51,32 @@ data class RemoteItemDto(
     @SerializedName("location_id")
     val locationId: String? = null,
     val updatedAt: String? = null,
+)
+
+data class MobileSyncRequest(
+    val operations: List<MobileSyncOperationDto>,
+)
+
+data class MobileSyncOperationDto(
+    val clientOperationId: String,
+    val entity: String,
+    val action: String,
+    val localId: String? = null,
+    val serverId: String? = null,
+    val baseServerUpdatedAt: String? = null,
+    val payload: JsonObject? = null,
+)
+
+data class MobileSyncResponse(
+    val results: List<MobileSyncResultDto> = emptyList(),
+)
+
+data class MobileSyncResultDto(
+    val clientOperationId: String,
+    val status: String,
+    val entity: String,
+    val localId: String? = null,
+    val serverId: String? = null,
+    val serverUpdatedAt: String? = null,
+    val message: String? = null,
 )

@@ -2,6 +2,8 @@ package com.homeinventory.app.core.network
 
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AuthResponse
+import com.homeinventory.app.data.remote.MobileSyncRequest
+import com.homeinventory.app.data.remote.MobileSyncResponse
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import retrofit2.Response
 import retrofit2.http.Body
@@ -22,4 +24,7 @@ interface HomeInventoryApi {
 
     @GET("api/mobile/inventory/snapshot")
     suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>>
+
+    @POST("api/mobile/inventory/sync")
+    suspend fun syncInventory(@Body request: MobileSyncRequest): Response<ApiEnvelope<MobileSyncResponse>>
 }
