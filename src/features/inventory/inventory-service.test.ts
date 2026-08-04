@@ -813,4 +813,50 @@ describe("createInventoryService", () => {
       },
     ]);
   });
+
+  it("reuses an existing location name even when the Excel row names another area", async () => {
+    const { calls, repository } = createRepository();
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.commitImportForCurrentUser({
+        userId: "user-1",
+        rows: [
+          {
+            index: 9,
+            name: "Tape",
+            locationName: "Shelf",
+            areaName: "Tools",
+            note: "",
+            expireDate: null,
+          },
+        ],
+        conflictResolutions: {},
+      }),
+    ).resolves.toMatchObject({
+      createdAreas: 0,
+      createdLocations: 0,
+      createdItems: 1,
+      errors: [],
+    });
+
+    expect(calls).not.toContainEqual([
+      "createLocation",
+      expect.objectContaining({
+        householdId: "household-1",
+        name: "Shelf",
+      }),
+    ]);
+    expect(calls).toContainEqual([
+      "createItem",
+      {
+        householdId: "household-1",
+        createdBy: "user-1",
+        name: "Tape",
+        note: "",
+        expireDate: null,
+        locationId: "location-1",
+      },
+    ]);
+  });
 });

@@ -334,11 +334,7 @@ async function commitInventoryImportRows({
   const householdId = dashboard.household.id;
   const areaByName = new Map(dashboard.areas.map((area) => [area.name, area]));
   const locationByKey = new Map(
-    dashboard.locations.map((location) => {
-      const areaName =
-        dashboard.areas.find((area) => area.id === location.area_id)?.name ?? "";
-      return [`${normalizeAreaName(areaName)}:${location.name}`, location] as const;
-    }),
+    dashboard.locations.map((location) => [location.name, location] as const),
   );
   const summary: InventoryImportSummary = {
     createdAreas: 0,
@@ -421,23 +417,23 @@ async function createItemFromImportRow({
   summary: Pick<InventoryImportSummary, "createdAreas" | "createdLocations">;
 }) {
   const areaName = normalizeAreaName(row.areaName);
-  let area = areaByName.get(areaName);
-
-  if (!area) {
-    area = await repository.createArea({
-      householdId,
-      name: areaName,
-      color: defaultAreaColors[areaByName.size % defaultAreaColors.length],
-    });
-    areaByName.set(areaName, area);
-    summary.createdAreas += 1;
-  }
-
   const locationName = normalizeLocationName(row.locationName);
-  const locationKey = `${areaName}:${locationName}`;
+  const locationKey = locationName;
   let location = locationByKey.get(locationKey);
 
   if (!location) {
+    let area = areaByName.get(areaName);
+
+    if (!area) {
+      area = await repository.createArea({
+        householdId,
+        name: areaName,
+        color: defaultAreaColors[areaByName.size % defaultAreaColors.length],
+      });
+      areaByName.set(areaName, area);
+      summary.createdAreas += 1;
+    }
+
     location = await repository.createLocation({
       householdId,
       name: locationName,
