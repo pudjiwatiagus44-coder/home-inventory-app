@@ -81,7 +81,6 @@ function parseMobileSyncOperation(input: unknown): MobileSyncOperation {
     localId: readOptionalString(input, "localId"),
     serverId: readOptionalString(input, "serverId"),
     baseServerUpdatedAt: readOptionalString(input, "baseServerUpdatedAt"),
-    payload: readPayload(input.payload),
   };
 
   if (
@@ -100,12 +99,18 @@ function parseMobileSyncOperation(input: unknown): MobileSyncOperation {
 
   if (
     (operation.action === "create" || operation.action === "update") &&
-    !operation.payload
+    input.payload === undefined
   ) {
     throw new Error("payload is required for create and update");
   }
 
-  return removeUndefinedValues(operation);
+  return removeUndefinedValues({
+    ...operation,
+    payload:
+      input.payload === undefined
+        ? undefined
+        : readPayload(operation.entity, input.payload),
+  });
 }
 
 function readEntity(value: unknown): MobileSyncEntity {
@@ -152,16 +157,73 @@ function readOptionalString(
   return value;
 }
 
-function readPayload(value: unknown): MobileSyncPayload | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
+function readPayload(
+  entity: MobileSyncEntity,
+  value: unknown,
+): MobileSyncPayload {
   if (!isRecord(value)) {
     throw new Error("payload must be an object");
   }
 
-  return value as MobileSyncPayload;
+  if (entity === "area") {
+    return {
+      name: readPayloadRequiredString(value, "area payload", "name"),
+      color: readPayloadRequiredString(value, "area payload", "color"),
+    };
+  }
+
+  if (entity === "location") {
+    return {
+      name: readPayloadRequiredString(value, "location payload", "name"),
+      areaId: readPayloadNullableString(value, "location payload", "areaId"),
+    };
+  }
+
+  return {
+    name: readPayloadRequiredString(value, "item payload", "name"),
+    note: readPayloadString(value, "item payload", "note"),
+    expireDate: readPayloadNullableString(value, "item payload", "expireDate"),
+    locationId: readPayloadNullableString(value, "item payload", "locationId"),
+  };
+}
+
+function readPayloadRequiredString(
+  record: Record<string, unknown>,
+  label: string,
+  key: string,
+): string {
+  const value = readPayloadString(record, label, key);
+  if (value.trim() === "") {
+    throw new Error(`${label} ${key} must be a non-empty string`);
+  }
+
+  return value;
+}
+
+function readPayloadString(
+  record: Record<string, unknown>,
+  label: string,
+  key: string,
+): string {
+  const value = record[key];
+  if (typeof value !== "string") {
+    throw new Error(`${label} ${key} must be a string`);
+  }
+
+  return value;
+}
+
+function readPayloadNullableString(
+  record: Record<string, unknown>,
+  label: string,
+  key: string,
+): string | null {
+  const value = record[key];
+  if (value === null || typeof value === "string") {
+    return value;
+  }
+
+  throw new Error(`${label} ${key} must be a string or null`);
 }
 
 function removeUndefinedValues(
