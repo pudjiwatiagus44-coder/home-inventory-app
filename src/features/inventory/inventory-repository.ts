@@ -111,7 +111,7 @@ export function createPostgresInventoryRepository(
       const [areasResult, locationsResult, itemsResult] = await Promise.all([
         client.query<DashboardData["areas"][number]>(
           `
-            select id, name, color
+            select id, name, color, updated_at as "updatedAt"
             from areas
             where household_id = $1
             order by sort_order asc, created_at asc
@@ -120,7 +120,7 @@ export function createPostgresInventoryRepository(
         ),
         client.query<DashboardData["locations"][number]>(
           `
-            select id, name, area_id
+            select id, name, area_id, updated_at as "updatedAt"
             from locations
             where household_id = $1
             order by sort_order asc, created_at asc
@@ -129,7 +129,7 @@ export function createPostgresInventoryRepository(
         ),
         client.query<DashboardData["items"][number]>(
           `
-            select id, name, note, expire_date, location_id
+            select id, name, note, expire_date, location_id, updated_at as "updatedAt"
             from items
             where household_id = $1
             order by created_at desc

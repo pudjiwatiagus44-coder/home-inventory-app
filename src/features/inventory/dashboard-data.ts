@@ -7,6 +7,7 @@ export type AreaRow = {
   id: string;
   name: string;
   color: string;
+  updatedAt?: string;
 };
 
 export type DashboardArea = AreaRow & {
@@ -17,6 +18,7 @@ export type LocationRow = {
   id: string;
   name: string;
   area_id: string | null;
+  updatedAt?: string;
 };
 
 export type DashboardLocation = {
@@ -34,6 +36,7 @@ export type ItemRow = {
   note: string;
   expire_date: string | null;
   location_id: string | null;
+  updatedAt?: string;
 };
 
 export type DashboardData = {

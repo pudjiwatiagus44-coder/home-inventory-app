@@ -166,6 +166,84 @@ describe("createPostgresInventoryRepository", () => {
     expect(calls[0].text).toContain("join households");
   });
 
+  it("loads dashboard update versions for conflict checks", async () => {
+    const calls: Array<{ text: string; values?: unknown[] }> = [];
+    const results = [
+      { rows: [{ id: "household-1", name: "Home" }] },
+      {
+        rows: [
+          {
+            id: "area-1",
+            name: "Kitchen",
+            color: "#256f6b",
+            updatedAt: "2026-08-01T10:00:00.000Z",
+          },
+        ],
+      },
+      {
+        rows: [
+          {
+            id: "location-1",
+            name: "Shelf",
+            area_id: "area-1",
+            updatedAt: "2026-08-01T10:01:00.000Z",
+          },
+        ],
+      },
+      {
+        rows: [
+          {
+            id: "item-1",
+            name: "Battery",
+            note: "",
+            expire_date: null,
+            location_id: "location-1",
+            updatedAt: "2026-08-01T10:02:00.000Z",
+          },
+        ],
+      },
+    ];
+    const repository = createPostgresInventoryRepository({
+      query: async (text, values) => {
+        calls.push({ text, values });
+        return results.shift() ?? { rows: [] };
+      },
+    });
+
+    await expect(repository.getDashboardForUser("user-1")).resolves.toEqual({
+      household: { id: "household-1", name: "Home" },
+      areas: [
+        {
+          id: "area-1",
+          name: "Kitchen",
+          color: "#256f6b",
+          updatedAt: "2026-08-01T10:00:00.000Z",
+        },
+      ],
+      locations: [
+        {
+          id: "location-1",
+          name: "Shelf",
+          area_id: "area-1",
+          updatedAt: "2026-08-01T10:01:00.000Z",
+        },
+      ],
+      items: [
+        {
+          id: "item-1",
+          name: "Battery",
+          note: "",
+          expire_date: null,
+          location_id: "location-1",
+          updatedAt: "2026-08-01T10:02:00.000Z",
+        },
+      ],
+    });
+    expect(calls[1].text).toContain('updated_at as "updatedAt"');
+    expect(calls[2].text).toContain('updated_at as "updatedAt"');
+    expect(calls[3].text).toContain('updated_at as "updatedAt"');
+  });
+
   it("returns null when the current user has no household membership", async () => {
     const repository = createPostgresInventoryRepository({
       query: async () => ({ rows: [] }),
