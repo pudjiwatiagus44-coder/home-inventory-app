@@ -164,3 +164,16 @@ auth.users
 - 导入预检以当前用户 dashboard 数据作为对比基准，不查询或暴露其他用户数据。
 - 提交导入时允许的动作只有 `create`、`keep`、`overwrite`、`skip`：`create` 新增物品并按需创建区域/位置；`keep` 保留差异重复项为一条新物品；`overwrite` 只更新已有物品备注和有效期；`skip` 不写入。
 - API route 文件只能导出 Next.js 允许的 HTTP 方法和 route 配置，不导出业务常量。
+
+## 2026-08-04 Android 原生内测版架构
+
+- Android 原生内测版作为新增移动端客户端，不替代现有 Web/PWA，也不改变服务端作为权限边界的 owner。
+- Android 技术路线：Kotlin + Jetpack Compose + MVVM。
+- Android 本地缓存：Room，至少包含 `areas`、`locations`、`items`、`pending_operations`、`sync_state`。
+- Android 安全存储：session/token 使用 Android Keystore 或 EncryptedSharedPreferences；禁止保存明文密码、数据库密码、服务端密钥或真实云密钥。
+- Android 网络层：通过 HTTPS 调用现有 Next.js 认证和库存 API；客户端不得直连 PostgreSQL。
+- 服务端仍根据当前 session 推导 user 和 household；Android 请求不得提交或伪造可信 `householdId`。
+- 同步版本依据第一版优先使用服务器返回的 `updatedAt`。更新和删除请求携带客户端操作时看到的基础 `serverUpdatedAt`，服务端发现记录已变化时返回冲突，不允许客户端覆盖较新的服务器数据。
+- 离线新增使用本地临时 id 和 `pending_create` 状态；网络恢复后 Android 自动提交，成功后替换为服务器 id 与最新 `updatedAt`。
+- 离线编辑和删除进入 `pending_operations` 队列；恢复网络后按队列提交，冲突时服务器状态优先，客户端展示需用户重新确认的状态。
+- 第一版同步触发点：登录后、App 启动、手动刷新/同步、网络恢复、在线写入成功后。不做后台长时间同步、推送实时同步或复杂合并 UI。

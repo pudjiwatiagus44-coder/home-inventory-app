@@ -588,3 +588,14 @@
 - 部署证据：本地提交 `c74b0c4 feat: add excel backup import` 已推送到 GitHub `origin/main`；服务器 `/opt/home-inventory-app` 已拉取到 `c74b0c4`，执行 `npm ci` 和 `npm run build` 成功，构建路由包含 `/api/inventory/import`，`home-inventory-app.service` 重启后为 `active`。
 - 公网 smoke 证据：`curl -I https://homestorag.xyz/login` 返回 HTTP 200；`curl -I https://homestorag.xyz/app` 返回 HTTP 200；未登录 `POST https://homestorag.xyz/api/inventory/import?mode=preview` 返回 HTTP 401 和 `{"ok":false,"message":"Authentication required"}`。
 - 2026-08-04 导入同名格子修复证据：用户导入时遇到 `duplicate key value violates unique constraint "locations_unique_name_per_household"`；根因是数据库约束要求同一 household 内 `locations.name` 唯一，而导入提交曾按 `所在区域 + 格子编号` 判断是否创建格子。已改为按格子编号复用已有位置，只有格子编号不存在时才创建新位置；新增测试覆盖 Excel 区域不同但格子编号已存在时复用旧位置。验证：`npm test -- src/features/inventory/excel-backup.test.ts src/features/inventory/inventory-service.test.ts src/app/api/inventory/import/route.test.ts` 通过 3 个文件 / 37 个测试，`npm run lint` 通过，`npm run build` 通过。
+
+## 2026-08-04 Android 原生内测版设计确认
+
+- 用户确认路线：先做 Android 原生内测 APK，后续再规划 iOS。
+- 用户确认技术形态：Kotlin 原生 Android，不采用 React Native/Expo，不采用 WebView 套壳。
+- 用户确认离线能力：第一阶段包含离线缓存和离线编辑。
+- 用户确认冲突策略：服务器优先。离线编辑或删除已有数据时，如果服务器数据已变化，Android 不自动覆盖服务器。
+- 用户补充离线新增要求：离线状态下新增物品后，网络恢复时应自动尽快同步到服务器。
+- 用户确认账号边界：Android 复用现有邮箱 + 密码账号和后端权限，不单独创建移动端账号系统。
+- 设计文档：`docs/superpowers/specs/2026-08-04-android-native-internal-test-design.md`。
+- 后续实现验收必须至少覆盖：Android 内测 APK 可构建；现有账号可登录；在线 CRUD 可用；离线可查看最近清单；离线新增物品恢复联网后自动同步；离线编辑/删除冲突不覆盖服务器较新数据；Android API 权限负例验证用户 A/B 数据隔离；Android 不保存明文密码或后端/数据库密钥。
