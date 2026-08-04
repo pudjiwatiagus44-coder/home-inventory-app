@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 out/
+.worktrees/
 
 # Environment and secrets
 .env
@@ -33,4 +34,3 @@ exports/
 backups/
 *.sqlite
 *.db
-
