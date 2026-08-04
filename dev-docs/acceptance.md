@@ -599,3 +599,14 @@
 - 用户确认账号边界：Android 复用现有邮箱 + 密码账号和后端权限，不单独创建移动端账号系统。
 - 设计文档：`docs/superpowers/specs/2026-08-04-android-native-internal-test-design.md`。
 - 后续实现验收必须至少覆盖：Android 内测 APK 可构建；现有账号可登录；在线 CRUD 可用；离线可查看最近清单；离线新增物品恢复联网后自动同步；离线编辑/删除冲突不覆盖服务器较新数据；Android API 权限负例验证用户 A/B 数据隔离；Android 不保存明文密码或后端/数据库密钥。
+## 2026-08-04 Android 原生内测版本地实现证据
+
+- 代码证据：新增 `android/` Kotlin 原生 Android 工程，包名为 `com.homeinventory.app.internal`，当前用于内测 debug APK；工程包含 Gradle wrapper、AGP/Kotlin/Compose 配置、Manifest、Compose 入口界面、登录 session 层、Retrofit API 客户端、Room 本地缓存实体/DAO、pending operations 队列和 `SyncEngine`。
+- 后端移动同步 API 证据：新增 `/api/mobile/inventory/snapshot` 和 `/api/mobile/inventory/sync`，所有请求通过当前 `home_inventory_session` 解析用户；sync 请求不接受客户端提供的 `householdId`，服务端从当前用户推导 household 并执行权限边界。
+- 离线新增同步证据：Android `InventoryRepository.createItemOffline` 会把新物品写入本地 `items`，并写入 `pending_operations`；`SyncEngine.syncPendingOperations` 会提交 pending operation，服务端返回 `applied` 后标记为 applied，返回 `conflict` 或 `failed` 后标记冲突；`syncWhenOnline` 会在网络状态恢复为在线时触发一次同步。
+- 冲突策略证据：服务端 sync 层要求 update/delete 提交 `baseServerUpdatedAt`，并使用服务端版本检查；版本不匹配时返回 conflict，不覆盖服务端较新数据。
+- 安全证据：Android 代码不保存明文密码，不包含数据库密码、Supabase service role key、私钥、真实云密钥或真实用户数据；当前默认 base URL 为模拟器访问本机开发服务的 `http://10.0.2.2:3000/`，不是生产密钥或云服务直连。
+- Android 验证命令：`cd android && gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --quiet` 通过，debug APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`。
+- 后端移动验证命令：清空本地数据库环境变量后执行 `npm test -- src/features/inventory/mobile-sync.test.ts src/features/inventory/inventory-service.test.ts src/app/api/mobile/inventory/sync/route.test.ts src/app/api/mobile/inventory/permissions.test.ts`，通过 4 个测试文件 / 46 个测试。
+- 全量本地验证命令：清空本地数据库环境变量后执行 `npm test`，通过 34 个测试文件 / 225 个测试，2 个 PostgreSQL 集成占位测试跳过；`npm run lint` 通过；`npm run build` 通过，并在构建路由中列出 `/api/mobile/inventory/snapshot` 和 `/api/mobile/inventory/sync`。
+- 当前未完成/未验证：尚未在真机或模拟器中完成安装点击验收；Android UI 当前是内测库存界面骨架，新增按钮先写入界面状态，尚未完整接到 Room repository；真实邮箱密码登录 UI、在线 CRUD UI、快照下拉刷新、真实网络恢复监听实现和端到端同步点击流仍需后续阶段完成。
