@@ -1,0 +1,41 @@
+package com.homeinventory.app.data.repository
+
+import com.homeinventory.app.core.network.HomeInventoryApi
+import com.homeinventory.app.core.network.LoginRequest
+import com.homeinventory.app.core.session.SessionStore
+
+class AuthRepository(
+    private val api: HomeInventoryApi,
+    private val sessionStore: SessionStore,
+) {
+    suspend fun login(email: String, password: String): Result<Unit> {
+        val response = api.login(
+            LoginRequest(
+                email = email.trim().lowercase(),
+                password = password,
+            ),
+        )
+        val setCookie = response.headers()["set-cookie"]
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true || setCookie.isNullOrBlank()) {
+            return Result.failure(
+                IllegalStateException(body?.message ?: "Login failed"),
+            )
+        }
+
+        sessionStore.saveSessionCookie(setCookie)
+        return Result.success(Unit)
+    }
+
+    suspend fun logout(): Result<Unit> {
+        val response = api.logout()
+        sessionStore.clear()
+
+        return if (response.isSuccessful) {
+            Result.success(Unit)
+        } else {
+            Result.failure(IllegalStateException(response.body()?.message ?: "Logout failed"))
+        }
+    }
+}
