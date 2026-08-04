@@ -1,8 +1,38 @@
 import { describe, expect, it } from "vitest";
+import type { InventoryActionClient } from "./inventory-actions";
 import {
   createPostgresInventoryRepository,
   createSupabaseInventoryRepository,
 } from "./inventory-repository";
+import type { PostgresQueryClient } from "../../server/auth/postgres-auth-repository";
+
+type PostgresMockResult = { rows: unknown[] };
+
+function createInventoryActionClientMock(
+  client: unknown,
+): InventoryActionClient {
+  return client as InventoryActionClient;
+}
+
+function createPostgresQueryClientMock(client: {
+  query: (text: string, values?: unknown[]) => Promise<PostgresMockResult>;
+}): PostgresQueryClient {
+  return {
+    query: async <Row>(text: string, values?: unknown[]) => {
+      const result = await client.query(text, values);
+
+      return { rows: result.rows as Row[] };
+    },
+  };
+}
+
+function createTypedPostgresInventoryRepository(client: {
+  query: (text: string, values?: unknown[]) => Promise<PostgresMockResult>;
+}) {
+  return createPostgresInventoryRepository(
+    createPostgresQueryClientMock(client),
+  );
+}
 
 describe("createSupabaseInventoryRepository", () => {
   it("creates locations through the current Supabase adapter", async () => {
@@ -23,7 +53,9 @@ describe("createSupabaseInventoryRepository", () => {
       }),
     };
 
-    const repository = createSupabaseInventoryRepository(supabase);
+    const repository = createSupabaseInventoryRepository(
+      createInventoryActionClientMock(supabase),
+    );
 
     await expect(
       repository.createLocation({
@@ -60,7 +92,9 @@ describe("createSupabaseInventoryRepository", () => {
       }),
     };
 
-    const repository = createSupabaseInventoryRepository(supabase);
+    const repository = createSupabaseInventoryRepository(
+      createInventoryActionClientMock(supabase),
+    );
 
     await expect(
       repository.deleteItem({
@@ -123,7 +157,7 @@ describe("createPostgresInventoryRepository", () => {
         ],
       },
     ];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return results.shift() ?? { rows: [] };
@@ -203,7 +237,7 @@ describe("createPostgresInventoryRepository", () => {
         ],
       },
     ];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return results.shift() ?? { rows: [] };
@@ -245,7 +279,7 @@ describe("createPostgresInventoryRepository", () => {
   });
 
   it("returns null when the current user has no household membership", async () => {
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async () => ({ rows: [] }),
     });
 
@@ -256,7 +290,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("creates an area scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return {
@@ -287,7 +321,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("creates a location scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return { rows: [{ id: "location-1", name: "上层抽屉" }] };
@@ -312,7 +346,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("updates an area scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return {
@@ -346,7 +380,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("deletes an area scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return { rows: [] };
@@ -372,7 +406,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("updates a location scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return { rows: [{ id: "location-1", name: "Pantry" }] };
@@ -400,7 +434,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("deletes a location scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return { rows: [] };
@@ -426,7 +460,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("creates an item scoped to a resolved household and creator", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return {
@@ -477,7 +511,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("updates an item scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return {
@@ -530,7 +564,7 @@ describe("createPostgresInventoryRepository", () => {
 
   it("deletes an item scoped to a resolved household", async () => {
     const calls: Array<{ text: string; values?: unknown[] }> = [];
-    const repository = createPostgresInventoryRepository({
+    const repository = createTypedPostgresInventoryRepository({
       query: async (text, values) => {
         calls.push({ text, values });
         return { rows: [] };
