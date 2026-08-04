@@ -293,7 +293,9 @@ export function createPostgresInventoryRepository(
       );
       const area = result.rows[0];
 
-      return area ? normalizeVersionedRow(area) : null;
+      return area
+        ? normalizeRequiredVersionedRow(area, "areas versioned update")
+        : null;
     },
     deleteArea: async (input) => {
       await client.query(
@@ -416,7 +418,9 @@ export function createPostgresInventoryRepository(
       );
       const location = result.rows[0];
 
-      return location ? normalizeVersionedRow(location) : null;
+      return location
+        ? normalizeRequiredVersionedRow(location, "locations versioned update")
+        : null;
     },
     deleteLocation: async (input) => {
       await client.query(
@@ -563,7 +567,9 @@ export function createPostgresInventoryRepository(
       );
       const item = result.rows[0];
 
-      return item ? normalizeVersionedRow(item) : null;
+      return item
+        ? normalizeRequiredVersionedRow(item, "items versioned update")
+        : null;
     },
     deleteItem: async (input) => {
       await client.query(
@@ -657,9 +663,32 @@ type PostgresItemRow = Omit<ItemRow, "updatedAt"> & PostgresVersionedField;
 function normalizeVersionedRow<Row extends PostgresVersionedField>(
   row: Row,
 ): Omit<Row, "updatedAt"> & { updatedAt?: string } {
-  if (row.updatedAt instanceof Date) {
-    return { ...row, updatedAt: row.updatedAt.toISOString() };
+  const updatedAt = normalizeUpdatedAt(row.updatedAt);
+
+  if (!updatedAt) {
+    return row as Omit<Row, "updatedAt"> & { updatedAt?: string };
   }
 
-  return row as Omit<Row, "updatedAt"> & { updatedAt?: string };
+  return { ...row, updatedAt };
+}
+
+function normalizeRequiredVersionedRow<Row extends PostgresVersionedField>(
+  row: Row,
+  label: string,
+): Omit<Row, "updatedAt"> & { updatedAt: string } {
+  const updatedAt = normalizeUpdatedAt(row.updatedAt);
+
+  if (!updatedAt) {
+    throw new Error(`${label} did not return updatedAt`);
+  }
+
+  return { ...row, updatedAt };
+}
+
+function normalizeUpdatedAt(value: string | Date | undefined) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return value;
 }

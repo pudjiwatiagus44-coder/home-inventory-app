@@ -45,7 +45,12 @@ describe("mobile inventory route permissions", () => {
       },
     };
     const { POST } = createMobileSyncHandlers({
-      authService: { getCurrentUser: async () => ({ userId: "user-b" }) },
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "user-b",
+          email: "user-b@example.com",
+        }),
+      },
       inventoryService: createInventoryService({ repository }),
     });
 

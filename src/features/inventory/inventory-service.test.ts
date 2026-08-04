@@ -953,7 +953,7 @@ describe("createInventoryService", () => {
         return {
           id: input.locationId,
           name: input.name.trim(),
-          area_id: input.areaId,
+          area_id: input.areaId ?? null,
           updatedAt: "2026-08-04T02:00:00.000Z",
         };
       },

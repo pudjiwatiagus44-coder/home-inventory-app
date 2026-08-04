@@ -43,7 +43,12 @@ describe("POST /api/mobile/inventory/sync", () => {
       },
     };
     const { POST } = createMobileSyncHandlers({
-      authService: { getCurrentUser: async () => ({ userId: "user-1" }) },
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "user-1",
+          email: "user-1@example.com",
+        }),
+      },
       inventoryService: {
         syncQueuedOperationsForCurrentUser: async (input) => {
           calls.push(input);
@@ -100,7 +105,12 @@ describe("POST /api/mobile/inventory/sync", () => {
 
   it("returns 501 when the default sync service cannot be configured", async () => {
     const { POST } = createMobileSyncHandlers({
-      authService: { getCurrentUser: async () => ({ userId: "user-1" }) },
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "user-1",
+          email: "user-1@example.com",
+        }),
+      },
       env: {},
     });
 
@@ -124,7 +134,12 @@ describe("POST /api/mobile/inventory/sync", () => {
 
   it("uses the default route service when PostgreSQL can be configured", async () => {
     const { POST } = createMobileSyncHandlers({
-      authService: { getCurrentUser: async () => ({ userId: "user-1" }) },
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "user-1",
+          email: "user-1@example.com",
+        }),
+      },
       env: { DATABASE_URL: "postgres://inventory.test/db" },
       createPool: () => ({
         query: async () => {
