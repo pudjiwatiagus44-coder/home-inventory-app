@@ -624,3 +624,13 @@
 - 线上验证证据：未登录 `GET https://homestorag.xyz/api/mobile/inventory/snapshot` 返回 401 `{"ok":false,"message":"Authentication required"}`（原 404）；`POST /api/mobile/inventory/sync` 返回 401；`/login` 返回 200。
 - 端到端 smoke 证据：通过公网 API 注册临时用户 → 空清单 snapshot 返回默认 household 与空数组 → 创建区域/位置/物品成功 → 登录后 snapshot 返回该用户自己的 1 个区域、1 个位置、1 个物品，字段与 Android DTO 一致（`area_id`、`expire_date`、`location_id`、`updatedAt`）。冒烟用户及其关联数据已从 `home_inventory_test` 数据库级联删除，剩余 smoke 用户数为 0。
 - 剩余未验证：Android 真机安装新 APK 后的点击验收（需要用户重新安装/构建 debug APK）；Android 离线缓存与冲突同步的完整点击流仍按设计文档后续推进。
+
+## 2026-08-05 Android 界面对齐移动网页端与离线同步实现证据
+
+- 用户需求：账号自动保存/自动登录；Android 界面与移动网页端一致（区域/位置/物品增删改、搜索、筛选、排序、过期提醒、Excel 导入导出）；离线能力一起实现。设计文档：`docs/superpowers/specs/2026-08-05-android-dashboard-alignment-design.md`；实施计划：`docs/superpowers/plans/2026-08-05-android-dashboard-alignment.md`。
+- 会话层证据：新增 `CookieHeaderParser`（解析 `home_inventory_session`）与 `EncryptedSessionStore`（EncryptedSharedPreferences 持久化 session cookie，不存密码）；`HomeInventoryApplication` 提供 session/database 单例；`AppRoot` 启动时根据已存 cookie 自动进入清单页，退出时清除并回登录页。
+- 数据层证据：Room v2 建齐 `areas` / `locations` / `items` / `pending_operations` / `sync_state` 五张表；`InventoryRepository` 统一入口：快照落库、在线 CRUD（先调 API 成功再写 Room）、离线新增/编辑/删除（写 Room + 入待同步队列）；`SyncEngine` 在网络恢复后按队列提交，成功用服务端 id/updatedAt 替换本地，冲突保留并提示；`AndroidConnectivityObserver` 监听网络恢复自动同步。
+- UI 层证据：`DashboardScreen` 复刻移动网页端布局（顶部「家中清单 + 备份/导入/退出」、搜索栏、区域条、位置条、物品列表 + 排序、悬浮「新增」按钮）；物品行点击编辑（弹窗含删除）；新增物品/位置/区域弹窗；主题色与 Web token 对齐（`#4E6F5D` 主色、`#F7F5EF` 背景等）。
+- Excel 层证据：`ExcelBackupGenerator` 用 Apache POI 生成 `物品清单_YYYY-MM-DD_HH-mm-ss.xlsx`（表头 `序号/名称/格子编号/所在区域/备注/有效期`），导出写入系统下载目录；导入走系统文件选择器 → multipart 上传 `/api/inventory/import?mode=preview` 预检 → 冲突行选择（跳过/都保留/覆盖）→ commit 提交 → 汇总提示（新增/覆盖/保留重复/跳过/失败行）。
+- 验证证据：`gradle :app:testDebugUnitTest --no-daemon` 通过 9 个测试文件 / 26 个测试（会话、仓库、同步、校验、ViewModel、Excel、导入契约）；`gradle :app:assembleDebug --no-daemon` 成功，debug APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`；服务端契约回归 `npm test` 通过 34 个文件 / 225 个测试，`npm run lint` 通过。
+- 剩余未验证：Android 真机安装后的完整点击验收（自动登录、在线增删改、搜索/筛选/排序/过期、导出/导入、断网离线编辑、恢复自动同步、冲突提示、退出清理）；这些需要在真机按验收清单执行后写回证据。服务器无需变更（复用现有 API）。
