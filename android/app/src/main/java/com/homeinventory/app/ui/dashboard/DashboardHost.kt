@@ -1,19 +1,29 @@
 package com.homeinventory.app.ui.dashboard
 
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.homeinventory.app.data.local.AppDatabase
+import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
+import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
+import com.homeinventory.app.ui.dashboard.dialogs.ImportPreviewDialog
+import com.homeinventory.app.ui.dashboard.dialogs.ImportSummaryMessage
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
@@ -25,8 +35,10 @@ fun DashboardHost(
     repository: InventoryRepository,
     authRepository: AuthRepository,
     database: AppDatabase,
+    importExportRepository: ImportExportRepository,
     onSignedOut: () -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
@@ -35,6 +47,33 @@ fun DashboardHost(
     var showAreaForm by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
+    var importPreview by remember { mutableStateOf<ImportPreviewDto?>(null) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    var isCommittingImport by remember { mutableStateOf(false) }
+    val conflictResolutions = remember { mutableStateMapOf<String, String>() }
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes == null || bytes.isEmpty()) {
+                    importError = "读取文件失败"
+                } else {
+                    importExportRepository.previewImport(bytes, "backup.xlsx")
+                        .onSuccess { preview ->
+                            conflictResolutions.clear()
+                            preview.conflicts.forEach { conflict ->
+                                conflictResolutions[conflict.id] = "skip"
+                            }
+                            importPreview = preview
+                            importError = null
+                        }
+                        .onFailure { error -> importError = error.message }
+                }
+            }
+        }
+    }
 
     DashboardScreen(
         state = state,
@@ -73,7 +112,15 @@ fun DashboardHost(
             }
         },
         onBackup = { },
-        onImport = { },
+        onImport = {
+            filePicker.launch(
+                arrayOf(
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.ms-excel",
+                    "application/octet-stream",
+                ),
+            )
+        },
         onSignOut = {
             scope.launch {
                 authRepository.logout()
@@ -244,6 +291,46 @@ fun DashboardHost(
             onDismiss = {
                 showAreaForm = false
                 formError = null
+            },
+        )
+    }
+
+    importPreview?.let { preview ->
+        ImportPreviewDialog(
+            preview = preview,
+            isCommitting = isCommittingImport,
+            errorMessage = importError,
+            onResolveConflict = { conflictId, resolution ->
+                conflictResolutions[conflictId] = resolution
+            },
+            onCommit = {
+                scope.launch {
+                    isCommittingImport = true
+                    importExportRepository.commitImport(
+                        rows = preview.rows,
+                        conflictResolutions = conflictResolutions.toMap(),
+                    )
+                        .onSuccess { summary ->
+                            isCommittingImport = false
+                            importPreview = null
+                            importError = null
+                            Toast.makeText(
+                                context,
+                                ImportSummaryMessage(summary),
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            repository.syncPendingOperations()
+                            repository.refreshSnapshot()
+                        }
+                        .onFailure { error ->
+                            isCommittingImport = false
+                            importError = error.message
+                        }
+                }
+            },
+            onDismiss = {
+                importPreview = null
+                importError = null
             },
         )
     }

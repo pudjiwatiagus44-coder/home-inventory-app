@@ -15,6 +15,7 @@ import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.data.repository.AuthRepository
+import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.data.sync.AndroidConnectivityObserver
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
@@ -37,6 +38,9 @@ fun AppRoot() {
             api = api,
             sessionStore = sessionStore,
         )
+    }
+    val importExportRepository = remember {
+        ImportExportRepository(api = api)
     }
     val repository = remember {
         InventoryRepository(
@@ -103,6 +107,7 @@ fun AppRoot() {
                 repository = repository,
                 authRepository = authRepository,
                 database = app.database,
+                importExportRepository = importExportRepository,
                 onSignedOut = { isLoggedIn = false },
             )
         } else {
