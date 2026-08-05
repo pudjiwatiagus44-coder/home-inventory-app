@@ -3,8 +3,8 @@ package com.homeinventory.app.data.repository
 import com.homeinventory.app.core.network.HomeInventoryApi
 import com.google.gson.Gson
 import com.google.gson.JsonParser
-import com.homeinventory.app.data.local.InventoryDao
-import com.homeinventory.app.data.local.InventoryItemEntity
+import com.homeinventory.app.data.local.ItemDao
+import com.homeinventory.app.data.local.ItemEntity
 import com.homeinventory.app.data.local.PendingOperationDao
 import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.remote.RemoteDashboardDto
@@ -13,7 +13,7 @@ import okhttp3.ResponseBody
 
 class InventoryRepository(
     private val api: HomeInventoryApi,
-    private val inventoryDao: InventoryDao,
+    private val itemDao: ItemDao,
     private val pendingOperationDao: PendingOperationDao,
     private val gson: Gson = Gson(),
 ) {
@@ -60,9 +60,9 @@ class InventoryRepository(
         expireDate: String? = null,
         locationId: String? = null,
         nowMillis: Long = System.currentTimeMillis(),
-    ): InventoryItemEntity {
+    ): ItemEntity {
         val localId = "local-item-${UUID.randomUUID()}"
-        val item = InventoryItemEntity.pendingCreate(
+        val item = ItemEntity.pendingCreate(
             localId = localId,
             name = name,
             note = note,
@@ -90,7 +90,7 @@ class InventoryRepository(
             errorMessage = null,
         )
 
-        inventoryDao.upsertItem(item)
+        itemDao.upsert(item)
         pendingOperationDao.upsertOperation(operation)
 
         return item

@@ -2,8 +2,8 @@ package com.homeinventory.app.data.repository
 
 import com.homeinventory.app.core.network.HomeInventoryApi
 import com.homeinventory.app.core.network.LoginRequest
-import com.homeinventory.app.data.local.InventoryDao
-import com.homeinventory.app.data.local.InventoryItemEntity
+import com.homeinventory.app.data.local.ItemDao
+import com.homeinventory.app.data.local.ItemEntity
 import com.homeinventory.app.data.local.PendingOperationDao
 import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
@@ -27,7 +27,7 @@ import retrofit2.Response
 class InventoryRepositoryTest {
     @Test
     fun offlineCreatedItemIsMarkedPendingCreate() {
-        val item = InventoryItemEntity.pendingCreate(
+        val item = ItemEntity.pendingCreate(
             localId = "local-item-1",
             name = "Offline milk",
             note = "",
@@ -56,7 +56,7 @@ class InventoryRepositoryTest {
         )
         val repository = InventoryRepository(
             api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = dashboard))),
-            inventoryDao = FakeInventoryDao(),
+            itemDao = FakeItemDao(),
             pendingOperationDao = FakePendingOperationDao(),
         )
 
@@ -76,7 +76,7 @@ class InventoryRepositoryTest {
                         .toResponseBody("application/json".toMediaType()),
                 ),
             ),
-            inventoryDao = FakeInventoryDao(),
+            itemDao = FakeItemDao(),
             pendingOperationDao = FakePendingOperationDao(),
         )
 
@@ -90,7 +90,7 @@ class InventoryRepositoryTest {
     fun loadSnapshotReturnsFailureWhenNetworkRequestFails() = runTest {
         val repository = InventoryRepository(
             api = FailingSnapshotApi(IOException("timeout")),
-            inventoryDao = FakeInventoryDao(),
+            itemDao = FakeItemDao(),
             pendingOperationDao = FakePendingOperationDao(),
         )
 
@@ -137,10 +137,16 @@ private class FailingSnapshotApi(
         Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
 }
 
-private class FakeInventoryDao : InventoryDao {
-    override fun observeItems(): Flow<List<InventoryItemEntity>> = flowOf(emptyList())
+private class FakeItemDao : ItemDao {
+    override fun observeAll(): Flow<List<ItemEntity>> = flowOf(emptyList())
 
-    override suspend fun upsertItem(item: InventoryItemEntity) = Unit
+    override suspend fun upsert(item: ItemEntity) = Unit
+
+    override suspend fun markSynced(localId: String, serverId: String, serverUpdatedAt: String) = Unit
+
+    override suspend fun deleteById(localId: String) = Unit
+
+    override suspend fun clearAll() = Unit
 }
 
 private class FakePendingOperationDao : PendingOperationDao {
@@ -151,4 +157,6 @@ private class FakePendingOperationDao : PendingOperationDao {
     override suspend fun markApplied(clientOperationId: String) = Unit
 
     override suspend fun markConflict(clientOperationId: String, message: String) = Unit
+
+    override suspend fun clearAll() = Unit
 }

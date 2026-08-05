@@ -6,17 +6,41 @@ import androidx.room.PrimaryKey
 object SyncStatus {
     const val Synced = "synced"
     const val PendingCreate = "pending_create"
+    const val PendingUpdate = "pending_update"
+    const val PendingDelete = "pending_delete"
     const val Conflict = "conflict"
 }
 
-@Entity(tableName = "items")
-data class InventoryItemEntity(
-    @PrimaryKey val localId: String,
+@Entity(tableName = "areas")
+data class AreaEntity(
+    @PrimaryKey val id: String,
     val serverId: String?,
+    val name: String,
+    val color: String,
+    val serverUpdatedAt: String?,
+    val localUpdatedAt: Long,
+    val syncStatus: String,
+)
+
+@Entity(tableName = "locations")
+data class LocationEntity(
+    @PrimaryKey val id: String,
+    val serverId: String?,
+    val areaId: String?,
+    val name: String,
+    val serverUpdatedAt: String?,
+    val localUpdatedAt: Long,
+    val syncStatus: String,
+)
+
+@Entity(tableName = "items")
+data class ItemEntity(
+    @PrimaryKey val id: String,
+    val serverId: String?,
+    val locationId: String?,
     val name: String,
     val note: String,
     val expireDate: String?,
-    val locationId: String?,
     val serverUpdatedAt: String?,
     val localUpdatedAt: Long,
     val syncStatus: String,
@@ -29,19 +53,25 @@ data class InventoryItemEntity(
             expireDate: String?,
             locationId: String?,
             nowMillis: Long = System.currentTimeMillis(),
-        ) = InventoryItemEntity(
-            localId = localId,
+        ) = ItemEntity(
+            id = localId,
             serverId = null,
+            locationId = locationId,
             name = name,
             note = note,
             expireDate = expireDate,
-            locationId = locationId,
             serverUpdatedAt = null,
             localUpdatedAt = nowMillis,
             syncStatus = SyncStatus.PendingCreate,
         )
     }
 }
+
+@Entity(tableName = "sync_state")
+data class SyncStateEntity(
+    @PrimaryKey val key: String,
+    val value: String,
+)
 
 @Entity(tableName = "pending_operations")
 data class PendingOperationEntity(

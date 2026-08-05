@@ -18,4 +18,7 @@ interface PendingOperationDao {
 
     @Query("update pending_operations set state = 'conflict', errorMessage = :message where clientOperationId = :clientOperationId")
     suspend fun markConflict(clientOperationId: String, message: String)
+
+    @Query("delete from pending_operations")
+    suspend fun clearAll()
 }

@@ -37,7 +37,7 @@ fun AppRoot() {
     val inventoryRepository = remember {
         InventoryRepository(
             api = api,
-            inventoryDao = app.database.inventoryDao(),
+            itemDao = app.database.itemDao(),
             pendingOperationDao = app.database.pendingOperationDao(),
         )
     }

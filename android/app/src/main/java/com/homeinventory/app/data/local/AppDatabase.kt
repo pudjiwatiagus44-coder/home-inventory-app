@@ -7,15 +7,21 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
-        InventoryItemEntity::class,
+        AreaEntity::class,
+        LocationEntity::class,
+        ItemEntity::class,
         PendingOperationEntity::class,
+        SyncStateEntity::class,
     ],
-    version = 1,
-    exportSchema = true,
+    version = 2,
+    exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun inventoryDao(): InventoryDao
+    abstract fun areaDao(): AreaDao
+    abstract fun locationDao(): LocationDao
+    abstract fun itemDao(): ItemDao
     abstract fun pendingOperationDao(): PendingOperationDao
+    abstract fun syncStateDao(): SyncStateDao
 
     companion object {
         @Volatile
@@ -27,7 +33,11 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "home_inventory.db",
-                ).build().also { database ->
+                )
+                    // v1 从未有真实数据（旧 UI 不写 Room），内测阶段允许重建
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { database ->
                     instance = database
                 }
             }
