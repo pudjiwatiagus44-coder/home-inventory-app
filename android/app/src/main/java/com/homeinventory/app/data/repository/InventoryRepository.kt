@@ -25,9 +25,13 @@ import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.sync.DaoPendingOperationQueue
+import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
+import com.homeinventory.app.data.sync.SyncEngine
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import okhttp3.ResponseBody
 
 class InventoryRepository(
@@ -316,6 +320,108 @@ class InventoryRepository(
             ),
         )
         return location
+    }
+
+    suspend fun updateItemOffline(
+        localId: String,
+        serverId: String?,
+        baseServerUpdatedAt: String?,
+        name: String,
+        note: String,
+        expireDate: String?,
+        locationId: String?,
+    ) {
+        itemDao.upsert(
+            ItemEntity(
+                id = localId,
+                serverId = serverId,
+                locationId = locationId,
+                name = name,
+                note = note,
+                expireDate = expireDate,
+                serverUpdatedAt = baseServerUpdatedAt,
+                localUpdatedAt = System.currentTimeMillis(),
+                syncStatus = SyncStatus.PendingUpdate,
+            ),
+        )
+        pendingOperationDao.upsertOperation(
+            PendingOperationEntity(
+                clientOperationId = "op-${UUID.randomUUID()}",
+                entity = "item",
+                action = "update",
+                localId = localId,
+                serverId = serverId,
+                baseServerUpdatedAt = baseServerUpdatedAt,
+                payloadJson = gson.toJson(
+                    mapOf(
+                        "name" to name,
+                        "note" to note,
+                        "expireDate" to expireDate,
+                        "locationId" to locationId,
+                    ),
+                ),
+                state = "pending",
+                createdAt = System.currentTimeMillis(),
+                errorMessage = null,
+            ),
+        )
+    }
+
+    suspend fun deleteItemOffline(
+        localId: String,
+        serverId: String?,
+        baseServerUpdatedAt: String?,
+    ) {
+        val current = itemDao.observeAll().first().firstOrNull { it.id == localId }
+        if (current != null) {
+            itemDao.upsert(current.copy(syncStatus = SyncStatus.PendingDelete))
+        }
+        pendingOperationDao.upsertOperation(
+            PendingOperationEntity(
+                clientOperationId = "op-${UUID.randomUUID()}",
+                entity = "item",
+                action = "delete",
+                localId = localId,
+                serverId = serverId,
+                baseServerUpdatedAt = baseServerUpdatedAt,
+                payloadJson = "{}",
+                state = "pending",
+                createdAt = System.currentTimeMillis(),
+                errorMessage = null,
+            ),
+        )
+    }
+
+    suspend fun syncPendingOperations(): Result<Unit> {
+        val engine = SyncEngine(
+            queue = DaoPendingOperationQueue(pendingOperationDao),
+            remote = RetrofitRemoteSyncClient(api),
+            onOperationApplied = { applied ->
+                when (applied.entity) {
+                    "area" -> areaDao.markSynced(
+                        applied.localId.orEmpty(),
+                        applied.serverId,
+                        applied.serverUpdatedAt.orEmpty(),
+                    )
+                    "location" -> locationDao.markSynced(
+                        applied.localId.orEmpty(),
+                        applied.serverId,
+                        applied.serverUpdatedAt.orEmpty(),
+                    )
+                    "item" -> itemDao.markSynced(
+                        applied.localId.orEmpty(),
+                        applied.serverId,
+                        applied.serverUpdatedAt.orEmpty(),
+                    )
+                }
+            },
+        )
+        return try {
+            engine.syncPendingOperations()
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(IllegalStateException(error.message ?: "同步失败"))
+        }
     }
 
     private suspend inline fun <T> runOnlineMutation(

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.filter
 class SyncEngine(
     private val queue: PendingOperationQueue,
     private val remote: RemoteSyncClient,
+    private val onOperationApplied: suspend (RemoteSyncApplied) -> Unit = {},
 ) {
     suspend fun syncWhenOnline(connectivityObserver: ConnectivityObserver) {
         connectivityObserver.isOnline
@@ -26,8 +27,9 @@ class SyncEngine(
         if (operations.isEmpty()) return
 
         val result = remote.submit(operations)
-        for (clientOperationId in result.appliedClientOperationIds) {
-            queue.markApplied(clientOperationId)
+        for (applied in result.applied) {
+            queue.markApplied(applied.clientOperationId)
+            onOperationApplied(applied)
         }
         for (conflict in result.conflicts) {
             queue.markConflict(conflict.clientOperationId, conflict.message)
@@ -46,8 +48,16 @@ data class PendingSyncOperation(
 )
 
 data class RemoteSyncResult(
-    val appliedClientOperationIds: List<String>,
+    val applied: List<RemoteSyncApplied>,
     val conflicts: List<RemoteSyncConflict>,
+)
+
+data class RemoteSyncApplied(
+    val clientOperationId: String,
+    val entity: String,
+    val localId: String?,
+    val serverId: String,
+    val serverUpdatedAt: String?,
 )
 
 data class RemoteSyncConflict(
@@ -114,9 +124,17 @@ class RetrofitRemoteSyncClient(
 
         val results = response.body()?.data?.results.orEmpty()
         return RemoteSyncResult(
-            appliedClientOperationIds = results
+            applied = results
                 .filter { it.status == "applied" }
-                .map { it.clientOperationId },
+                .map {
+                    RemoteSyncApplied(
+                        clientOperationId = it.clientOperationId,
+                        entity = it.entity,
+                        localId = it.localId,
+                        serverId = it.serverId.orEmpty(),
+                        serverUpdatedAt = it.serverUpdatedAt,
+                    )
+                },
             conflicts = results
                 .filter { it.status == "conflict" || it.status == "failed" }
                 .map {
