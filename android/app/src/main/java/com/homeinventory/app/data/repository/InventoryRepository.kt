@@ -14,7 +14,17 @@ import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.local.SyncStatus
 import com.homeinventory.app.data.local.SyncStateDao
 import com.homeinventory.app.data.local.SyncStateEntity
+import com.homeinventory.app.data.remote.AreaCreateRequest
+import com.homeinventory.app.data.remote.AreaUpdateRequest
+import com.homeinventory.app.data.remote.ApiEnvelope
+import com.homeinventory.app.data.remote.ItemCreateRequest
+import com.homeinventory.app.data.remote.ItemUpdateRequest
+import com.homeinventory.app.data.remote.LocationCreateRequest
+import com.homeinventory.app.data.remote.LocationUpdateRequest
+import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
+import com.homeinventory.app.data.remote.RemoteItemDto
+import com.homeinventory.app.data.remote.RemoteLocationDto
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -110,6 +120,226 @@ class InventoryRepository(
         pendingOperationDao.upsertOperation(operation)
 
         return item
+    }
+
+    suspend fun pendingOperations(): List<PendingOperationEntity> =
+        pendingOperationDao.pendingOperations()
+
+    suspend fun createItemOnline(
+        name: String,
+        note: String,
+        expireDate: String?,
+        locationId: String?,
+    ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
+        request = { api.createItem(ItemCreateRequest(name, note, expireDate, locationId)) },
+        onSuccess = { remoteItem ->
+            itemDao.upsert(
+                ItemEntity(
+                    id = remoteItem.id,
+                    serverId = remoteItem.id,
+                    locationId = remoteItem.locationId,
+                    name = remoteItem.name,
+                    note = remoteItem.note,
+                    expireDate = remoteItem.expireDate,
+                    serverUpdatedAt = remoteItem.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun updateItemOnline(
+        serverId: String,
+        name: String,
+        note: String,
+        expireDate: String?,
+        locationId: String?,
+    ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
+        request = { api.updateItem(serverId, ItemUpdateRequest(name, note, expireDate, locationId)) },
+        onSuccess = { remoteItem ->
+            itemDao.upsert(
+                ItemEntity(
+                    id = remoteItem.id,
+                    serverId = remoteItem.id,
+                    locationId = remoteItem.locationId,
+                    name = remoteItem.name,
+                    note = remoteItem.note,
+                    expireDate = remoteItem.expireDate,
+                    serverUpdatedAt = remoteItem.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun deleteItemOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
+        request = { api.deleteItem(serverId) },
+        requireData = false,
+        onSuccess = { itemDao.deleteById(serverId) },
+    )
+
+    suspend fun createAreaOnline(name: String, color: String?): Result<Unit> = runOnlineMutation<RemoteAreaDto>(
+        request = { api.createArea(AreaCreateRequest(name, color)) },
+        onSuccess = { remoteArea ->
+            areaDao.upsert(
+                AreaEntity(
+                    id = remoteArea.id,
+                    serverId = remoteArea.id,
+                    name = remoteArea.name,
+                    color = remoteArea.color,
+                    serverUpdatedAt = remoteArea.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun updateAreaOnline(serverId: String, name: String, color: String?): Result<Unit> = runOnlineMutation<RemoteAreaDto>(
+        request = { api.updateArea(serverId, AreaUpdateRequest(name, color)) },
+        onSuccess = { remoteArea ->
+            areaDao.upsert(
+                AreaEntity(
+                    id = remoteArea.id,
+                    serverId = remoteArea.id,
+                    name = remoteArea.name,
+                    color = remoteArea.color,
+                    serverUpdatedAt = remoteArea.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun deleteAreaOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
+        request = { api.deleteArea(serverId) },
+        requireData = false,
+        onSuccess = { areaDao.deleteById(serverId) },
+    )
+
+    suspend fun createLocationOnline(name: String, areaId: String?): Result<Unit> = runOnlineMutation<RemoteLocationDto>(
+        request = { api.createLocation(LocationCreateRequest(name, areaId)) },
+        onSuccess = { remoteLocation ->
+            locationDao.upsert(
+                LocationEntity(
+                    id = remoteLocation.id,
+                    serverId = remoteLocation.id,
+                    areaId = remoteLocation.areaId,
+                    name = remoteLocation.name,
+                    serverUpdatedAt = remoteLocation.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun updateLocationOnline(serverId: String, name: String, areaId: String?): Result<Unit> = runOnlineMutation<RemoteLocationDto>(
+        request = { api.updateLocation(serverId, LocationUpdateRequest(name, areaId)) },
+        onSuccess = { remoteLocation ->
+            locationDao.upsert(
+                LocationEntity(
+                    id = remoteLocation.id,
+                    serverId = remoteLocation.id,
+                    areaId = remoteLocation.areaId,
+                    name = remoteLocation.name,
+                    serverUpdatedAt = remoteLocation.updatedAt,
+                    localUpdatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.Synced,
+                ),
+            )
+        },
+    )
+
+    suspend fun deleteLocationOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
+        request = { api.deleteLocation(serverId) },
+        requireData = false,
+        onSuccess = { locationDao.deleteById(serverId) },
+    )
+
+    suspend fun createAreaOffline(name: String, color: String): AreaEntity {
+        val localId = "local-area-${UUID.randomUUID()}"
+        val area = AreaEntity(
+            id = localId,
+            serverId = null,
+            name = name,
+            color = color,
+            serverUpdatedAt = null,
+            localUpdatedAt = System.currentTimeMillis(),
+            syncStatus = SyncStatus.PendingCreate,
+        )
+        areaDao.upsert(area)
+        pendingOperationDao.upsertOperation(
+            PendingOperationEntity(
+                clientOperationId = "op-${UUID.randomUUID()}",
+                entity = "area",
+                action = "create",
+                localId = localId,
+                serverId = null,
+                baseServerUpdatedAt = null,
+                payloadJson = gson.toJson(mapOf("name" to name, "color" to color)),
+                state = "pending",
+                createdAt = System.currentTimeMillis(),
+                errorMessage = null,
+            ),
+        )
+        return area
+    }
+
+    suspend fun createLocationOffline(name: String, areaId: String?): LocationEntity {
+        val localId = "local-location-${UUID.randomUUID()}"
+        val location = LocationEntity(
+            id = localId,
+            serverId = null,
+            areaId = areaId,
+            name = name,
+            serverUpdatedAt = null,
+            localUpdatedAt = System.currentTimeMillis(),
+            syncStatus = SyncStatus.PendingCreate,
+        )
+        locationDao.upsert(location)
+        pendingOperationDao.upsertOperation(
+            PendingOperationEntity(
+                clientOperationId = "op-${UUID.randomUUID()}",
+                entity = "location",
+                action = "create",
+                localId = localId,
+                serverId = null,
+                baseServerUpdatedAt = null,
+                payloadJson = gson.toJson(mapOf("name" to name, "areaId" to areaId)),
+                state = "pending",
+                createdAt = System.currentTimeMillis(),
+                errorMessage = null,
+            ),
+        )
+        return location
+    }
+
+    private suspend inline fun <T> runOnlineMutation(
+        request: () -> retrofit2.Response<ApiEnvelope<T>>,
+        requireData: Boolean = true,
+        onSuccess: (T) -> Unit,
+    ): Result<Unit> {
+        val response = try {
+            request()
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+        if (!response.isSuccessful) {
+            return Result.failure(IllegalStateException(parseErrorMessage(response.errorBody()) ?: "操作失败"))
+        }
+        val data = body?.data
+        if (body?.ok != true || (requireData && data == null)) {
+            return Result.failure(IllegalStateException(body?.message ?: "操作失败"))
+        }
+        @Suppress("UNCHECKED_CAST")
+        val successValue: T = if (requireData) data as T else Unit as T
+        onSuccess(successValue)
+        return Result.success(Unit)
     }
 
     private suspend fun replaceServerData(dashboard: RemoteDashboardDto) {
