@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +29,7 @@ import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Surface
+import com.homeinventory.app.ui.theme.Danger
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +41,7 @@ fun LocationFormDialog(
     errorMessage: String?,
     onSave: (LocationFormValues) -> Unit,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(initial.name) }
     var areaId by remember { mutableStateOf(initial.areaId) }
@@ -66,12 +70,25 @@ fun LocationFormDialog(
             errorMessage?.let {
                 Text(text = it, color = Danger, fontSize = 13.sp)
             }
-            Button(
-                onClick = { onSave(LocationFormValues(name = name, areaId = areaId)) },
-                enabled = !isSaving,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(if (isSaving) "保存中..." else "保存位置")
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("删除", color = Danger)
+                    }
+                } else {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                }
+                Button(
+                    onClick = { onSave(LocationFormValues(name = name, areaId = areaId)) },
+                    enabled = !isSaving,
+                ) {
+                    Text(if (isSaving) "保存中..." else "保存")
+                }
             }
         }
     }

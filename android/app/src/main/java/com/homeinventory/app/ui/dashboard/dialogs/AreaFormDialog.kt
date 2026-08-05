@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.ui.theme.Surface
 import com.homeinventory.app.ui.theme.Foreground
+import com.homeinventory.app.ui.theme.Danger
 
 @Composable
 fun AreaFormDialog(
@@ -38,6 +40,7 @@ fun AreaFormDialog(
     errorMessage: String?,
     onSave: (AreaFormValues) -> Unit,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(initial.name) }
     var color by remember { mutableStateOf(initial.color) }
@@ -77,12 +80,25 @@ fun AreaFormDialog(
             errorMessage?.let {
                 Text(text = it, color = com.homeinventory.app.ui.theme.Danger, fontSize = 13.sp)
             }
-            Button(
-                onClick = { onSave(AreaFormValues(name = name, color = color)) },
-                enabled = !isSaving,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(if (isSaving) "保存中..." else "保存区域")
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("删除", color = Danger)
+                    }
+                } else {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                }
+                Button(
+                    onClick = { onSave(AreaFormValues(name = name, color = color)) },
+                    enabled = !isSaving,
+                ) {
+                    Text(if (isSaving) "保存中..." else "保存")
+                }
             }
         }
     }

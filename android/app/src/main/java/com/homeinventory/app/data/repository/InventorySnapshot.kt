@@ -9,6 +9,7 @@ data class InventorySnapshot(
         val id: String,
         val name: String,
         val color: String,
+        val serverUpdatedAt: String? = null,
         val syncStatus: String,
     )
 
@@ -16,6 +17,7 @@ data class InventorySnapshot(
         val id: String,
         val name: String,
         val areaId: String?,
+        val serverUpdatedAt: String? = null,
         val syncStatus: String,
     )
 
@@ -27,6 +29,7 @@ data class InventorySnapshot(
         val locationId: String?,
         val areaId: String?,
         val locationName: String?,
+        val serverUpdatedAt: String? = null,
         val syncStatus: String,
     )
 }

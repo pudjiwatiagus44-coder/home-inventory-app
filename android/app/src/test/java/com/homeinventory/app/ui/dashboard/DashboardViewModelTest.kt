@@ -99,7 +99,12 @@ class DashboardViewModelTest {
         try {
             val snapshot = InventorySnapshot(
                 locations = listOf(
-                    InventorySnapshot.LocationView("location-1", "冰箱", "area-1", "synced"),
+                    InventorySnapshot.LocationView(
+                        id = "location-1",
+                        name = "冰箱",
+                        areaId = "area-1",
+                        syncStatus = "synced",
+                    ),
                 ),
                 items = listOf(
                     item("item-1", "牛奶", locationId = "location-1", locationName = "冰箱"),

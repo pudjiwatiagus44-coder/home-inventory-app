@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +32,7 @@ import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Surface
+import com.homeinventory.app.ui.theme.Danger
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,6 +46,7 @@ fun ItemFormDialog(
     errorMessage: String?,
     onSave: (ItemFormValues) -> Unit,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initial.name) }
@@ -151,22 +155,35 @@ fun ItemFormDialog(
             errorMessage?.let {
                 Text(text = it, color = Danger, fontSize = 13.sp)
             }
-            Button(
-                onClick = {
-                    onSave(
-                        ItemFormValues(
-                            name = name,
-                            areaId = areaId,
-                            locationId = locationId,
-                            note = note,
-                            expireDate = expireDate,
-                        ),
-                    )
-                },
-                enabled = !isSaving,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(if (isSaving) "保存中..." else "保存物品")
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("删除", color = Danger)
+                    }
+                } else {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                }
+                Button(
+                    onClick = {
+                        onSave(
+                            ItemFormValues(
+                                name = name,
+                                areaId = areaId,
+                                locationId = locationId,
+                                note = note,
+                                expireDate = expireDate,
+                            ),
+                        )
+                    },
+                    enabled = !isSaving,
+                ) {
+                    Text(if (isSaving) "保存中..." else "保存")
+                }
             }
         }
     }

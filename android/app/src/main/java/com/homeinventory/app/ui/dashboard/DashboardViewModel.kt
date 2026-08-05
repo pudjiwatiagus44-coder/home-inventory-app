@@ -20,6 +20,7 @@ data class DashboardUiItem(
     val areaId: String?,
     val locationId: String?,
     val locationName: String?,
+    val serverUpdatedAt: String?,
     val syncStatus: String,
     val expirationStatus: String,
 )
@@ -64,6 +65,7 @@ class DashboardViewModel(
                     areaId = item.areaId,
                     locationId = item.locationId,
                     locationName = item.locationName ?: item.locationId?.let(locationNames::get),
+                    serverUpdatedAt = item.serverUpdatedAt,
                     syncStatus = item.syncStatus,
                     expirationStatus = expirationStatus(item.expireDate),
                 )

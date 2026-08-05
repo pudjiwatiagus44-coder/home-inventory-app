@@ -1,11 +1,5 @@
 package com.homeinventory.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,9 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
@@ -25,7 +20,10 @@ import com.homeinventory.app.data.sync.AndroidConnectivityObserver
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
 import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
 import com.homeinventory.app.data.sync.SyncEngine
+import com.homeinventory.app.ui.dashboard.DashboardHost
+import com.homeinventory.app.ui.dashboard.DashboardViewModel
 import com.homeinventory.app.ui.login.LoginScreen
+import com.homeinventory.app.ui.theme.HomeInventoryTheme
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,7 +38,7 @@ fun AppRoot() {
             sessionStore = sessionStore,
         )
     }
-    val inventoryRepository = remember {
+    val repository = remember {
         InventoryRepository(
             api = api,
             areaDao = app.database.areaDao(),
@@ -50,52 +48,63 @@ fun AppRoot() {
             syncStateDao = app.database.syncStateDao(),
         )
     }
+    val factory = remember(repository) {
+        viewModelFactory {
+            initializer {
+                DashboardViewModel(
+                    inventory = repository.observeInventory(),
+                    syncPending = repository::syncPendingOperations,
+                )
+            }
+        }
+    }
+    val viewModel: DashboardViewModel = viewModel(factory = factory)
     var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    MaterialTheme {
+    LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator()
-                Text(text = "正在同步清单...")
+            scope.launch { repository.refreshSnapshot() }
+            scope.launch {
+                SyncEngine(
+                    queue = DaoPendingOperationQueue(app.database.pendingOperationDao()),
+                    remote = RetrofitRemoteSyncClient(api),
+                    onOperationApplied = { applied ->
+                        when (applied.entity) {
+                            "area" -> app.database.areaDao().markSynced(
+                                applied.localId.orEmpty(),
+                                applied.serverId,
+                                applied.serverUpdatedAt.orEmpty(),
+                            )
+                            "location" -> app.database.locationDao().markSynced(
+                                applied.localId.orEmpty(),
+                                applied.serverId,
+                                applied.serverUpdatedAt.orEmpty(),
+                            )
+                            "item" -> app.database.itemDao().markSynced(
+                                applied.localId.orEmpty(),
+                                applied.serverId,
+                                applied.serverUpdatedAt.orEmpty(),
+                            )
+                        }
+                    },
+                ).syncWhenOnline(AndroidConnectivityObserver(app))
             }
-            LaunchedEffect(Unit) {
-                if (isLoggedIn) {
-                    scope.launch { inventoryRepository.refreshSnapshot() }
-                    scope.launch {
-                        SyncEngine(
-                            queue = DaoPendingOperationQueue(app.database.pendingOperationDao()),
-                            remote = RetrofitRemoteSyncClient(api),
-                            onOperationApplied = { applied ->
-                                when (applied.entity) {
-                                    "area" -> app.database.areaDao().markSynced(
-                                        applied.localId.orEmpty(),
-                                        applied.serverId,
-                                        applied.serverUpdatedAt.orEmpty(),
-                                    )
-                                    "location" -> app.database.locationDao().markSynced(
-                                        applied.localId.orEmpty(),
-                                        applied.serverId,
-                                        applied.serverUpdatedAt.orEmpty(),
-                                    )
-                                    "item" -> app.database.itemDao().markSynced(
-                                        applied.localId.orEmpty(),
-                                        applied.serverId,
-                                        applied.serverUpdatedAt.orEmpty(),
-                                    )
-                                }
-                            },
-                        ).syncWhenOnline(AndroidConnectivityObserver(app))
-                    }
-                }
-            }
+        }
+    }
+
+    HomeInventoryTheme {
+        if (isLoggedIn) {
+            DashboardHost(
+                viewModel = viewModel,
+                repository = repository,
+                authRepository = authRepository,
+                database = app.database,
+                onSignedOut = { isLoggedIn = false },
+            )
         } else {
             LoginScreen(
                 email = email,
@@ -119,7 +128,7 @@ fun AppRoot() {
                             .onSuccess {
                                 password = ""
                                 isLoggedIn = true
-                                scope.launch { inventoryRepository.refreshSnapshot() }
+                                scope.launch { repository.refreshSnapshot() }
                             }
                             .onFailure { error ->
                                 errorMessage = error.message ?: "登录失败"

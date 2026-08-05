@@ -48,9 +48,11 @@ class InventoryRepository(
             val locationNames = locations.associate { it.id to it.name }
             val areaIds = locations.associate { it.id to it.areaId }
             InventorySnapshot(
-                areas = areas.map { InventorySnapshot.AreaView(it.id, it.name, it.color, it.syncStatus) },
+                areas = areas.map {
+                    InventorySnapshot.AreaView(it.id, it.name, it.color, it.serverUpdatedAt, it.syncStatus)
+                },
                 locations = locations.map {
-                    InventorySnapshot.LocationView(it.id, it.name, it.areaId, it.syncStatus)
+                    InventorySnapshot.LocationView(it.id, it.name, it.areaId, it.serverUpdatedAt, it.syncStatus)
                 },
                 items = items.map {
                     InventorySnapshot.ItemView(
@@ -61,6 +63,7 @@ class InventoryRepository(
                         locationId = it.locationId,
                         areaId = it.locationId?.let { id -> areaIds[id] },
                         locationName = it.locationId?.let { id -> locationNames[id] },
+                        serverUpdatedAt = it.serverUpdatedAt,
                         syncStatus = it.syncStatus,
                     )
                 },
