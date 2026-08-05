@@ -2,6 +2,7 @@ package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.homeinventory.app.data.repository.InventorySnapshot
@@ -54,7 +56,8 @@ fun AreaStrip(
                             color = if (selected) Primary else Border,
                             shape = RoundedCornerShape(9.dp),
                         )
-                        .size(width = 84.dp, height = 52.dp),
+                        .size(width = 84.dp, height = 52.dp)
+                        .clickable { onSelectArea(area.id) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -72,6 +75,8 @@ fun AreaStrip(
                             text = area.name,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Text(
@@ -86,7 +91,8 @@ fun AreaStrip(
                     modifier = Modifier
                         .clip(RoundedCornerShape(9.dp))
                         .border(1.dp, Border, RoundedCornerShape(9.dp))
-                        .size(width = 84.dp, height = 52.dp),
+                        .size(width = 84.dp, height = 52.dp)
+                        .clickable(onClick = onAddArea),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

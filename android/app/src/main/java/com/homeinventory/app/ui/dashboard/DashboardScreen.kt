@@ -81,7 +81,11 @@ fun DashboardScreen(
                 onAddArea = onAddArea,
             )
             LocationStrip(
-                locations = state.locations,
+                locations = if (state.filters.areaId == null) {
+                    state.locations
+                } else {
+                    state.locations.filter { it.areaId == state.filters.areaId }
+                },
                 selectedLocationId = state.filters.locationId,
                 selectedAreaId = state.filters.areaId,
                 itemCountByLocation = state.items.groupBy { it.locationId }.mapValues { it.value.size },

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.homeinventory.app.ui.theme.Primary
@@ -59,6 +60,8 @@ fun TopBar(
                 text = "家中清单",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TextButton(onClick = onBackup) { Text("备份") }
