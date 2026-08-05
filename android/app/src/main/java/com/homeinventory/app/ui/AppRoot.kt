@@ -1,24 +1,26 @@
 package com.homeinventory.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.InventoryRepository
-import com.homeinventory.app.ui.inventory.InventoryScreen
-import com.homeinventory.app.ui.inventory.InventoryViewModel
 import com.homeinventory.app.ui.login.LoginScreen
 import kotlinx.coroutines.launch
 
@@ -37,19 +39,13 @@ fun AppRoot() {
     val inventoryRepository = remember {
         InventoryRepository(
             api = api,
+            areaDao = app.database.areaDao(),
+            locationDao = app.database.locationDao(),
             itemDao = app.database.itemDao(),
             pendingOperationDao = app.database.pendingOperationDao(),
+            syncStateDao = app.database.syncStateDao(),
         )
     }
-    val factory = remember(inventoryRepository) {
-        viewModelFactory {
-            initializer {
-                InventoryViewModel(loadSnapshot = inventoryRepository::loadSnapshot)
-            }
-        }
-    }
-    val viewModel: InventoryViewModel = viewModel(factory = factory)
-    val state by viewModel.state.collectAsState()
     var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -58,10 +54,17 @@ fun AppRoot() {
 
     MaterialTheme {
         if (isLoggedIn) {
-            InventoryScreen(
-                state = state,
-                onRefresh = viewModel::refreshFromServer,
-            )
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+                Text(text = "正在同步清单...")
+            }
+            LaunchedEffect(Unit) {
+                inventoryRepository.refreshSnapshot()
+            }
         } else {
             LoginScreen(
                 email = email,
@@ -85,7 +88,7 @@ fun AppRoot() {
                             .onSuccess {
                                 password = ""
                                 isLoggedIn = true
-                                viewModel.refreshFromServer()
+                                scope.launch { inventoryRepository.refreshSnapshot() }
                             }
                             .onFailure { error ->
                                 errorMessage = error.message ?: "登录失败"
