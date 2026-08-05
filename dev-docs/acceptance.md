@@ -610,3 +610,17 @@
 - 后端移动验证命令：清空本地数据库环境变量后执行 `npm test -- src/features/inventory/mobile-sync.test.ts src/features/inventory/inventory-service.test.ts src/app/api/mobile/inventory/sync/route.test.ts src/app/api/mobile/inventory/permissions.test.ts`，通过 4 个测试文件 / 46 个测试。
 - 全量本地验证命令：清空本地数据库环境变量后执行 `npm test`，通过 34 个测试文件 / 225 个测试，2 个 PostgreSQL 集成占位测试跳过；`npm run lint` 通过；`npm run build` 通过，并在构建路由中列出 `/api/mobile/inventory/snapshot` 和 `/api/mobile/inventory/sync`。
 - 当前未完成/未验证：尚未在真机或模拟器中完成安装点击验收；Android UI 当前是内测库存界面骨架，新增按钮先写入界面状态，尚未完整接到 Room repository；真实邮箱密码登录 UI、在线 CRUD UI、快照下拉刷新、真实网络恢复监听实现和端到端同步点击流仍需后续阶段完成。
+
+## 2026-08-05 Android 登录后加载真实清单修复与线上部署证据
+
+- 用户反馈：阿里云服务器已上线，Android 内测 APK 登录成功后显示的不是自己的物品清单。
+- 根因证据：`android/app/src/main/java/com/homeinventory/app/ui/inventory/InventoryViewModel.kt` 初始状态硬编码了示例条目 `Offline item draft / Saved locally and ready to sync / pending_create`；`AppRoot` 登录成功后直接渲染该状态，从未调用 `/api/mobile/inventory/snapshot`；且服务器当时部署的 main 分支没有移动端路由，实测 `GET https://homestorag.xyz/api/mobile/inventory/snapshot` 返回 404。移动端 API 只存在于 worktree 分支 `codex/android-native-internal-test`，未合并、未部署。
+- 代码证据（Android）：`InventoryViewModel` 新增构造依赖 `loadSnapshot`、`refreshFromServer()` 与 `loadFromServer()`，登录成功后自动拉取快照，映射位置名并渲染真实清单；移除硬编码示例条目；失败时展示服务端错误消息，空清单展示空状态。`InventoryRepository` 新增 `loadSnapshot()`，正确解析成功体与 `errorBody()` 错误消息。`InventoryScreen` 将“Add 假数据”按钮替换为“刷新”，支持加载中/错误/空状态。`AppRoot` 组装 Room 单例、API 与仓库，登录成功即触发 `refreshFromServer()`。`AppDatabase` 新增 `getInstance()` 单例。
+- 代码证据（Web）：`/api/mobile/inventory/snapshot` 与 `/api/mobile/inventory/sync` 从 worktree 分支合并回 `main`（提交 `6a2af52`），服务端仍通过当前 session 解析用户并拒绝未登录请求。
+- TDD 证据：先新增 `InventoryViewModelTest.kt`（初始无示例条目、成功加载含位置名、空清单、失败提示、refresh 触发）与 `InventoryRepositoryTest.kt`（快照成功、错误响应消息、网络异常），先看到因功能缺失导致的编译失败，再实现后转绿。
+- Android 验证：`gradle :app:testDebugUnitTest --no-daemon` 全部通过；`gradle :app:assembleDebug --no-daemon` 成功生成 debug APK。
+- Web 验证：PostgreSQL 集成测试（`--no-file-parallelism`）2 个文件通过；清空 `TEST_DATABASE_URL`/`DATABASE_URL` 后 `npm test` 通过 34 个测试文件 / 225 个测试，2 个占位跳过；`npm run lint` 通过；`npm run build` 通过并生成 `/api/mobile/inventory/snapshot` 与 `/api/mobile/inventory/sync` 路由。
+- 部署证据：服务器 `/opt/home-inventory-app` 以可回滚方式切换：克隆最新 main（`6a2af52`）到新目录，`npm ci` 与 `npm run build` 成功，备份旧目录为 `/opt/home-inventory-app.bak.20260805_171226`，新目录改名为 `/opt/home-inventory-app` 并重启 `home-inventory-app.service`，状态 `active`。本次同时修复了服务器 `deploy` 用户无独立 HOME 导致 npm 无法写日志的问题（创建 `/home/deploy`）。
+- 线上验证证据：未登录 `GET https://homestorag.xyz/api/mobile/inventory/snapshot` 返回 401 `{"ok":false,"message":"Authentication required"}`（原 404）；`POST /api/mobile/inventory/sync` 返回 401；`/login` 返回 200。
+- 端到端 smoke 证据：通过公网 API 注册临时用户 → 空清单 snapshot 返回默认 household 与空数组 → 创建区域/位置/物品成功 → 登录后 snapshot 返回该用户自己的 1 个区域、1 个位置、1 个物品，字段与 Android DTO 一致（`area_id`、`expire_date`、`location_id`、`updatedAt`）。冒烟用户及其关联数据已从 `home_inventory_test` 数据库级联删除，剩余 smoke 用户数为 0。
+- 剩余未验证：Android 真机安装新 APK 后的点击验收（需要用户重新安装/构建 debug APK）；Android 离线缓存与冲突同步的完整点击流仍按设计文档后续推进。
