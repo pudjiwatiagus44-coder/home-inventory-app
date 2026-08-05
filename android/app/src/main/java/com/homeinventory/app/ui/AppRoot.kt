@@ -8,29 +8,50 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.core.session.InMemorySessionStore
+import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.repository.AuthRepository
+import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.ui.inventory.InventoryScreen
 import com.homeinventory.app.ui.inventory.InventoryViewModel
 import com.homeinventory.app.ui.login.LoginScreen
 import kotlinx.coroutines.launch
 
 @Composable
-fun AppRoot(
-    viewModel: InventoryViewModel = viewModel(),
-) {
-    val state by viewModel.state.collectAsState()
+fun AppRoot() {
     val scope = rememberCoroutineScope()
     val sessionStore = remember { InMemorySessionStore() }
+    val api = remember { NetworkModule.createApi(sessionStore) }
     val authRepository = remember {
         AuthRepository(
-            api = NetworkModule.createApi(sessionStore),
+            api = api,
             sessionStore = sessionStore,
         )
     }
+    val context = LocalContext.current
+    val inventoryRepository = remember {
+        val database = AppDatabase.getInstance(context)
+        InventoryRepository(
+            api = api,
+            inventoryDao = database.inventoryDao(),
+            pendingOperationDao = database.pendingOperationDao(),
+        )
+    }
+    val factory = remember(inventoryRepository) {
+        viewModelFactory {
+            initializer {
+                InventoryViewModel(loadSnapshot = inventoryRepository::loadSnapshot)
+            }
+        }
+    }
+    val viewModel: InventoryViewModel = viewModel(factory = factory)
+    val state by viewModel.state.collectAsState()
     var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -41,7 +62,7 @@ fun AppRoot(
         if (isLoggedIn) {
             InventoryScreen(
                 state = state,
-                onAddOfflineItem = viewModel::addOfflineDraft,
+                onRefresh = viewModel::refreshFromServer,
             )
         } else {
             LoginScreen(
@@ -66,6 +87,7 @@ fun AppRoot(
                             .onSuccess {
                                 password = ""
                                 isLoggedIn = true
+                                viewModel.refreshFromServer()
                             }
                             .onFailure { error ->
                                 errorMessage = error.message ?: "登录失败"

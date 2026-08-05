@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,7 +26,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun InventoryScreen(
     state: InventoryUiState,
-    onAddOfflineItem: () -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -39,26 +41,60 @@ fun InventoryScreen(
         ) {
             Column {
                 Text(
-                    text = "Home Inventory",
+                    text = state.householdName ?: "Home Inventory",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = state.syncMessage.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                if (state.isLoading) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                        Text(
+                            text = "同步中...",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                } else {
+                    state.syncMessage?.let { message ->
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
-            Button(onClick = onAddOfflineItem) {
-                Text("Add")
+            Button(
+                onClick = onRefresh,
+                enabled = !state.isLoading,
+            ) {
+                Text("刷新")
             }
+        }
+
+        state.errorMessage?.let { message ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn {
-            items(state.items, key = { item -> item.id }) { item ->
-                InventoryItemRow(item = item)
-                Divider()
+        if (state.items.isEmpty() && !state.isLoading && state.errorMessage == null) {
+            Text(
+                text = "暂无物品，请在网页端添加后再刷新。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            LazyColumn {
+                items(state.items, key = { item -> item.id }) { item ->
+                    InventoryItemRow(item = item)
+                    Divider()
+                }
             }
         }
     }
@@ -78,7 +114,7 @@ private fun InventoryItemRow(item: InventoryUiItem) {
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = item.syncStatus,
+                    text = item.syncStatus.toDisplayText(),
                     style = MaterialTheme.typography.labelMedium,
                 )
             }
@@ -96,4 +132,10 @@ private fun InventoryItemRow(item: InventoryUiItem) {
             }
         }
     }
+}
+
+private fun String.toDisplayText(): String = when (this) {
+    "synced" -> "已同步"
+    "pending_create" -> "待同步"
+    else -> this
 }

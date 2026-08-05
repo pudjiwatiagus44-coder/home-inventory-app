@@ -1,9 +1,28 @@
 package com.homeinventory.app.data.repository
 
+import com.homeinventory.app.core.network.HomeInventoryApi
+import com.homeinventory.app.core.network.LoginRequest
+import com.homeinventory.app.data.local.InventoryDao
 import com.homeinventory.app.data.local.InventoryItemEntity
+import com.homeinventory.app.data.local.PendingOperationDao
+import com.homeinventory.app.data.local.PendingOperationEntity
+import com.homeinventory.app.data.remote.ApiEnvelope
+import com.homeinventory.app.data.remote.AuthResponse
+import com.homeinventory.app.data.remote.MobileSyncRequest
+import com.homeinventory.app.data.remote.MobileSyncResponse
+import com.homeinventory.app.data.remote.RemoteDashboardDto
+import com.homeinventory.app.data.remote.RemoteItemDto
+import java.io.IOException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.Response
 
 class InventoryRepositoryTest {
     @Test
@@ -21,4 +40,115 @@ class InventoryRepositoryTest {
         assertNull(item.serverId)
         assertEquals(123L, item.localUpdatedAt)
     }
+
+    @Test
+    fun loadSnapshotReturnsDashboardWhenServerSucceeds() = runTest {
+        val dashboard = RemoteDashboardDto(
+            items = listOf(
+                RemoteItemDto(
+                    id = "item-1",
+                    name = "牛奶",
+                    note = "",
+                    expireDate = null,
+                    locationId = null,
+                ),
+            ),
+        )
+        val repository = InventoryRepository(
+            api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = dashboard))),
+            inventoryDao = FakeInventoryDao(),
+            pendingOperationDao = FakePendingOperationDao(),
+        )
+
+        val result = repository.loadSnapshot()
+
+        assertTrue(result.isSuccess)
+        assertEquals(dashboard, result.getOrNull())
+    }
+
+    @Test
+    fun loadSnapshotReturnsFailureWithServerMessageWhenResponseFails() = runTest {
+        val repository = InventoryRepository(
+            api = FakeSnapshotApi(
+                Response.error(
+                    401,
+                    """{"ok":false,"message":"Authentication required"}"""
+                        .toResponseBody("application/json".toMediaType()),
+                ),
+            ),
+            inventoryDao = FakeInventoryDao(),
+            pendingOperationDao = FakePendingOperationDao(),
+        )
+
+        val result = repository.loadSnapshot()
+
+        assertTrue(result.isFailure)
+        assertEquals("Authentication required", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun loadSnapshotReturnsFailureWhenNetworkRequestFails() = runTest {
+        val repository = InventoryRepository(
+            api = FailingSnapshotApi(IOException("timeout")),
+            inventoryDao = FakeInventoryDao(),
+            pendingOperationDao = FakePendingOperationDao(),
+        )
+
+        val result = repository.loadSnapshot()
+
+        assertTrue(result.isFailure)
+        assertEquals("无法连接服务器，请检查网络", result.exceptionOrNull()?.message)
+    }
+}
+
+private class FakeSnapshotApi(
+    private val snapshotResponse: Response<ApiEnvelope<RemoteDashboardDto>>,
+) : HomeInventoryApi {
+    override suspend fun login(request: LoginRequest): Response<AuthResponse> =
+        Response.success(AuthResponse(ok = true))
+
+    override suspend fun logout(): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> = snapshotResponse
+
+    override suspend fun syncInventory(
+        request: MobileSyncRequest,
+    ): Response<ApiEnvelope<MobileSyncResponse>> =
+        Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
+}
+
+private class FailingSnapshotApi(
+    private val error: Throwable,
+) : HomeInventoryApi {
+    override suspend fun login(request: LoginRequest): Response<AuthResponse> =
+        Response.success(AuthResponse(ok = true))
+
+    override suspend fun logout(): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> {
+        throw error
+    }
+
+    override suspend fun syncInventory(
+        request: MobileSyncRequest,
+    ): Response<ApiEnvelope<MobileSyncResponse>> =
+        Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
+}
+
+private class FakeInventoryDao : InventoryDao {
+    override fun observeItems(): Flow<List<InventoryItemEntity>> = flowOf(emptyList())
+
+    override suspend fun upsertItem(item: InventoryItemEntity) = Unit
+}
+
+private class FakePendingOperationDao : PendingOperationDao {
+    override suspend fun pendingOperations(): List<PendingOperationEntity> = emptyList()
+
+    override suspend fun upsertOperation(operation: PendingOperationEntity) = Unit
+
+    override suspend fun markApplied(clientOperationId: String) = Unit
+
+    override suspend fun markConflict(clientOperationId: String, message: String) = Unit
 }
