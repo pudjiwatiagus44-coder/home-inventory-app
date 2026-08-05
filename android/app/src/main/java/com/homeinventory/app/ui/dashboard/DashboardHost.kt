@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.homeinventory.app.data.local.AppDatabase
+import com.homeinventory.app.data.excel.BackupRow
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
@@ -111,7 +112,29 @@ fun DashboardHost(
                 repository.refreshSnapshot()
             }
         },
-        onBackup = { },
+        onBackup = {
+            scope.launch {
+                val rows = state.items.mapIndexed { index, item ->
+                    BackupRow(
+                        index = index + 1,
+                        name = item.name,
+                        locationName = item.locationName ?: "",
+                        areaName = item.areaId
+                            ?.let { areaId -> state.areas.firstOrNull { it.id == areaId }?.name }
+                            ?: "",
+                        note = item.note,
+                        expireDate = item.expireDate,
+                    )
+                }
+                importExportRepository.exportBackup(rows = rows, context = context)
+                    .onSuccess { filename ->
+                        Toast.makeText(context, "已导出 $filename", Toast.LENGTH_LONG).show()
+                    }
+                    .onFailure { error ->
+                        Toast.makeText(context, error.message ?: "导出失败", Toast.LENGTH_LONG).show()
+                    }
+            }
+        },
         onImport = {
             filePicker.launch(
                 arrayOf(
