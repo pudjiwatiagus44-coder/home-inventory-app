@@ -35,19 +35,8 @@ class AuthRepositoryTest {
 
 private class FailingLoginApi(
     private val error: Throwable,
-) : HomeInventoryApi {
+) : TestApiStub() {
     override suspend fun login(request: LoginRequest): Response<AuthResponse> {
         throw error
     }
-
-    override suspend fun logout(): Response<ApiEnvelope<Unit>> =
-        Response.success(ApiEnvelope(ok = true))
-
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
-        Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))
-
-    override suspend fun syncInventory(
-        request: MobileSyncRequest,
-    ): Response<ApiEnvelope<MobileSyncResponse>> =
-        Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
 }

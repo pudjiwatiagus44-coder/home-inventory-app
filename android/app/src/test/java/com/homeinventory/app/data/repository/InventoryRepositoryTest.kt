@@ -103,38 +103,16 @@ class InventoryRepositoryTest {
 
 private class FakeSnapshotApi(
     private val snapshotResponse: Response<ApiEnvelope<RemoteDashboardDto>>,
-) : HomeInventoryApi {
-    override suspend fun login(request: LoginRequest): Response<AuthResponse> =
-        Response.success(AuthResponse(ok = true))
-
-    override suspend fun logout(): Response<ApiEnvelope<Unit>> =
-        Response.success(ApiEnvelope(ok = true))
-
+) : TestApiStub() {
     override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> = snapshotResponse
-
-    override suspend fun syncInventory(
-        request: MobileSyncRequest,
-    ): Response<ApiEnvelope<MobileSyncResponse>> =
-        Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
 }
 
 private class FailingSnapshotApi(
     private val error: Throwable,
-) : HomeInventoryApi {
-    override suspend fun login(request: LoginRequest): Response<AuthResponse> =
-        Response.success(AuthResponse(ok = true))
-
-    override suspend fun logout(): Response<ApiEnvelope<Unit>> =
-        Response.success(ApiEnvelope(ok = true))
-
+) : TestApiStub() {
     override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> {
         throw error
     }
-
-    override suspend fun syncInventory(
-        request: MobileSyncRequest,
-    ): Response<ApiEnvelope<MobileSyncResponse>> =
-        Response.success(ApiEnvelope(ok = true, data = MobileSyncResponse()))
 }
 
 private class FakeItemDao : ItemDao {
