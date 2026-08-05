@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.core.session.InMemorySessionStore
 import com.homeinventory.app.data.repository.AuthRepository
@@ -46,6 +47,7 @@ fun AppRoot(
             LoginScreen(
                 email = email,
                 password = password,
+                serverUrl = AppConfig.baseUrl,
                 isLoading = isLoading,
                 errorMessage = errorMessage,
                 onEmailChange = {

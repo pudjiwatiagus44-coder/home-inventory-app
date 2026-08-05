@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 fun LoginScreen(
     email: String,
     password: String,
+    serverUrl: String,
     isLoading: Boolean,
     errorMessage: String?,
     onEmailChange: (String) -> Unit,
@@ -44,6 +45,10 @@ fun LoginScreen(
         Text(
             text = "登录后同步你的物品清单",
             style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            text = "服务器：$serverUrl",
+            style = MaterialTheme.typography.bodySmall,
         )
 
         Spacer(modifier = Modifier.height(28.dp))
