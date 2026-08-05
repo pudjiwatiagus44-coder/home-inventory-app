@@ -21,6 +21,10 @@ import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.InventoryRepository
+import com.homeinventory.app.data.sync.AndroidConnectivityObserver
+import com.homeinventory.app.data.sync.DaoPendingOperationQueue
+import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
+import com.homeinventory.app.data.sync.SyncEngine
 import com.homeinventory.app.ui.login.LoginScreen
 import kotlinx.coroutines.launch
 
@@ -63,7 +67,34 @@ fun AppRoot() {
                 Text(text = "正在同步清单...")
             }
             LaunchedEffect(Unit) {
-                inventoryRepository.refreshSnapshot()
+                if (isLoggedIn) {
+                    scope.launch { inventoryRepository.refreshSnapshot() }
+                    scope.launch {
+                        SyncEngine(
+                            queue = DaoPendingOperationQueue(app.database.pendingOperationDao()),
+                            remote = RetrofitRemoteSyncClient(api),
+                            onOperationApplied = { applied ->
+                                when (applied.entity) {
+                                    "area" -> app.database.areaDao().markSynced(
+                                        applied.localId.orEmpty(),
+                                        applied.serverId,
+                                        applied.serverUpdatedAt.orEmpty(),
+                                    )
+                                    "location" -> app.database.locationDao().markSynced(
+                                        applied.localId.orEmpty(),
+                                        applied.serverId,
+                                        applied.serverUpdatedAt.orEmpty(),
+                                    )
+                                    "item" -> app.database.itemDao().markSynced(
+                                        applied.localId.orEmpty(),
+                                        applied.serverId,
+                                        applied.serverUpdatedAt.orEmpty(),
+                                    )
+                                }
+                            },
+                        ).syncWhenOnline(AndroidConnectivityObserver(app))
+                    }
+                }
             }
         } else {
             LoginScreen(
