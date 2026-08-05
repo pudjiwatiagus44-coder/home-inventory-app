@@ -10,7 +10,7 @@ class InMemorySessionStore : SessionStore {
     private var cookie: String? = null
 
     override fun saveSessionCookie(setCookieHeader: String) {
-        cookie = setCookieHeader.substringBefore(";").trim().ifEmpty { null }
+        cookie = CookieHeaderParser.parse(setCookieHeader)
     }
 
     override fun sessionCookie(): String? = cookie

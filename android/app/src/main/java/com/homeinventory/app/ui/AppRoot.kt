@@ -12,10 +12,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
-import com.homeinventory.app.core.session.InMemorySessionStore
-import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.ui.inventory.InventoryScreen
@@ -26,7 +25,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AppRoot() {
     val scope = rememberCoroutineScope()
-    val sessionStore = remember { InMemorySessionStore() }
+    val app = LocalContext.current.applicationContext as HomeInventoryApplication
+    val sessionStore = app.sessionStore
     val api = remember { NetworkModule.createApi(sessionStore) }
     val authRepository = remember {
         AuthRepository(
@@ -34,13 +34,11 @@ fun AppRoot() {
             sessionStore = sessionStore,
         )
     }
-    val context = LocalContext.current
     val inventoryRepository = remember {
-        val database = AppDatabase.getInstance(context)
         InventoryRepository(
             api = api,
-            inventoryDao = database.inventoryDao(),
-            pendingOperationDao = database.pendingOperationDao(),
+            inventoryDao = app.database.inventoryDao(),
+            pendingOperationDao = app.database.pendingOperationDao(),
         )
     }
     val factory = remember(inventoryRepository) {

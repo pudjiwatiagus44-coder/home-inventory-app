@@ -14,4 +14,13 @@ class SessionStoreTest {
         assertEquals("home_inventory_session=abc", store.sessionCookie())
         assertNull(store.rawPasswordForTest())
     }
+
+    @Test
+    fun ignoresHeadersWithoutSessionCookie() {
+        val store = InMemorySessionStore()
+
+        store.saveSessionCookie("other=value; Path=/")
+
+        assertNull(store.sessionCookie())
+    }
 }
