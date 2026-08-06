@@ -37,3 +37,7 @@ create unique index if not exists household_join_requests_pending_unique_idx
   on household_join_requests(household_id, user_id) where status = 'pending';
 create index if not exists household_join_requests_household_id_idx on household_join_requests(household_id);
 create index if not exists household_join_requests_user_id_idx on household_join_requests(user_id);
+
+-- Grant the application role the same privileges it has on existing tables.
+grant all privileges on household_invitations to home_inventory_app;
+grant all privileges on household_join_requests to home_inventory_app;
