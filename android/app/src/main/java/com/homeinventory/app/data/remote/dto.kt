@@ -196,3 +196,16 @@ data class JoinRequestDto(
     @SerializedName("created_at")
     val createdAt: String? = null,
 )
+
+data class ApkVersionDto(
+    @SerializedName("versionName")
+    val versionName: String? = null,
+    @SerializedName("versionCode")
+    val versionCode: Int = 0,
+    @SerializedName("url")
+    val url: String? = null,
+    @SerializedName("size")
+    val size: Long = 0,
+    @SerializedName("updatedAt")
+    val updatedAt: String? = null,
+)

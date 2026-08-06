@@ -17,6 +17,7 @@ import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.DateNormalizer
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
@@ -169,6 +170,21 @@ class InventoryRepository(
         }
 
         return Result.success(Unit)
+    }
+
+    suspend fun checkForUpdate(): Result<ApkVersionDto> {
+        val response = try {
+            api.apkVersion()
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body == null) {
+            return Result.failure(IllegalStateException("获取版本信息失败"))
+        }
+
+        return Result.success(body)
     }
 
     suspend fun createItemOffline(

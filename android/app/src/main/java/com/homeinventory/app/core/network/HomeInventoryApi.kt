@@ -3,6 +3,7 @@ package com.homeinventory.app.core.network
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.AuthResponse
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
@@ -106,4 +107,7 @@ interface HomeInventoryApi {
 
     @POST("api/family/join-requests/{requestId}/reject")
     suspend fun rejectJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>
+
+    @GET("apk/version.json")
+    suspend fun apkVersion(): Response<ApkVersionDto>
 }

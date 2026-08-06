@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.homeinventory.app.HomeInventoryApplication
+import com.homeinventory.app.BuildConfig
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
 import com.homeinventory.app.data.repository.AuthRepository
@@ -62,6 +63,8 @@ fun AppRoot() {
                     loadJoinRequests = repository::listJoinRequests,
                     approveJoinRequest = repository::approveJoinRequest,
                     rejectJoinRequest = repository::rejectJoinRequest,
+                    checkForUpdate = repository::checkForUpdate,
+                    localVersionCode = BuildConfig.VERSION_CODE,
                 )
             }
         }

@@ -672,6 +672,14 @@
 - 版本与托管证据：`versionCode=4`、`versionName=0.3.0`，`gradlew :app:testDebugUnitTest :app:assembleDebug` 构建成功（19,816,941 字节）；已通过 `scripts/upload-apk.ps1` 上传服务器，`/apk/version.json` 显示 0.3.0 / code 4，APK URL 返回 HTTP 200。
 - 服务端审批接口在 App 端复用，之前线上 smoke 已验证批准后成员可读、移除后失效；App 真机点击验收待用户完成。
 
+## 2026-08-06 Android 更新提醒证据
+
+- 用户确认 App 内增加更新提醒：服务器 APK 版本比本地新时，提示用户更新。
+- 代码证据：`HomeInventoryApi` 新增 `GET apk/version.json`（公共静态文件，无需登录态）；`InventoryRepository.checkForUpdate()` 解析版本信息；`DashboardViewModel` 新增 `UpdateCheckUiState` 与 `checkForUpdates()`，用服务器 `versionCode > 本地 BuildConfig.VERSION_CODE` 判断是否有新版，检查失败静默不打扰；`DashboardHost` 进入清单页时检查一次，有新版弹 `AlertDialog`（“立即更新”用系统浏览器打开 APK 地址，“稍后”关闭）。
+- TDD 证据：`InventoryRepositoryTest` 新增版本获取成功/网络失败 2 个用例；`DashboardViewModelTest` 新增服务器更新时提示、版本一致不提示、检查失败静默 3 个用例。
+- 版本与托管证据：`versionCode=5`、`versionName=0.4.0`，构建成功并通过 `scripts/upload-apk.ps1` 上传，`/apk/version.json` 显示 0.4.0 / code 5。装有 0.3.0 及更早版本的用户打开 App 会收到更新提示（服务器 code 5 > 本地 code）。
+- 真机验收：需用户安装 0.4.0 后确认无自更新提示（本地=服务器），再装 0.3.0 或等下一次发版验证提示弹窗。
+
 ## 2026-08-04 Excel 批量备份与导入证据
 
 - 用户确认规则：导入以 `所在区域 + 格子编号 + 名称` 判断同格同名物品；备注和有效期完全相同则自动跳过；备注或有效期不同则在弹窗中对比当前数据和 Excel 数据，由用户选择跳过、都保留或覆盖；全新物品自动导入并按需创建缺失区域和格子。

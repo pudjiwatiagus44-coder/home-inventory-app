@@ -11,6 +11,7 @@ import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.local.SyncStateDao
 import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -247,6 +248,35 @@ class InventoryRepositoryTest {
         assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
     }
 
+    @Test
+    fun checkForUpdateReturnsServerVersion() = runTest {
+        val repository = repositoryWith(
+            api = VersionApi(
+                ApkVersionDto(
+                    versionName = "0.4.0",
+                    versionCode = 5,
+                    url = "https://homestorag.xyz/apk/home-inventory-internal-latest.apk",
+                ),
+            ),
+        )
+
+        val result = repository.checkForUpdate()
+
+        assertTrue(result.isSuccess)
+        assertEquals(5, result.getOrNull()?.versionCode)
+        assertEquals("0.4.0", result.getOrNull()?.versionName)
+    }
+
+    @Test
+    fun checkForUpdateFailsWhenServerUnavailable() = runTest {
+        val repository = repositoryWith(api = FailingVersionApi(IOException("timeout")))
+
+        val result = repository.checkForUpdate()
+
+        assertTrue(result.isFailure)
+        assertEquals("无法连接服务器，请检查网络", result.exceptionOrNull()?.message)
+    }
+
     private fun repositoryWith(api: TestApiStub): InventoryRepository =
         InventoryRepository(
             api = api,
@@ -306,6 +336,21 @@ private class RejectingApprovalApi : TestApiStub() {
             """{"ok":false,"message":"只有房主可以管理成员和邀请"}"""
                 .toResponseBody("application/json".toMediaType()),
         )
+}
+
+private class VersionApi(
+    private val version: ApkVersionDto,
+) : TestApiStub() {
+    override suspend fun apkVersion(): Response<ApkVersionDto> =
+        Response.success(version)
+}
+
+private class FailingVersionApi(
+    private val error: Throwable,
+) : TestApiStub() {
+    override suspend fun apkVersion(): Response<ApkVersionDto> {
+        throw error
+    }
 }
 
 private class RecordingApi : TestApiStub() {

@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard
 
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -278,6 +279,93 @@ class DashboardViewModelTest {
 
             assertEquals("只有房主可以管理成员和邀请", viewModel.joinRequestsState().value.errorMessage)
             assertEquals(1, viewModel.joinRequestsState().value.requests.size)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun checkForUpdatesPromptsWhenServerVersionIsNewer() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                checkForUpdate = {
+                    Result.success(
+                        ApkVersionDto(
+                            versionName = "0.4.0",
+                            versionCode = 5,
+                            url = "https://homestorag.xyz/apk/home-inventory-internal-latest.apk",
+                        ),
+                    )
+                },
+                localVersionCode = 4,
+            )
+            advanceUntilIdle()
+
+            viewModel.checkForUpdates()
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.updateCheckState().value.updateAvailable)
+            assertEquals("0.4.0", viewModel.updateCheckState().value.versionName)
+            assertEquals(
+                "https://homestorag.xyz/apk/home-inventory-internal-latest.apk",
+                viewModel.updateCheckState().value.downloadUrl,
+            )
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun checkForUpdatesStaysSilentWhenVersionsMatch() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                checkForUpdate = {
+                    Result.success(
+                        ApkVersionDto(
+                            versionName = "0.4.0",
+                            versionCode = 4,
+                            url = "https://homestorag.xyz/apk/home-inventory-internal-latest.apk",
+                        ),
+                    )
+                },
+                localVersionCode = 4,
+            )
+            advanceUntilIdle()
+
+            viewModel.checkForUpdates()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.updateCheckState().value.updateAvailable)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun checkForUpdatesStaysSilentWhenCheckFails() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                checkForUpdate = {
+                    Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+                },
+                localVersionCode = 4,
+            )
+            advanceUntilIdle()
+
+            viewModel.checkForUpdates()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.updateCheckState().value.updateAvailable)
+            assertEquals(false, viewModel.updateCheckState().value.isChecking)
         } finally {
             Dispatchers.resetMain()
         }

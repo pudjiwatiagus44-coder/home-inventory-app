@@ -5,6 +5,7 @@ import com.homeinventory.app.core.network.LoginRequest
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.AuthResponse
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
@@ -91,4 +92,13 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun rejectJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun apkVersion(): Response<ApkVersionDto> =
+        Response.success(
+            ApkVersionDto(
+                versionName = "0.0.0",
+                versionCode = 0,
+                url = "https://homestorag.xyz/apk/home-inventory-internal-latest.apk",
+            ),
+        )
 }

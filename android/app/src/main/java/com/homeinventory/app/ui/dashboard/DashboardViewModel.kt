@@ -2,6 +2,7 @@ package com.homeinventory.app.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.repository.InventorySnapshot
 import java.time.LocalDate
@@ -58,6 +59,13 @@ data class JoinRequestsUiState(
     val pendingRequestId: String? = null,
 )
 
+data class UpdateCheckUiState(
+    val isChecking: Boolean = false,
+    val updateAvailable: Boolean = false,
+    val versionName: String? = null,
+    val downloadUrl: String? = null,
+)
+
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
@@ -73,6 +81,10 @@ class DashboardViewModel(
     private val rejectJoinRequest: suspend (String) -> Result<Unit> = {
         Result.failure(IllegalStateException("审批功能不可用"))
     },
+    private val checkForUpdate: suspend () -> Result<ApkVersionDto> = {
+        Result.failure(IllegalStateException("更新检查不可用"))
+    },
+    private val localVersionCode: Int = 0,
     private val today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
     private val filters = MutableStateFlow(DashboardFilters())
@@ -80,6 +92,36 @@ class DashboardViewModel(
     private val refreshFlag = MutableStateFlow(0)
     private val invite = MutableStateFlow(InviteUiState())
     private val joinRequests = MutableStateFlow(JoinRequestsUiState())
+    private val updateCheck = MutableStateFlow(UpdateCheckUiState())
+
+    fun updateCheckState(): StateFlow<UpdateCheckUiState> = updateCheck
+
+    fun checkForUpdates() {
+        if (updateCheck.value.isChecking) {
+            return
+        }
+
+        viewModelScope.launch {
+            updateCheck.value = updateCheck.value.copy(isChecking = true)
+            checkForUpdate()
+                .onSuccess { info ->
+                    updateCheck.value = UpdateCheckUiState(
+                        isChecking = false,
+                        updateAvailable = info.versionCode > localVersionCode,
+                        versionName = info.versionName,
+                        downloadUrl = info.url,
+                    )
+                }
+                .onFailure {
+                    // 更新检查失败不打扰用户：保持无更新状态
+                    updateCheck.value = updateCheck.value.copy(isChecking = false)
+                }
+        }
+    }
+
+    fun dismissUpdatePrompt() {
+        updateCheck.value = updateCheck.value.copy(updateAvailable = false)
+    }
 
     fun invitations(): StateFlow<InviteUiState> = invite
 

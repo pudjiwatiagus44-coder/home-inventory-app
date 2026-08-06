@@ -1,10 +1,13 @@
 package com.homeinventory.app.ui.dashboard
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -13,6 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
 import com.homeinventory.app.data.remote.ImportPreviewDto
@@ -45,6 +51,7 @@ fun DashboardHost(
     val state by viewModel.state.collectAsState()
     val inviteState by viewModel.invitations().collectAsState()
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
+    val updateState by viewModel.updateCheckState().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
@@ -78,6 +85,10 @@ fun DashboardHost(
                 }
             }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.checkForUpdates()
     }
 
     DashboardScreen(
@@ -173,6 +184,38 @@ fun DashboardHost(
             onDismiss = {
                 showInviteDialog = false
                 viewModel.clearInvitation()
+            },
+        )
+    }
+
+    if (updateState.updateAvailable) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUpdatePrompt,
+            title = { Text("发现新版本") },
+            text = {
+                Text(
+                    updateState.versionName?.let { "有新版本 v$it 可更新，是否立即下载？" }
+                        ?: "有新版本可更新，是否立即下载？",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        updateState.downloadUrl?.let { url ->
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                            )
+                        }
+                        viewModel.dismissUpdatePrompt()
+                    },
+                ) {
+                    Text("立即更新")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissUpdatePrompt) {
+                    Text("稍后")
+                }
             },
         )
     }
