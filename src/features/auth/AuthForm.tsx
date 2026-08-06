@@ -7,7 +7,7 @@ import { authenticateWithSelfHostedApi } from "./self-hosted-auth-client";
 
 type AuthMode = "sign-in" | "sign-up";
 
-export function AuthForm() {
+export function AuthForm({ redirect }: { redirect?: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
@@ -32,7 +32,9 @@ export function AuthForm() {
         email,
         password,
       });
-      router.push("/app");
+      router.push(
+        redirect && redirect.startsWith("/") ? redirect : "/app",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "认证请求失败");
     } finally {

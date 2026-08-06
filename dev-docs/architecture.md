@@ -215,6 +215,7 @@ auth.users
 - 家庭形态：一个账号可属于多个家庭，UI 提供“当前家庭”切换器；所有清单请求基于当前家庭，服务端仍从 session 推导用户和家庭，不接受客户端伪造可信 `householdId`。
 - 家庭切换器的“当前家庭”选择只是前端状态；真正可访问哪些家庭由 RLS 依据 membership 决定，前端不能靠切换器越权读取其他家庭。
 - 现有 areas/locations/items 的 member-only RLS 天然支持共享，无需改动；需要新增的是 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）、成员管理 RLS 以及提交申请/批准申请的安全函数。
+- 实施路线（2026-08-06 用户确认）：直接在自托管部署（`homestorag.xyz`，自有 PostgreSQL + 自有认证 + 服务端权限校验）上实现并上线；Supabase/RLS 方案仅作为历史设计参考，不以 Supabase 为实施目标。自托管路线的权限由服务端校验兜底（等价于 RLS 设计），数据库表结构与 Supabase 版保持一致。
 - 家庭共享先做 Web/PWA；Android 内测版暂不实现共享 UI，但服务端权限模型保持兼容，Android 仍按当前 session 推导的 household 读取数据。
 
 ## 验证方式

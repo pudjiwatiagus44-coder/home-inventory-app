@@ -57,7 +57,10 @@ export function createDashboardHandlers(
 
         const repository =
           dependencies.inventoryRepository ?? createRouteDashboardRepository();
-        const data = await repository.getDashboardForUser(currentUser.userId);
+        const data = await repository.getDashboardForUser(
+          currentUser.userId,
+          request.nextUrl.searchParams.get("householdId") ?? undefined,
+        );
 
         if (!data) {
           return NextResponse.json(

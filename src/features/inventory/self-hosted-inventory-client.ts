@@ -32,8 +32,12 @@ export function createSelfHostedInventoryClient({
   fetch: fetchImpl = globalThis.fetch.bind(globalThis),
 }: ClientOptions = {}) {
   return {
-    getDashboard() {
-      return request<DashboardData>("/api/inventory/dashboard", {
+    getDashboard(householdId?: string) {
+      const query = householdId
+        ? `?householdId=${encodeURIComponent(householdId)}`
+        : "";
+
+      return request<DashboardData>(`/api/inventory/dashboard${query}`, {
         method: "GET",
       });
     },

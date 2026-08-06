@@ -33,7 +33,10 @@ type VersionedLocationRow = LocationRow & { updatedAt: string };
 type VersionedItemRow = ItemRow & { updatedAt: string };
 
 export type InventoryRepository = {
-  getDashboardForUser: (userId: string) => Promise<DashboardData | null>;
+  getDashboardForUser: (
+    userId: string,
+    householdId?: string,
+  ) => Promise<DashboardData | null>;
   createArea: (
     input: AreaInput & { householdId: string },
   ) => ReturnType<typeof createInventoryArea>;
@@ -136,7 +139,8 @@ export function createPostgresInventoryRepository(
   }
 
   return {
-    getDashboardForUser: async (userId) => {
+    getDashboardForUser: async (userId, householdId) => {
+      const householdParams = householdId ? [userId, householdId] : [userId];
       const householdResult = await client.query<{
         id: string;
         name: string;
@@ -146,10 +150,11 @@ export function createPostgresInventoryRepository(
           from household_members
           join households on households.id = household_members.household_id
           where household_members.user_id = $1
+          ${householdId ? "and household_members.household_id = $2" : ""}
           order by household_members.created_at asc
           limit 1
         `,
-        [userId],
+        householdParams,
       );
       const household = householdResult.rows[0];
 

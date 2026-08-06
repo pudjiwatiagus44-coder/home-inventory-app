@@ -329,7 +329,7 @@
 | 第一闭环 | 用户注册到管理物品的完整流程跑通 | 代码闭环已完成；仍需用户验收陪跑 |
 | 数据影响 | 数据创建、更新、删除证据 | 已有代码、用户反馈和 RLS 负例证据；仍需完整浏览器陪跑 |
 | 权限安全 | RLS 设计、migration、真实 Supabase 用户 A/B 负例 | 已验证，13 项通过 / 0 项失败 |
-| 家庭共享 | 设计已确认并写入真源；migration、代码和负例尚未实施 | 设计已确认；实施未开始 |
+| 家庭共享 | 设计已确认；migration 与代码已实现并通过本地测试/lint/build；真实 Supabase 负例和浏览器验收未完成 | 实施中（本地已验证） |
 | 第三方 | Supabase 官方文档和 sandbox/API 证据 | 部分确认 |
 | 部署路线 | `dev-docs/deployment-route.md` 已确认；阿里云测试环境已部署 | 阿里云测试 URL 已完成公网 API smoke；完整浏览器点击验收未完成 |
 | 中国大陆正式版路线 | `dev-docs/deployment-route.md` 和 `dev-docs/stages/mainland-production-route.md` 已记录 | 已确认目标；测试环境已跑通，正式 HTTPS/备案/生产验收未完成 |
@@ -629,6 +629,16 @@
 - 边界：第一版不做真实邮件通知、房主转让、成员自助退出、多家庭数据合并；Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容。
 - 真源落点：`dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/database-design.md`、`dev-docs/acceptance.md`、`dev-docs/stages/family-sharing.md`。
 - 实施状态：设计已确认并写入真源；migration、代码、权限负例和浏览器验收均未开始，等待用户确认实施计划后启动。
+
+## 2026-08-06 家庭成员共享实施证据
+
+- migration 证据：`supabase/migrations/202608060001_family_sharing.sql` 已编写，包含 `household_invitations`、`household_join_requests`、部分唯一索引、六个 security definer 安全函数（查家庭/提交申请/批准/拒绝/成员列表/申请列表）和 RLS 策略，与 `dev-docs/database-design.md` 一致；尚未在真实 Supabase 项目执行。
+- 数据层证据：`src/features/family/family-data.ts`（URL-safe token 生成、邀请 URL、30 天有效期、链接状态、token 校验）与 `src/features/family/family-actions.ts`（生成/作废链接、申请、批准/拒绝、移除成员、成员/申请/家庭列表）已实现。
+- 落地页证据：新增 `/join/<token>` 页面，含登录/注册（Supabase 测试路线）、申请加入、Android 内测 APK 下载入口（`NEXT_PUBLIC_APK_DOWNLOAD_URL`）。
+- UI 证据：`FamilySettings.tsx` 家庭设置面板（生成/复制/作废邀请链接、批准/拒绝申请、成员列表与移除）和当前家庭切换器已接入 `/app` 的 Supabase 测试路线；自托管路线的“设置”按钮提示该能力尚未上线。
+- TDD 证据：先新增 `family-data.test.ts` / `family-actions.test.ts` 27 个测试，先看到模块缺失失败，再实现后转绿。
+- 本地验证证据：`npm test` 通过 36 个测试文件 / 252 个测试（2 个 PostgreSQL 集成占位跳过）；`npm run lint` exit code 0；`npm run build` exit code 0，Next.js 16.2.10 构建成功，生成 `/join/[token]` 动态路由。
+- 未完成：真实 Supabase 执行 migration、家庭共享权限负例、真实浏览器验收陪跑、自托管路线同步实现、APK 服务器托管与自动上传。
 
 ## 2026-08-04 Excel 批量备份与导入证据
 
