@@ -175,3 +175,14 @@ data class ImportSummaryDto(
     val skippedItems: Int = 0,
     val errors: List<ImportErrorDto> = emptyList(),
 )
+
+data class CreateInvitationRequest(
+    val householdId: String,
+)
+
+data class InvitationLinkDto(
+    val id: String,
+    val token: String,
+    val expiresAt: String? = null,
+    val url: String,
+)

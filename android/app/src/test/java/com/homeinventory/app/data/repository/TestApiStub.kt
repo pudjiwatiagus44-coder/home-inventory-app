@@ -6,9 +6,11 @@ import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.AuthResponse
+import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
+import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.LocationCreateRequest
@@ -67,4 +69,16 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun commitImport(request: ImportCommitRequest): Response<ApiEnvelope<ImportSummaryDto>> =
         Response.success(ApiEnvelope(ok = true, data = ImportSummaryDto()))
+
+    override suspend fun createInvitation(request: CreateInvitationRequest): Response<ApiEnvelope<InvitationLinkDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = InvitationLinkDto(
+                    id = "link-1",
+                    token = "token_1",
+                    url = "https://homestorag.xyz/join/token_1",
+                ),
+            ),
+        )
 }

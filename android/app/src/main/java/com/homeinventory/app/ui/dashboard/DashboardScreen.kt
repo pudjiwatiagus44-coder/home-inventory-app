@@ -33,6 +33,7 @@ fun DashboardScreen(
     onRefresh: () -> Unit,
     onBackup: () -> Unit,
     onImport: () -> Unit,
+    onInvite: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -42,6 +43,7 @@ fun DashboardScreen(
             TopBar(
                 onBackup = onBackup,
                 onImport = onImport,
+                onInvite = onInvite,
                 onSignOut = onSignOut,
             )
         },

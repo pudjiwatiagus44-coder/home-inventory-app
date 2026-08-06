@@ -11,6 +11,8 @@ import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.local.SyncStateDao
 import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
+import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
@@ -152,6 +154,51 @@ class InventoryRepositoryTest {
         assertEquals("2026-08-29T16:00:00.000Z" != item.expireDate, true)
     }
 
+    @Test
+    fun createInvitationLinkReturnsSharedUrlAfterSnapshotLoaded() = runTest {
+        val repository = repositoryWith(
+            api = FakeSnapshotApi(
+                Response.success(
+                    ApiEnvelope(
+                        ok = true,
+                        data = RemoteDashboardDto(
+                            household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        repository.refreshSnapshot()
+
+        val result = repository.createInvitationLink()
+
+        assertTrue(result.isSuccess)
+        assertEquals("https://homestorag.xyz/join/token_1", result.getOrNull())
+    }
+
+    @Test
+    fun createInvitationLinkFailsWhenHouseholdNotLoaded() = runTest {
+        val repository = repositoryWith(
+            api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))),
+        )
+
+        val result = repository.createInvitationLink()
+
+        assertTrue(result.isFailure)
+        assertEquals("家庭信息未加载，请先刷新清单", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun createInvitationLinkFailsWhenServerRejects() = runTest {
+        val repository = repositoryWith(api = RejectingInvitationApi())
+        repository.refreshSnapshot()
+
+        val result = repository.createInvitationLink()
+
+        assertTrue(result.isFailure)
+        assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
+    }
+
     private fun repositoryWith(api: TestApiStub): InventoryRepository =
         InventoryRepository(
             api = api,
@@ -196,6 +243,25 @@ private class RecordingApi : TestApiStub() {
             ),
         )
     }
+}
+
+private class RejectingInvitationApi : TestApiStub() {
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
+                ),
+            ),
+        )
+
+    override suspend fun createInvitation(request: CreateInvitationRequest): Response<ApiEnvelope<InvitationLinkDto>> =
+        Response.error(
+            403,
+            """{"ok":false,"message":"只有房主可以管理成员和邀请"}"""
+                .toResponseBody("application/json".toMediaType()),
+        )
 }
 
 private class FakeAreaDao : AreaDao {

@@ -23,6 +23,7 @@ import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
+import com.homeinventory.app.ui.dashboard.dialogs.InviteDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ImportPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ImportSummaryMessage
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormDialog
@@ -42,7 +43,9 @@ fun DashboardHost(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsState()
+    val inviteState by viewModel.invitations().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
+    var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var showLocationForm by remember { mutableStateOf(false) }
     var showAreaForm by remember { mutableStateOf(false) }
@@ -144,6 +147,10 @@ fun DashboardHost(
                 ),
             )
         },
+        onInvite = {
+            showInviteDialog = true
+            viewModel.generateInvitationLink()
+        },
         onSignOut = {
             scope.launch {
                 authRepository.logout()
@@ -152,6 +159,17 @@ fun DashboardHost(
             }
         },
     )
+
+    if (showInviteDialog) {
+        InviteDialog(
+            state = inviteState,
+            onRegenerate = viewModel::generateInvitationLink,
+            onDismiss = {
+                showInviteDialog = false
+                viewModel.clearInvitation()
+            },
+        )
+    }
 
     if (showItemForm) {
         ItemFormDialog(

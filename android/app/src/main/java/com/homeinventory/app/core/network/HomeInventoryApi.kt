@@ -4,9 +4,11 @@ import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.AuthResponse
+import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
+import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.LocationCreateRequest
@@ -90,4 +92,7 @@ interface HomeInventoryApi {
 
     @POST("api/inventory/import?mode=commit")
     suspend fun commitImport(@Body request: ImportCommitRequest): Response<ApiEnvelope<ImportSummaryDto>>
+
+    @POST("api/family/invitations")
+    suspend fun createInvitation(@Body request: CreateInvitationRequest): Response<ApiEnvelope<InvitationLinkDto>>
 }

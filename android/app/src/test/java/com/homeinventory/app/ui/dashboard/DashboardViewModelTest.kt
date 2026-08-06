@@ -126,6 +126,51 @@ class DashboardViewModelTest {
         }
     }
 
+    @Test
+    fun generateInvitationLinkExposesSharedUrl() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                createInvitation = { Result.success("https://homestorag.xyz/join/abc") },
+            )
+            advanceUntilIdle()
+
+            viewModel.generateInvitationLink()
+            advanceUntilIdle()
+
+            assertEquals("https://homestorag.xyz/join/abc", viewModel.invitations().value.link)
+            assertEquals(false, viewModel.invitations().value.isGenerating)
+            assertEquals(null, viewModel.invitations().value.errorMessage)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun generateInvitationLinkShowsErrorWhenGenerationFails() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                createInvitation = {
+                    Result.failure(IllegalStateException("只有房主可以管理成员和邀请"))
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.generateInvitationLink()
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.invitations().value.link)
+            assertEquals("只有房主可以管理成员和邀请", viewModel.invitations().value.errorMessage)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun item(
         id: String,
         name: String,

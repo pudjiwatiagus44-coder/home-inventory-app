@@ -18,6 +18,7 @@ import com.homeinventory.app.data.DateNormalizer
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApiEnvelope
+import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.LocationCreateRequest
@@ -44,6 +45,9 @@ class InventoryRepository(
     private val syncStateDao: SyncStateDao,
     private val gson: Gson = Gson(),
 ) {
+    @Volatile
+    private var currentHouseholdId: String? = null
+
     fun observeInventory(): Flow<InventorySnapshot> =
         combine(areaDao.observeAll(), locationDao.observeAll(), itemDao.observeAll()) { areas, locations, items ->
             val locationNames = locations.associate { it.id to it.name }
@@ -84,8 +88,34 @@ class InventoryRepository(
             )
         }
         replaceServerData(body.data)
+        currentHouseholdId = body.data.household?.id
         syncStateDao.put(SyncStateEntity(KEY_LAST_SYNC, System.currentTimeMillis().toString()))
         return Result.success(Unit)
+    }
+
+    suspend fun createInvitationLink(): Result<String> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        val response = try {
+            api.createInvitation(CreateInvitationRequest(householdId))
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true || body.data == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: "生成邀请链接失败",
+                ),
+            )
+        }
+
+        return Result.success(body.data.url)
     }
 
     suspend fun createItemOffline(

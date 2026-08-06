@@ -44,14 +44,49 @@ data class DashboardUiState(
     val errorMessage: String? = null,
 )
 
+data class InviteUiState(
+    val isGenerating: Boolean = false,
+    val link: String? = null,
+    val errorMessage: String? = null,
+)
+
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
+    private val createInvitation: suspend () -> Result<String> = {
+        Result.failure(IllegalStateException("邀请功能不可用"))
+    },
     private val today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
     private val filters = MutableStateFlow(DashboardFilters())
     private val sortMode = MutableStateFlow(ItemSortMode.ExpireSoon)
     private val refreshFlag = MutableStateFlow(0)
+    private val invite = MutableStateFlow(InviteUiState())
+
+    fun invitations(): StateFlow<InviteUiState> = invite
+
+    fun generateInvitationLink() {
+        if (invite.value.isGenerating) {
+            return
+        }
+
+        viewModelScope.launch {
+            invite.value = InviteUiState(isGenerating = true)
+            createInvitation()
+                .onSuccess { url ->
+                    invite.value = InviteUiState(link = url)
+                }
+                .onFailure { error ->
+                    invite.value = InviteUiState(
+                        errorMessage = error.message ?: "生成邀请链接失败",
+                    )
+                }
+        }
+    }
+
+    fun clearInvitation() {
+        invite.value = InviteUiState()
+    }
 
     val state: StateFlow<DashboardUiState> =
         combine(inventory, filters, sortMode, refreshFlag) { snapshot, filter, sort, _ ->

@@ -58,6 +58,7 @@ fun AppRoot() {
                 DashboardViewModel(
                     inventory = repository.observeInventory(),
                     syncPending = repository::syncPendingOperations,
+                    createInvitation = repository::createInvitationLink,
                 )
             }
         }

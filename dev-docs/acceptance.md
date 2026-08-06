@@ -422,7 +422,7 @@
 - 链接落地页包含 Android 内测 APK 下载入口，下载地址为部署配置项；APK 由服务器静态托管，每次构建后自动上传最新版并更新版本信息，落地页与 App 检查版本提示更新（安装需用户确认）。
 - 权限由 RLS 兜底：未提交申请、申请被拒绝或被移除的账号不能读取家庭数据，不能只靠前端隐藏按钮。
 - 一个账号可属于多个家庭；当前家庭切换器只切换前端操作上下文，不能越权读取其他家庭。
-- 家庭共享先做 Web/PWA；Android 内测版本阶段不实现共享 UI。
+- 家庭共享先做 Web/PWA；Android 内测版提供房主邀请分享（生成链接 + 系统分享/复制），申请与审批以 Web 端为主。
 
 ## 位置编辑与位置筛选验收路径
 
@@ -626,7 +626,7 @@
 - 权限模型：owner 与 member 对家庭内区域、位置、物品拥有相同查看/新增/编辑/删除权限；仅 owner 可邀请成员、移除成员、更新和删除家庭。
 - 数据归属：数据属于 household；成员被移除后立即失去访问权，家庭数据保留。
 - 家庭形态：一个账号可属于多个家庭（默认家庭 + 被邀请加入的家庭），UI 提供“当前家庭”切换器；所有清单操作基于当前家庭。
-- 边界：第一版不做真实邮件通知、房主转让、成员自助退出、多家庭数据合并；Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容。
+- 边界：第一版不做真实邮件通知、房主转让、成员自助退出、多家庭数据合并；Android 内测版提供房主邀请分享（生成链接 + 系统分享/复制），申请与审批以 Web 端为主，服务端权限模型保持兼容。
 - 真源落点：`dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/database-design.md`、`dev-docs/acceptance.md`、`dev-docs/stages/family-sharing.md`。
 - 实施状态：设计已确认并写入真源；migration、代码、权限负例和浏览器验收均未开始，等待用户确认实施计划后启动。
 
@@ -652,6 +652,17 @@
 - 本地验证：`npm test` 39 个测试文件 / 268 通过（2 个 PostgreSQL 集成占位跳过）；`npm run lint` 通过；`npm run build` 通过。
 - 清理证据：冒烟测试账号（famsmoke-*/famurl-*）已从数据库删除（DELETE 5，剩余 0）。
 - 未完成：真实浏览器点击验收、邀请链接落地页 APK 下载与服务器托管、Android 端联动、`origin/main` 补推、生产级备份/监控。
+
+## 2026-08-06 Android 内测版邀请分享与 APK 托管证据
+
+- 用户确认 Android App 内提供“邀请家人/分享”能力：房主在 App 内生成邀请链接，通过系统分享面板/复制发给家人。
+- Android 代码证据：`HomeInventoryApi` 新增 `POST api/family/invitations`；`InventoryRepository.createInvitationLink()` 基于当前 household 生成链接（家庭未加载时返回明确错误，服务端拒绝时透传服务端消息）；`DashboardViewModel` 新增邀请状态与 `generateInvitationLink()`；顶栏新增“邀请”按钮，`InviteDialog` 支持复制链接与 Android 系统分享（`ACTION_SEND`）。
+- TDD 证据：`InventoryRepositoryTest` 新增链接生成成功/家庭未加载/服务端拒绝 3 个用例；`DashboardViewModelTest` 新增成功与失败 2 个用例；`TestApiStub` 同步补充 `createInvitation`。
+- 版本与构建证据：`versionCode=3`、`versionName=0.2.0`；`gradlew :app:testDebugUnitTest :app:assembleDebug` 构建成功，APK 19,800,557 字节。本环境 AGP 的 JdkImageTransform 无法启动 javac，因 `minSdk=26` 已自带 `java.time`，关闭 core library desugaring（`isCoreLibraryDesugaringEnabled=false`）后构建通过，已写入 `android/app/build.gradle.kts` 注释说明。
+- APK 托管证据：`scripts/upload-apk.ps1` 自动构建并上传 APK 与 `version.json`；线上 `https://homestorag.xyz/apk/home-inventory-internal-latest.apk` 返回 HTTP 200，`/apk/version.json` 返回版本 0.2.0 / code 3 / 19,800,557 字节。
+- 落地页证据：服务器 `app.env` 已配置 `NEXT_PUBLIC_APK_DOWNLOAD_URL`，Web 重建后 `/join/<token>` 未登录页显示“下载 Android App（内测版）”按钮（线上验证通过）。
+- 线上验证后临时账号已清理（DELETE 1，剩余 0）。
+- 未完成：Android 真机安装点击验收（App 内“邀请”→ 系统分享 → 家人申请 → 房主批准）、Android App 启动时版本检查更新提示。
 
 ## 2026-08-04 Excel 批量备份与导入证据
 
