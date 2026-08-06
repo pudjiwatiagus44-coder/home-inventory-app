@@ -329,7 +329,7 @@
 | 第一闭环 | 用户注册到管理物品的完整流程跑通 | 代码闭环已完成；仍需用户验收陪跑 |
 | 数据影响 | 数据创建、更新、删除证据 | 已有代码、用户反馈和 RLS 负例证据；仍需完整浏览器陪跑 |
 | 权限安全 | RLS 设计、migration、真实 Supabase 用户 A/B 负例 | 已验证，13 项通过 / 0 项失败 |
-| 家庭共享 | 设计已确认；migration 与代码已实现并通过本地测试/lint/build；真实 Supabase 负例和浏览器验收未完成 | 实施中（本地已验证） |
+| 家庭共享 | 设计已确认；自托管实现已上线 `homestorag.xyz`，线上 smoke 覆盖邀请/申请/批准/共同访问/移除；浏览器点击验收与 Android 联动待补 | 已上线（待浏览器验收） |
 | 第三方 | Supabase 官方文档和 sandbox/API 证据 | 部分确认 |
 | 部署路线 | `dev-docs/deployment-route.md` 已确认；阿里云测试环境已部署 | 阿里云测试 URL 已完成公网 API smoke；完整浏览器点击验收未完成 |
 | 中国大陆正式版路线 | `dev-docs/deployment-route.md` 和 `dev-docs/stages/mainland-production-route.md` 已记录 | 已确认目标；测试环境已跑通，正式 HTTPS/备案/生产验收未完成 |
@@ -638,7 +638,20 @@
 - UI 证据：`FamilySettings.tsx` 家庭设置面板（生成/复制/作废邀请链接、批准/拒绝申请、成员列表与移除）和当前家庭切换器已接入 `/app` 的 Supabase 测试路线；自托管路线的“设置”按钮提示该能力尚未上线。
 - TDD 证据：先新增 `family-data.test.ts` / `family-actions.test.ts` 27 个测试，先看到模块缺失失败，再实现后转绿。
 - 本地验证证据：`npm test` 通过 36 个测试文件 / 252 个测试（2 个 PostgreSQL 集成占位跳过）；`npm run lint` exit code 0；`npm run build` exit code 0，Next.js 16.2.10 构建成功，生成 `/join/[token]` 动态路由。
-- 未完成：真实 Supabase 执行 migration、家庭共享权限负例、真实浏览器验收陪跑、自托管路线同步实现、APK 服务器托管与自动上传。
+- 未完成（后续更新见“2026-08-06 家庭成员共享自托管上线证据”）：真实浏览器验收陪跑、APK 服务器托管与自动上传、Android 端联动。
+
+## 2026-08-06 家庭成员共享自托管上线证据
+
+- 用户确认实施路线改为自托管（`homestorag.xyz`），不以 Supabase 为实施目标（访问不便）。
+- 数据库证据：`dev-docs/sql/family_sharing_self_hosted.sql` 已在服务器 `home_inventory_test` 执行成功（`household_invitations`、`household_join_requests`、部分唯一索引），并授予应用角色 `home_inventory_app` 全部权限。
+- 部署证据：本地 `main` 通过 git bundle 传输到服务器（GitHub 推送因网络暂时不可用，待网络恢复后补推 `origin/main`）；旧目录备份为 `/opt/home-inventory-app.bak.family.20260806`；`npm ci` 与 `npm run build` 成功，构建路由包含全部 family 接口；`home-inventory-app.service` 重启后 `active`，`https://homestorag.xyz/login` 返回 200。
+- 链接域名修复：Nginx 增加 `X-Forwarded-Host`，服务端用转发头生成公开域名；线上邀请链接为 `https://homestorag.xyz/join/<token>`。
+- 线上 smoke 证据（13 步全通过）：注册临时用户 A/B → A 创建邀请链接（30 天有效）→ B 批准前读 A 家庭 dashboard 返回 404 → B 通过 `/api/join/<token>` 查询家庭信息 → B 提交申请 → A 看到 pending 申请（含邮箱）→ A 批准 → B 的 `/api/family/households` 出现 A 家庭（role=member）且可读 A 家庭 dashboard 200 → A 成员列表显示 B → A 移除 B → B 家庭列表不再包含 A 家庭、读 A 家庭 dashboard 404 → A 数据仍可读 200。
+- 落地页证据：`/join/<token>` 未登录显示“加入家人的清单 / 去登录 / 注册”，已登录显示“申请加入”。
+- 权限负例：未批准不可访问、批准后可读写、移除立即失效在线上 smoke 验证通过；member 不能管理成员/邀请、非 owner 不能批准由单元测试覆盖（`family-service.test.ts`、`family-handlers.test.ts`）。
+- 本地验证：`npm test` 39 个测试文件 / 268 通过（2 个 PostgreSQL 集成占位跳过）；`npm run lint` 通过；`npm run build` 通过。
+- 清理证据：冒烟测试账号（famsmoke-*/famurl-*）已从数据库删除（DELETE 5，剩余 0）。
+- 未完成：真实浏览器点击验收、邀请链接落地页 APK 下载与服务器托管、Android 端联动、`origin/main` 补推、生产级备份/监控。
 
 ## 2026-08-04 Excel 批量备份与导入证据
 

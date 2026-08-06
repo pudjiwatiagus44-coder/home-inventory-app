@@ -47,10 +47,9 @@
 - 前端：`family-client.ts`（HTTP）与 `FamilySettings.tsx`（生成/复制/作废链接、批准/拒绝申请、成员列表与移除）已接入 `/app`；当前家庭切换器在自托管与 Supabase 分支均可用；链接落地页 `/join/<token>` 为服务端组件（cookie session），含申请加入与 Android APK 下载入口。
 - 验证：`npm test` 39 个测试文件 / 268 通过；`npm run lint` 通过；`npm run build` 通过并生成全部 family 路由。
 
-未完成（部署与后续阶段）：
+未完成（后续阶段）：
 
-- 在 `homestorag.xyz` 服务器数据库执行自托管 SQL 并部署代码（本轮进行）。
-- 家庭共享权限负例（未申请不可访问、批准后可读写、member 不能管理、移除立即失效、无效 token 不能申请、非 owner 不能批准）线上验证。
+- 2026-08-06 已上线：自托管 SQL 已在服务器执行，代码已部署到 `homestorag.xyz`；线上 smoke 覆盖未申请不可访问、批准后可读写、移除立即失效、成员列表与移除（证据见 `dev-docs/acceptance.md`）。
 - 真实浏览器验收陪跑（房主生成链接 → 家人申请 → 批准 → 共同编辑 → 移除成员）。
 - Android APK 服务器托管、构建后自动上传和版本检查更新。
 
