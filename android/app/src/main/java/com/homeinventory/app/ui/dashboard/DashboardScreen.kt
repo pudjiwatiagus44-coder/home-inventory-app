@@ -3,27 +3,21 @@ package com.homeinventory.app.ui.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.homeinventory.app.ui.dashboard.components.AreaStrip
 import com.homeinventory.app.ui.dashboard.components.FloatingAddButton
 import com.homeinventory.app.ui.dashboard.components.ItemList
 import com.homeinventory.app.ui.dashboard.components.LocationStrip
+import com.homeinventory.app.ui.dashboard.components.SearchBar
 import com.homeinventory.app.ui.dashboard.components.TopBar
 import com.homeinventory.app.ui.theme.Background
-import com.homeinventory.app.ui.theme.SurfaceMuted
 
 @Composable
 fun DashboardScreen(
@@ -62,13 +56,9 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TextField(
+            SearchBar(
                 value = state.filters.search,
-                onValueChange = onSearchChange,
-                placeholder = { Text("搜索物品（名称 / 类别 / 位置 / 备注）", fontSize = 13.sp) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                onChange = onSearchChange,
             )
             AreaStrip(
                 areas = state.areas,

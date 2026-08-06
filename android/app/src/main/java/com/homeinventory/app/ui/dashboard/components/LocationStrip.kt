@@ -73,7 +73,9 @@ fun LocationStrip(
                         )
                         .size(width = 84.dp, height = 58.dp)
                         .padding(vertical = 4.dp)
-                        .clickable { onSelectLocation(location.id) },
+                        .clickable {
+                            onSelectLocation(if (selected) null else location.id)
+                        },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

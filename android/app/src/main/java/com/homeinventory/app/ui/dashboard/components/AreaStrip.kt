@@ -61,7 +61,9 @@ fun AreaStrip(
                             shape = RoundedCornerShape(9.dp),
                         )
                         .size(width = 84.dp, height = 52.dp)
-                        .clickable { onSelectArea(area.id) },
+                        .clickable {
+                            onSelectArea(if (selected) null else area.id)
+                        },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
