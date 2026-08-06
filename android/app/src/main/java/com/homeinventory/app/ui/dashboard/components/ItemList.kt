@@ -2,6 +2,8 @@ package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -20,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +38,9 @@ import com.homeinventory.app.ui.theme.Border
 import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.SurfaceMuted
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ItemList(
     items: List<DashboardUiItem>,
@@ -44,9 +50,18 @@ fun ItemList(
     isEmpty: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     Column(modifier = modifier) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {},
+                    onDoubleClick = {
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -73,6 +88,7 @@ fun ItemList(
             )
         } else {
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(bottom = 104.dp),
             ) {
                 items(items, key = { it.id }) { item ->
