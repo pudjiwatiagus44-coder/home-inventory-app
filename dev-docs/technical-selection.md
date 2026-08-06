@@ -108,11 +108,12 @@ MVP 选择：Supabase Postgres。
 - `profiles`
 - `households`
 - `household_members`
+- `household_invitations`
 - `areas`
 - `locations`
 - `items`
 
-第一版虽然不做家庭共享，但保留 household 概念，避免未来共享功能大迁移。
+2026-08-06 已确认将家庭成员共享纳入当前范围：`households` / `household_members` 承载共享，`household_invitations` 承载邀请链接，`household_join_requests` 承载加入申请；areas/locations/items 继续按 `household_id` 归属，不需要更换数据库。
 
 ## 运行时和部署边界
 
@@ -177,4 +178,5 @@ MVP 选择：Supabase Postgres。
 - Android 不直连 PostgreSQL，不保存数据库密码、service role key、私钥或真实云密钥。
 - Android 第一阶段包含离线缓存和离线编辑；离线新增在网络恢复后自动同步。
 - 离线编辑和删除的冲突策略为服务器优先：不自动覆盖服务器较新数据。
-- 本例外不包含应用商店上架、正式签名发布、推送通知、照片上传、扫码识别、AI 识别、支付、家庭共享或 iOS 实现。
+- 本例外不包含应用商店上架、正式签名发布、推送通知、照片上传、扫码识别、AI 识别、支付或 iOS 实现。
+- 家庭成员共享先做 Web/PWA（2026-08-06 确认）；Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容。

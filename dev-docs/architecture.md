@@ -66,12 +66,14 @@ auth.users
   -> profiles
   -> households
   -> household_members
+  -> household_invitations
+  -> household_join_requests
   -> areas
   -> locations
   -> items
 ```
 
-第一版虽然不做家庭成员共享，但仍保留 `households` 概念。每个用户注册后自动拥有一个默认家庭空间，后续扩展共享时不需要大迁移。
+每个用户注册后自动拥有一个默认家庭空间。2026-08-06 已确认将家庭成员共享纳入当前范围，`households` / `household_members` 直接承载共享，`household_invitations` 承载邀请链接，`household_join_requests` 承载加入申请；areas / locations / items 继续以 `household_id` 归属家庭，不需要因共享做数据迁移。
 
 ### profiles
 
@@ -90,8 +92,33 @@ auth.users
 
 - `household_id`
 - `user_id`
-- `role`：第一版仅 `owner`
+- `role`：`owner` / `member`；owner 管理家庭与成员，owner 与 member 对家庭内库存数据权限相同
 - `created_at`
+
+### household_invitations
+
+- `id`
+- `household_id`
+- `token`：随机不可猜的分享令牌，URL-safe
+- `created_by`：生成链接的 owner
+- `created_at`
+- `updated_at`
+- `expires_at`：默认 30 天
+- `revoked_at`：作废时间，为空表示有效
+
+邀请链接不绑定具体成员：拿到链接的人都可以提交申请；链接有效期和作废状态决定能否申请。链接通过微信等外部渠道手动发送，不接入微信授权。
+
+### household_join_requests
+
+- `id`
+- `household_id`
+- `user_id`：申请人
+- `status`：`pending` / `approved` / `rejected`
+- `created_at`
+- `decided_at`
+- `decided_by`：审批人（owner）
+
+每个账号对同一家庭最多一条 `pending` 申请；批准后由安全函数创建 `member` 成员关系。
 
 ### areas
 
@@ -127,8 +154,13 @@ auth.users
 
 ## 权限边界
 
-- 用户只能读取自己所属 household 的数据。
-- 用户只能写入自己所属 household 的 areas、locations、items。
+- 用户只能读取自己是成员的 household 的数据。
+- 用户只能写入自己是成员的 household 的 areas、locations、items。
+- `owner` 与 `member` 对 household 内 areas、locations、items 的读写权限相同（RLS 均按成员关系判断）。
+- 只有 `owner` 能邀请成员、移除成员、更新和删除 household。
+- 成员关系只能通过注册初始化函数（owner）或房主批准申请（member）创建；不允许普通前端直接插入/修改 `household_members`。
+- 申请必须通过有效邀请链接提交（安全函数校验 token），批准前不拥有任何家庭数据访问权；只有 owner 能批准或拒绝申请。
+- 数据属于 household：成员被移除后立即失去访问权，数据保留在 household 内。
 - 第一版没有管理员读取用户数据的功能。
 - 前端可以显示或隐藏按钮，但真正权限必须由 RLS 保证。
 - public schema 中暴露给前端的用户数据表必须启用 RLS。
@@ -147,6 +179,44 @@ auth.users
   -> 前端展示成功、失败、空状态或权限错误
 ```
 
+家庭成员邀请与加入流程：
+
+```text
+房主在家庭设置生成邀请链接（token，默认 30 天有效）
+  -> 房主通过微信等渠道把链接发给对方
+  -> 对方打开链接落地页：看到家庭名称、Android 内测 App 下载入口和“申请加入”按钮
+  -> 未登录用户先注册/登录（登录后回到链接页）
+  -> 调用 submit_household_join_request(token)
+  -> 安全函数校验 token 有效且未作废
+  -> 创建 household_join_requests（status = pending）
+  -> 房主在家庭设置看到加入申请并批准
+  -> 调用 approve_household_join_request
+  -> 创建 household_members（role = member），申请状态改为 approved
+  -> 成员刷新后在“当前家庭”切换器中看到并进入该家庭
+```
+
+链接落地页的 App 下载入口指向 Android 内测 APK 的服务器静态托管地址（部署配置项，不硬编码到业务代码）；每次 Android 构建后自动上传最新 APK 并更新版本信息，落地页与 App 通过版本信息检查最新版，安装由用户确认，不做静默安装。
+
+成员移除流程：
+
+```text
+房主在成员列表选择移除成员
+  -> 删除 household_members 中该成员的记录（RLS 仅允许 owner 且不能移除自己）
+  -> 该成员下一次请求即被 RLS 拒绝访问家庭数据
+  -> 家庭内 areas/locations/items 数据保持不变
+```
+
+## 2026-08-06 家庭成员共享架构决策
+
+- 邀请方式：房主生成分享链接（token，默认 30 天有效，可作废/重新生成，同一家庭同一时间一个有效链接），通过微信等外部渠道手动发送；对方打开链接注册/登录后提交加入申请，房主批准后成为成员。第一版不发真实邮件，不接入微信授权或微信开放平台。
+- 链接落地页：展示家庭名称、“申请加入”按钮和 Android 内测版 App 下载入口；下载地址为部署配置项。
+- 权限：`owner` / `member` 对库存数据权限相同；仅 `owner` 可管理成员和家庭；不做角色变更、不做房主转让。
+- 数据归属：数据属于 household；成员被移除后数据保留、访问立即失效。
+- 家庭形态：一个账号可属于多个家庭，UI 提供“当前家庭”切换器；所有清单请求基于当前家庭，服务端仍从 session 推导用户和家庭，不接受客户端伪造可信 `householdId`。
+- 家庭切换器的“当前家庭”选择只是前端状态；真正可访问哪些家庭由 RLS 依据 membership 决定，前端不能靠切换器越权读取其他家庭。
+- 现有 areas/locations/items 的 member-only RLS 天然支持共享，无需改动；需要新增的是 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）、成员管理 RLS 以及提交申请/批准申请的安全函数。
+- 家庭共享先做 Web/PWA；Android 内测版暂不实现共享 UI，但服务端权限模型保持兼容，Android 仍按当前 session 推导的 household 读取数据。
+
 ## 验证方式
 
 - 本地启动命令：待 scaffold 后确认，预期为 `npm run dev`。
@@ -155,6 +225,7 @@ auth.users
 - UI 验证：注册、登录、新增位置、新增物品、搜索、编辑、删除、退出。
 - API/数据库验证：检查 Supabase 表数据。
 - 权限负例：用户 B 不能读写用户 A 的 household 数据。
+- 家庭共享负例：未提交申请或被拒绝的账号不能读写家庭数据；被移除成员立即失去访问；member 不能邀请/移除成员或改角色。
 - Git checkpoint：第一阶段文档和代码分别小步提交。
 
 ## 2026-08-04 Excel 批量备份与导入架构
@@ -177,3 +248,4 @@ auth.users
 - 离线新增使用本地临时 id 和 `pending_create` 状态；网络恢复后 Android 自动提交，成功后替换为服务器 id 与最新 `updatedAt`。
 - 离线编辑和删除进入 `pending_operations` 队列；恢复网络后按队列提交，冲突时服务器状态优先，客户端展示需用户重新确认的状态。
 - 第一版同步触发点：登录后、App 启动、手动刷新/同步、网络恢复、在线写入成功后。不做后台长时间同步、推送实时同步或复杂合并 UI。
+- 家庭成员共享先做 Web/PWA（2026-08-06 确认）；Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容，Android 仍按当前 session 推导的 household 读取数据。

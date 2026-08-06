@@ -484,7 +484,7 @@ Next.js
 
 ### household_members
 
-第一版只创建 owner 成员，为后续家庭共享保留结构。
+2026-08-06 已确认家庭成员共享纳入范围：owner 由注册初始化创建，member 通过“邀请链接 + 自主申请 + 房主批准”加入；共享先做 Supabase 路线，正式版迁移时同步承载相同权限模型。
 
 - `household_id uuid not null references households(id) on delete cascade`
 - `user_id uuid not null references users(id) on delete cascade`
@@ -643,7 +643,7 @@ Supabase session
 
 停止条件：
 
-- 如果需要改 MVP 产品范围，例如家庭共享、手机号、照片、扫码，必须先询问用户。
+- 如果需要改 MVP 产品范围（例如新增手机号、照片、扫码等当前范围外能力），必须先询问用户。
 
 ### 子阶段 2：自有认证表与 session 设计
 
@@ -886,7 +886,7 @@ Supabase session
 ## 必须停止并询问
 
 - 要改变技术路线，例如放弃阿里云、改用 Firebase、自建非 Next.js 后端或原生 App 先行。
-- 要新增手机号短信、社交登录、支付、上传、AI 识别、扫码、家庭共享、管理员后台。
+- 要新增手机号短信、社交登录、支付、上传、AI 识别、扫码、管理员后台。
 - 需要真实云账号、真实密钥、真实用户数据或生产环境操作。
 - 项目目标、MVP、不做什么、验收标准发生变化。
 

@@ -36,13 +36,16 @@
 - `profiles`
 - `households`
 - `household_members`
+- `household_invitations`
 - `areas`
 - `locations`
 - `items`
 
+2026-08-06 已确认家庭成员共享纳入产品范围（先做 Supabase 路线）：正式版迁移时，`household_invitations`（邀请链接）、`household_join_requests`（加入申请）、member 角色和“当前家庭”模型同步承载，具体设计以 `dev-docs/database-design.md` 为准。
+
 ## 关键权限边界
 
-- 每个用户第一版只有一个默认 household。
+- 每个用户注册时有一个默认 household；2026-08-06 起一个账号可属于多个 household（默认家庭 + 被邀请加入的家庭），服务端必须基于当前用户实际 membership 校验访问，前端传入的“当前家庭”不可信。
 - 所有业务数据通过 `household_id` 收敛。
 - 前端传入的 `household_id`、`area_id`、`location_id`、`item_id` 都不可信。
 - 服务端写入前必须确认当前用户属于目标 household。
@@ -59,3 +62,4 @@
 2. session 默认有效期已确认为 30 天。
 3. 测试阶段先不做邮箱验证和密码重置；正式公开前必须补齐。
 4. 在本地 PostgreSQL 或阿里云测试 PostgreSQL 中演练 migration。
+5. 家庭共享相关表与权限随 `dev-docs/database-design.md` 同步进正式版 schema 草案（当前尚未写入 `sql/mainland_initial_schema.sql`）。

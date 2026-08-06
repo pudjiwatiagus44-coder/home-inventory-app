@@ -53,7 +53,7 @@
 | 当前本地版置物管理系统 | 已验证“位置 + 物品 + 搜索 + 过期提醒”是有效核心模型 | 保留低成本录入、按位置查找、快速搜索 | 不复制 Python + JSON、本地局域网、无账号假设 | 只学习信息结构和使用习惯，云端实现从 Supabase/RLS 开始 |
 | Supabase Auth / RLS 官方文档 | 本阶段依赖 Supabase 登录和行级权限 | 用数据库 RLS 做权限兜底 | 不把权限只放在前端按钮显示层 | 每个用户只能访问自己 household 的数据 |
 | Supabase Next.js quickstart | 本阶段使用 Next.js + Supabase client | 学习官方 client 初始化和 session 调用方式 | 不引入自建后端或 service role key 到浏览器 | 继续沿用现有 `src/lib/supabase/` 初始化层 |
-| Homebox / Grocy 等家庭库存产品 | 同属家庭物品/库存管理 | 位置、物品、搜索、到期信息是常见核心 | 不复制复杂资产管理、扫码、照片、多人共享、库存流水 | 第一版只做个人私有清单，保持小闭环 |
+| Homebox / Grocy 等家庭库存产品 | 同属家庭物品/库存管理 | 位置、物品、搜索、到期信息是常见核心 | 不复制复杂资产管理、扫码、照片、库存流水 | 第一版先做个人私有清单，家庭共享按 `dev-docs/stages/family-sharing.md` 另立阶段 |
 
 参考扫描状态：已记录方向性参考；未做深度竞品流程复刻。若后续要做更完整信息架构或视觉设计，应单独补 `dev-docs/frontend-design.md`。
 
@@ -85,7 +85,6 @@
 
 本阶段明确不做：
 
-- 家庭成员共享。
 - 照片或附件上传。
 - 扫码识别。
 - AI 图片识别。
@@ -133,7 +132,7 @@
 | 风险等级 | 标准任务 |
 | 当前 owner | `src/features/inventory/AppDashboard.tsx` 负责表单 UI；`src/features/inventory/dashboard-data.ts` 负责位置筛选和编辑态区域推导 |
 | 推荐插入路线 | 复用现有 `areas`、`locations.area_id`、`items.location_id`；为物品表单增加前端 `areaId` 状态，用区域筛选位置下拉，保存时仍只提交 `location_id` |
-| 拒绝路线 | 不新增数据库字段；不修改 RLS；不新增家庭共享、照片、扫码、支付；不把物品直接绑定到区域字段；不引入新的后端写入路径 |
+| 拒绝路线 | 不新增数据库字段；不修改 RLS；不新增照片、扫码、支付；家庭共享另立阶段；不把物品直接绑定到区域字段；不引入新的后端写入路径 |
 
 ### 2026-07-04 补充体验：移动端搜索入口置顶
 
@@ -440,7 +439,7 @@
 - 需要改登录方式或 session 管理方式。
 - 需要引入自建后端、Next.js route handler 或 server action 来承载核心写入。
 - 需要真实 service role key、数据库密码或生产用户数据。
-- 想加入照片上传、扫码、家庭共享、支付、管理员后台。
+- 想加入照片上传、扫码、支付、管理员后台。
 - Supabase migration 与 `dev-docs/database-design.md` 不一致。
 - 权限负例失败，用户 B 能读写用户 A 数据。
 
@@ -458,7 +457,7 @@
 
 - 已确认本阶段加入区域 CRUD。
 - 已确认区域是位置的上属，物品通过位置归入区域。
-- 本阶段仍不加入家庭共享、照片、扫码、AI 识别、支付、原生 App。
+- 本阶段仍不加入照片、扫码、AI 识别、支付、原生 App；家庭共享已于 2026-08-06 确认为独立阶段，实施计划见 `dev-docs/stages/family-sharing.md`。
 
 已确认可以进入代码实现。
 
