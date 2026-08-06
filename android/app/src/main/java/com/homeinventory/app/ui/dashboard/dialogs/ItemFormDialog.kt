@@ -17,6 +17,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +33,6 @@ import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Surface
-import com.homeinventory.app.ui.theme.Danger
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,25 +132,11 @@ fun ItemFormDialog(
                 label = { Text("备注") },
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                value = expireDate ?: "",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("过期日") },
-                placeholder = { Text("可选") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        DatePickerDialog(
-                            context,
-                            { _, year, month, day ->
-                                expireDate = "%04d-%02d-%02d".format(year, month + 1, day)
-                            },
-                            LocalDate.now().year,
-                            LocalDate.now().monthValue - 1,
-                            LocalDate.now().dayOfMonth,
-                        ).show()
-                    },
+            ExpireDateField(
+                expireDate = expireDate,
+                onPickDate = { date ->
+                    expireDate = date
+                },
             )
             errorMessage?.let {
                 Text(text = it, color = Danger, fontSize = 13.sp)
@@ -187,4 +173,37 @@ fun ItemFormDialog(
             }
         }
     }
+}
+
+@Composable
+private fun ExpireDateField(
+    expireDate: String?,
+    onPickDate: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+    OutlinedTextField(
+        value = expireDate ?: "",
+        onValueChange = {},
+        readOnly = true,
+        label = { Text("过期日") },
+        placeholder = { Text("可选") },
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) {
+                DatePickerDialog(
+                    context,
+                    { _, year, month, day ->
+                        onPickDate("%04d-%02d-%02d".format(year, month + 1, day))
+                    },
+                    LocalDate.now().year,
+                    LocalDate.now().monthValue - 1,
+                    LocalDate.now().dayOfMonth,
+                ).show()
+            },
+    )
 }
