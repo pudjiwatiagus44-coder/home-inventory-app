@@ -73,7 +73,7 @@ fun ItemList(
             )
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 88.dp),
+                contentPadding = PaddingValues(bottom = 104.dp),
             ) {
                 items(items, key = { it.id }) { item ->
                     ItemRow(item = item, onClick = { onEditItem(item) })
