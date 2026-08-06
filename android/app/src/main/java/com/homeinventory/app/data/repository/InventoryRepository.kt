@@ -21,6 +21,7 @@ import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
+import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.RemoteAreaDto
@@ -116,6 +117,58 @@ class InventoryRepository(
         }
 
         return Result.success(body.data.url)
+    }
+
+    suspend fun listJoinRequests(): Result<List<JoinRequestDto>> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        val response = try {
+            api.joinRequests(householdId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: "加载加入申请失败",
+                ),
+            )
+        }
+
+        return Result.success(body.data ?: emptyList())
+    }
+
+    suspend fun approveJoinRequest(requestId: String): Result<Unit> =
+        decideJoinRequest { api.approveJoinRequest(requestId) }
+
+    suspend fun rejectJoinRequest(requestId: String): Result<Unit> =
+        decideJoinRequest { api.rejectJoinRequest(requestId) }
+
+    private suspend fun decideJoinRequest(
+        call: suspend () -> retrofit2.Response<ApiEnvelope<Unit>>,
+    ): Result<Unit> {
+        val response = try {
+            call()
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: "处理申请失败",
+                ),
+            )
+        }
+
+        return Result.success(Unit)
     }
 
     suspend fun createItemOffline(

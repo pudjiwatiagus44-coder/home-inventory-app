@@ -11,6 +11,7 @@ import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
+import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
@@ -29,6 +30,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 data class LoginRequest(
     val email: String,
@@ -95,4 +97,13 @@ interface HomeInventoryApi {
 
     @POST("api/family/invitations")
     suspend fun createInvitation(@Body request: CreateInvitationRequest): Response<ApiEnvelope<InvitationLinkDto>>
+
+    @GET("api/family/join-requests")
+    suspend fun joinRequests(@Query("householdId") householdId: String): Response<ApiEnvelope<List<JoinRequestDto>>>
+
+    @POST("api/family/join-requests/{requestId}/approve")
+    suspend fun approveJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>
+
+    @POST("api/family/join-requests/{requestId}/reject")
+    suspend fun rejectJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>
 }

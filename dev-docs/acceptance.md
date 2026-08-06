@@ -662,7 +662,15 @@
 - APK 托管证据：`scripts/upload-apk.ps1` 自动构建并上传 APK 与 `version.json`；线上 `https://homestorag.xyz/apk/home-inventory-internal-latest.apk` 返回 HTTP 200，`/apk/version.json` 返回版本 0.2.0 / code 3 / 19,800,557 字节。
 - 落地页证据：服务器 `app.env` 已配置 `NEXT_PUBLIC_APK_DOWNLOAD_URL`，Web 重建后 `/join/<token>` 未登录页显示“下载 Android App（内测版）”按钮（线上验证通过）。
 - 线上验证后临时账号已清理（DELETE 1，剩余 0）。
-- 未完成：Android 真机安装点击验收（App 内“邀请”→ 系统分享 → 家人申请 → 房主批准）、Android App 启动时版本检查更新提示。
+- 未完成：Android 真机安装点击验收（App 内“邀请”→ 系统分享 → 家人申请 → App 内批准）、Android App 启动时版本检查更新提示。
+
+## 2026-08-06 Android 内测版申请审批证据
+
+- 用户确认 Android App 内完成房主审批：查看待处理加入申请，直接在 App 内批准或拒绝。
+- Android 代码证据：`HomeInventoryApi` 新增 `GET api/family/join-requests`、`POST api/family/join-requests/{id}/approve|reject`；`InventoryRepository` 新增 `listJoinRequests()` / `approveJoinRequest()` / `rejectJoinRequest()`（家庭未加载时明确报错，服务端拒绝透传消息）；`DashboardViewModel` 新增 `JoinRequestsUiState` 与刷新/批准/拒绝动作；`InviteDialog` 增加“加入申请”区块，展示申请人邮箱与申请时间，提供批准/拒绝按钮（处理中禁用）。
+- TDD 证据：`InventoryRepositoryTest` 新增申请列表成功/家庭未加载/批准被拒 3 个用例；`DashboardViewModelTest` 新增显示 pending/批准成功后移除/拒绝失败显示错误 3 个用例。
+- 版本与托管证据：`versionCode=4`、`versionName=0.3.0`，`gradlew :app:testDebugUnitTest :app:assembleDebug` 构建成功（19,816,941 字节）；已通过 `scripts/upload-apk.ps1` 上传服务器，`/apk/version.json` 显示 0.3.0 / code 4，APK URL 返回 HTTP 200。
+- 服务端审批接口在 App 端复用，之前线上 smoke 已验证批准后成员可读、移除后失效；App 真机点击验收待用户完成。
 
 ## 2026-08-04 Excel 批量备份与导入证据
 

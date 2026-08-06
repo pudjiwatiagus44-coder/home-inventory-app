@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard
 
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.remote.JoinRequestDto
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -166,6 +167,117 @@ class DashboardViewModelTest {
 
             assertEquals(null, viewModel.invitations().value.link)
             assertEquals("只有房主可以管理成员和邀请", viewModel.invitations().value.errorMessage)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun refreshJoinRequestsShowsPendingApplications() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadJoinRequests = {
+                    Result.success(
+                        listOf(
+                            JoinRequestDto(
+                                id = "request-1",
+                                userId = "user-2",
+                                email = "b@example.com",
+                                status = "pending",
+                            ),
+                        ),
+                    )
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.refreshJoinRequests()
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.joinRequestsState().value.requests.size)
+            assertEquals("b@example.com", viewModel.joinRequestsState().value.requests.single().email)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun approveJoinRequestRemovesRequestAfterSuccess() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var approved = false
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadJoinRequests = {
+                    Result.success(
+                        if (approved) {
+                            emptyList()
+                        } else {
+                            listOf(
+                                JoinRequestDto(
+                                    id = "request-1",
+                                    userId = "user-2",
+                                    email = "b@example.com",
+                                    status = "pending",
+                                ),
+                            )
+                        },
+                    )
+                },
+                approveJoinRequest = { requestId ->
+                    approved = true
+                    Result.success(Unit)
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.refreshJoinRequests()
+            advanceUntilIdle()
+            viewModel.approveRequest("request-1")
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.joinRequestsState().value.requests.size)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun rejectJoinRequestShowsErrorWhenFails() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadJoinRequests = {
+                    Result.success(
+                        listOf(
+                            JoinRequestDto(
+                                id = "request-1",
+                                userId = "user-2",
+                                email = "b@example.com",
+                                status = "pending",
+                            ),
+                        ),
+                    )
+                },
+                rejectJoinRequest = {
+                    Result.failure(IllegalStateException("只有房主可以管理成员和邀请"))
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.refreshJoinRequests()
+            advanceUntilIdle()
+            viewModel.rejectRequest("request-1")
+            advanceUntilIdle()
+
+            assertEquals("只有房主可以管理成员和邀请", viewModel.joinRequestsState().value.errorMessage)
+            assertEquals(1, viewModel.joinRequestsState().value.requests.size)
         } finally {
             Dispatchers.resetMain()
         }

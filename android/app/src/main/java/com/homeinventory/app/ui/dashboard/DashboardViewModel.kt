@@ -2,6 +2,7 @@ package com.homeinventory.app.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.repository.InventorySnapshot
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -50,11 +51,27 @@ data class InviteUiState(
     val errorMessage: String? = null,
 )
 
+data class JoinRequestsUiState(
+    val requests: List<JoinRequestDto> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val pendingRequestId: String? = null,
+)
+
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
     private val createInvitation: suspend () -> Result<String> = {
         Result.failure(IllegalStateException("邀请功能不可用"))
+    },
+    private val loadJoinRequests: suspend () -> Result<List<JoinRequestDto>> = {
+        Result.success(emptyList())
+    },
+    private val approveJoinRequest: suspend (String) -> Result<Unit> = {
+        Result.failure(IllegalStateException("审批功能不可用"))
+    },
+    private val rejectJoinRequest: suspend (String) -> Result<Unit> = {
+        Result.failure(IllegalStateException("审批功能不可用"))
     },
     private val today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
@@ -62,6 +79,7 @@ class DashboardViewModel(
     private val sortMode = MutableStateFlow(ItemSortMode.ExpireSoon)
     private val refreshFlag = MutableStateFlow(0)
     private val invite = MutableStateFlow(InviteUiState())
+    private val joinRequests = MutableStateFlow(JoinRequestsUiState())
 
     fun invitations(): StateFlow<InviteUiState> = invite
 
@@ -86,6 +104,70 @@ class DashboardViewModel(
 
     fun clearInvitation() {
         invite.value = InviteUiState()
+    }
+
+    fun joinRequestsState(): StateFlow<JoinRequestsUiState> = joinRequests
+
+    fun refreshJoinRequests() {
+        if (joinRequests.value.isLoading) {
+            return
+        }
+
+        viewModelScope.launch {
+            joinRequests.value = joinRequests.value.copy(
+                isLoading = true,
+                errorMessage = null,
+            )
+            loadJoinRequests()
+                .onSuccess { requests ->
+                    joinRequests.value = JoinRequestsUiState(
+                        requests = requests.filter { it.status == "pending" },
+                    )
+                }
+                .onFailure { error ->
+                    joinRequests.value = joinRequests.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "加载加入申请失败",
+                    )
+                }
+        }
+    }
+
+    fun approveRequest(requestId: String) {
+        decideRequest(requestId, approveJoinRequest)
+    }
+
+    fun rejectRequest(requestId: String) {
+        decideRequest(requestId, rejectJoinRequest)
+    }
+
+    private fun decideRequest(
+        requestId: String,
+        action: suspend (String) -> Result<Unit>,
+    ) {
+        if (joinRequests.value.pendingRequestId != null) {
+            return
+        }
+
+        viewModelScope.launch {
+            joinRequests.value = joinRequests.value.copy(
+                pendingRequestId = requestId,
+                errorMessage = null,
+            )
+            action(requestId)
+                .onSuccess {
+                    joinRequests.value = joinRequests.value.copy(
+                        pendingRequestId = null,
+                    )
+                    refreshJoinRequests()
+                }
+                .onFailure { error ->
+                    joinRequests.value = joinRequests.value.copy(
+                        pendingRequestId = null,
+                        errorMessage = error.message ?: "处理申请失败",
+                    )
+                }
+        }
     }
 
     val state: StateFlow<DashboardUiState> =

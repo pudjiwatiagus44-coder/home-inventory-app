@@ -44,6 +44,7 @@ fun DashboardHost(
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsState()
     val inviteState by viewModel.invitations().collectAsState()
+    val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
@@ -150,6 +151,7 @@ fun DashboardHost(
         onInvite = {
             showInviteDialog = true
             viewModel.generateInvitationLink()
+            viewModel.refreshJoinRequests()
         },
         onSignOut = {
             scope.launch {
@@ -163,7 +165,11 @@ fun DashboardHost(
     if (showInviteDialog) {
         InviteDialog(
             state = inviteState,
+            joinRequests = joinRequestsState,
             onRegenerate = viewModel::generateInvitationLink,
+            onRefreshRequests = viewModel::refreshJoinRequests,
+            onApproveRequest = viewModel::approveRequest,
+            onRejectRequest = viewModel::rejectRequest,
             onDismiss = {
                 showInviteDialog = false
                 viewModel.clearInvitation()

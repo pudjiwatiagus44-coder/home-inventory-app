@@ -13,6 +13,7 @@ import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.InvitationLinkDto
+import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
@@ -199,6 +200,53 @@ class InventoryRepositoryTest {
         assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
     }
 
+    @Test
+    fun listJoinRequestsReturnsPendingRequests() = runTest {
+        val repository = repositoryWith(
+            api = RequestsApi(
+                listOf(
+                    JoinRequestDto(
+                        id = "request-1",
+                        userId = "user-2",
+                        email = "b@example.com",
+                        status = "pending",
+                        createdAt = "2026-08-06T00:00:00.000Z",
+                    ),
+                ),
+            ),
+        )
+        repository.refreshSnapshot()
+
+        val result = repository.listJoinRequests()
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, result.getOrNull()?.size)
+        assertEquals("b@example.com", result.getOrNull()?.single()?.email)
+    }
+
+    @Test
+    fun listJoinRequestsFailsWhenHouseholdNotLoaded() = runTest {
+        val repository = repositoryWith(
+            api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))),
+        )
+
+        val result = repository.listJoinRequests()
+
+        assertTrue(result.isFailure)
+        assertEquals("家庭信息未加载，请先刷新清单", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun approveJoinRequestFailsWhenServerRejects() = runTest {
+        val repository = repositoryWith(api = RejectingApprovalApi())
+        repository.refreshSnapshot()
+
+        val result = repository.approveJoinRequest("request-1")
+
+        assertTrue(result.isFailure)
+        assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
+    }
+
     private fun repositoryWith(api: TestApiStub): InventoryRepository =
         InventoryRepository(
             api = api,
@@ -222,6 +270,42 @@ private class FailingSnapshotApi(
     override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> {
         throw error
     }
+}
+
+private class RequestsApi(
+    private val requests: List<JoinRequestDto>,
+) : TestApiStub() {
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
+                ),
+            ),
+        )
+
+    override suspend fun joinRequests(householdId: String): Response<ApiEnvelope<List<JoinRequestDto>>> =
+        Response.success(ApiEnvelope(ok = true, data = requests))
+}
+
+private class RejectingApprovalApi : TestApiStub() {
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
+                ),
+            ),
+        )
+
+    override suspend fun approveJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
+        Response.error(
+            403,
+            """{"ok":false,"message":"只有房主可以管理成员和邀请"}"""
+                .toResponseBody("application/json".toMediaType()),
+        )
 }
 
 private class RecordingApi : TestApiStub() {

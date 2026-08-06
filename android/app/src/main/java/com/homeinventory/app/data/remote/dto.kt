@@ -186,3 +186,13 @@ data class InvitationLinkDto(
     val expiresAt: String? = null,
     val url: String,
 )
+
+data class JoinRequestDto(
+    val id: String,
+    @SerializedName("user_id")
+    val userId: String,
+    val email: String,
+    val status: String,
+    @SerializedName("created_at")
+    val createdAt: String? = null,
+)

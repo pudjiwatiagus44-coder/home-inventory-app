@@ -59,6 +59,9 @@ fun AppRoot() {
                     inventory = repository.observeInventory(),
                     syncPending = repository::syncPendingOperations,
                     createInvitation = repository::createInvitationLink,
+                    loadJoinRequests = repository::listJoinRequests,
+                    approveJoinRequest = repository::approveJoinRequest,
+                    rejectJoinRequest = repository::rejectJoinRequest,
                 )
             }
         }

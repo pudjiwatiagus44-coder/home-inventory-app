@@ -13,6 +13,7 @@ import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
+import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
@@ -81,4 +82,13 @@ abstract class TestApiStub : HomeInventoryApi {
                 ),
             ),
         )
+
+    override suspend fun joinRequests(householdId: String): Response<ApiEnvelope<List<JoinRequestDto>>> =
+        Response.success(ApiEnvelope(ok = true, data = emptyList()))
+
+    override suspend fun approveJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun rejectJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
 }
