@@ -14,6 +14,7 @@ import com.homeinventory.app.data.local.PendingOperationEntity
 import com.homeinventory.app.data.local.SyncStatus
 import com.homeinventory.app.data.local.SyncStateDao
 import com.homeinventory.app.data.local.SyncStateEntity
+import com.homeinventory.app.data.DateNormalizer
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApiEnvelope
@@ -490,7 +491,7 @@ class InventoryRepository(
                     locationId = item.locationId,
                     name = item.name,
                     note = item.note,
-                    expireDate = item.expireDate,
+                    expireDate = DateNormalizer.normalizeExpireDate(item.expireDate),
                     serverUpdatedAt = item.updatedAt,
                     localUpdatedAt = now,
                     syncStatus = SyncStatus.Synced,

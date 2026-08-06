@@ -4,6 +4,7 @@ import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +17,8 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,12 +27,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.ui.theme.Border
 import com.homeinventory.app.ui.theme.Danger
+import com.homeinventory.app.ui.theme.Foreground
+import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Surface
 import java.time.LocalDate
 
@@ -181,29 +186,37 @@ private fun ExpireDateField(
     onPickDate: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-    OutlinedTextField(
-        value = expireDate ?: "",
-        onValueChange = {},
-        readOnly = true,
-        label = { Text("过期日") },
-        placeholder = { Text("可选") },
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-            ) {
-                DatePickerDialog(
-                    context,
-                    { _, year, month, day ->
-                        onPickDate("%04d-%02d-%02d".format(year, month + 1, day))
-                    },
-                    LocalDate.now().year,
-                    LocalDate.now().monthValue - 1,
-                    LocalDate.now().dayOfMonth,
-                ).show()
-            },
-    )
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = expireDate ?: "",
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            label = { Text("过期日") },
+            placeholder = { Text("可选") },
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = Foreground,
+                disabledBorderColor = Border,
+                disabledLabelColor = MutedForeground,
+                disabledPlaceholderColor = MutedForeground,
+                disabledContainerColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable {
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            onPickDate("%04d-%02d-%02d".format(year, month + 1, day))
+                        },
+                        LocalDate.now().year,
+                        LocalDate.now().monthValue - 1,
+                        LocalDate.now().dayOfMonth,
+                    ).show()
+                },
+        )
+    }
 }
