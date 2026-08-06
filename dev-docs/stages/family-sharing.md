@@ -34,8 +34,26 @@
 
 - 2026-08-06 用户确认将家庭成员共享纳入当前范围，邀请方式为“微信链接 + 对方自主申请 + 房主批准”，链接落地页含 Android 内测 APK 下载入口。
 - 产品、架构、数据库、验收真源已更新；本实施计划已建立。
-- 未编写 migration、未修改 RLS、未写任何功能代码。
+- 2026-08-06 已进入实施：`supabase/migrations/202608060001_family_sharing.sql` 已编写；家庭数据层 `src/features/family/`、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器代码已实现并通过本地测试/lint/build。
 - Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容；APK 下载地址为部署配置项。
+
+## 实施状态（2026-08-06）
+
+已完成（本地验证通过）：
+
+- migration 文件：`household_invitations` / `household_join_requests` / 六个安全函数 / RLS 策略，与 `database-design.md` 一致。
+- 家庭数据层：`src/features/family/family-data.ts`（token、有效期、链接状态、校验）和 `family-actions.ts`（生成/作废链接、申请、批准/拒绝、成员管理、家庭列表）。
+- 链接落地页：`/join/<token>`，含登录/注册、申请加入、Android APK 下载入口（`NEXT_PUBLIC_APK_DOWNLOAD_URL`）。
+- 家庭设置面板 `FamilySettings.tsx` 与当前家庭切换器已接入 `/app`（Supabase 测试路线）。
+- 验证：`npm test` 36 个测试文件 / 252 通过；`npm run lint` 通过；`npm run build` 通过并生成 `/join/[token]` 路由。
+
+未完成（需要用户或后续阶段）：
+
+- 在真实 Supabase 项目执行 migration。
+- 家庭共享权限负例（未申请不可访问、批准后可读写、member 不能管理、移除立即失效、无效 token 不能申请、非 owner 不能批准）。
+- 真实浏览器验收陪跑（房主生成链接 → 家人申请 → 批准 → 共同编辑 → 移除成员）。
+- 自托管（中国大陆正式版）路线的同步实现：API routes + 服务端权限 + `mainland_initial_schema.sql` 对应表与函数。
+- Android APK 服务器托管、构建后自动上传和版本检查更新。
 
 ## 范围
 
@@ -44,7 +62,7 @@
 - 新建 `household_invitations`（邀请链接：token、有效期、作废时间）。
 - 新建 `household_join_requests`（加入申请：pending / approved / rejected）。
 - `household_members` 新增 owner 删除成员的 RLS（不能删除自己）；member 插入只走批准申请的安全函数。
-- 新增安全函数：`get_household_for_invitation(token)`、`submit_household_join_request(token)`、`approve_household_join_request(request_id)`、`reject_household_join_request(request_id)`。
+- 新增安全函数：`get_household_for_invitation(token)`、`submit_household_join_request(token)`、`approve_household_join_request(request_id)`、`reject_household_join_request(request_id)`、`list_household_members(household_id)`、`list_household_join_requests(household_id)`。
 - 房主家庭设置：生成/复制/作废邀请链接、查看加入申请并批准或拒绝、成员列表、移除成员。
 - 链接落地页：展示家庭名称、“申请加入”按钮、Android 内测 APK 下载入口；APK 由服务器静态托管，每次 Android 构建后自动上传最新版并更新版本信息，落地页与 App 检查版本提示更新；未登录先注册/登录后回到链接页。
 - 当前家庭切换器：登录后返回该账号的全部 household，UI 选择当前家庭，清单读写基于当前家庭。
@@ -69,7 +87,7 @@
 - `household_join_requests(id, household_id, user_id, status, created_at, decided_at, decided_by)`；同一账号对同一家庭最多一条 pending 申请。
 - `household_invitations` RLS：仅 owner 可 select/insert/delete；申请人只能通过安全函数使用 token。
 - `household_join_requests` RLS：owner 看自己家庭的申请，申请人看自己的申请；不开放普通 insert/update/delete。
-- 四个安全函数：查家庭、提交申请、批准（创建 member）、拒绝；调用方不能指定目标家庭。
+- 六个安全函数：查家庭、提交申请、批准（创建 member）、拒绝、成员列表、申请列表；调用方不能指定目标家庭。
 - areas / locations / items 现有 member-only 策略无需改动，天然支持共享。
 - 链接落地页的 APK 下载地址通过部署配置项注入（如 `NEXT_PUBLIC_APK_DOWNLOAD_URL`），不硬编码。
 

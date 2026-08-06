@@ -409,6 +409,8 @@ grant execute on function public.reject_household_join_request(uuid) to authenti
 - `approve_household_join_request` 只允许目标家庭的 owner 调用，批准后才创建 `member` 关系。
 - `reject_household_join_request` 只允许目标家庭的 owner 调用，拒绝不会创建成员关系；被拒绝后同一账号可以重新申请。
 - `household_join_requests` 不提供普通前端 insert/update/delete 策略，全部状态变更走安全函数。
+- `list_household_members(target_household_id)` 与 `list_household_join_requests(target_household_id)`：security definer 只读函数，分别向家庭成员返回成员列表、向 owner 返回申请列表（含邮箱）。邮箱是 PII，不通过普通表查询暴露，只能经这两个函数按成员/owner 校验后返回。
+- `household_invitations.created_by` 默认取 `auth.uid()`，插入策略只校验 owner 身份，前端无需也无法伪造创建人。
 
 ## RLS 策略设计
 
@@ -757,7 +759,7 @@ using (public.is_household_member(household_id));
 - `202607030002_reset_inventory_rls_policies.sql` 已作为真实 Supabase 项目 RLS 漂移的二次修复方案加入仓库；用户执行后二次反馈新增物品成功。
 - 2026-07-04 用户 A/B 权限负例已在真实 Supabase 项目验证：A 可创建自己的 area/location/item；B 读取 A 的 household/area/location/item 均为 0 行；B 向 A household 插入 area/item 被 RLS 拒绝；B 更新/删除 A item 返回 0 行；未登录 anon 读取 A item 返回 0 行。结果记录见 `dev-docs/acceptance.md`。
 - 当前证据支持第一版“用户只能访问自己 household 数据”的 RLS 边界。
-- 2026-08-06 家庭成员共享设计已写入真源（`project-brief.md` / `architecture.md` / `database-design.md` / `acceptance.md` / `stages/family-sharing.md`）：邀请方式为分享链接 + 自主申请 + 房主批准，链接落地页含 Android 内测 APK 下载入口。尚未编写 migration，未在任何数据库执行。
+- 2026-08-06 家庭成员共享设计已写入真源（`project-brief.md` / `architecture.md` / `database-design.md` / `acceptance.md` / `stages/family-sharing.md`）：邀请方式为分享链接 + 自主申请 + 房主批准，链接落地页含 Android 内测 APK 下载入口。migration（`202608060001_family_sharing.sql`）已编写并与本设计一致，尚未在任何数据库执行。
 
 ## 仍需补充验证
 

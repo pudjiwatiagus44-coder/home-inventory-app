@@ -23,6 +23,9 @@ import {
   LocationRow,
 } from "./dashboard-data";
 import { getOrCreateDefaultHouseholdId } from "./household-bootstrap";
+import { listHouseholdsForUser } from "../family/family-actions";
+import type { HouseholdOption } from "../family/family-data";
+import { FamilySettings } from "../family/FamilySettings";
 import {
   validateAreaInput,
   validateInventoryItemInput,
@@ -206,6 +209,11 @@ export function AppDashboard({
   const [itemSortMode, setItemSortMode] = useState<ItemSortMode>("expireSoon");
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [households, setHouseholds] = useState<HouseholdOption[]>([]);
+  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(
+    null,
+  );
+  const [showFamilySettings, setShowFamilySettings] = useState(false);
   const [importStatus, setImportStatus] = useState<
     | { status: "idle" }
     | { status: "loading" }
@@ -259,9 +267,25 @@ export function AppDashboard({
           return;
         }
 
-        const householdId = await getOrCreateDefaultHouseholdId(
+        const memberships = await listHouseholdsForUser(
           supabase,
-          userResult.data.user,
+          userResult.data.user.id,
+        );
+        const activeMembership =
+          memberships.find(
+            (household) => household.id === activeHouseholdId,
+          ) ?? memberships[0];
+        const householdId =
+          activeMembership?.id ??
+          (await getOrCreateDefaultHouseholdId(
+            supabase,
+            userResult.data.user,
+          ));
+
+        setHouseholds(
+          memberships.length > 0
+            ? memberships
+            : [{ id: householdId, name: "我的家庭", role: "owner" }],
         );
 
         const [householdResult, areasResult, locationsResult, itemsResult] =
@@ -323,7 +347,7 @@ export function AppDashboard({
         }
       }
     },
-    [selfHostedUser],
+    [activeHouseholdId, selfHostedUser],
   );
 
   useEffect(() => {
@@ -898,6 +922,20 @@ export function AppDashboard({
             <div className="min-w-0">
               <h1 className="truncate text-[18px] font-semibold leading-6">家中清单</h1>
             </div>
+            {!selfHostedUser && households.length > 1 ? (
+              <select
+                aria-label="切换家庭"
+                className="h-8 max-w-[150px] rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-[12px] outline-none focus:border-[var(--primary)]"
+                onChange={(event) => setActiveHouseholdId(event.target.value)}
+                value={activeHouseholdId ?? ""}
+              >
+                {households.map((household) => (
+                  <option key={household.id} value={household.id}>
+                    {household.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
           <div className="hidden h-10 min-w-0 items-center gap-2 lg:flex">
             <label className="relative min-w-0 flex-1">
@@ -971,6 +1009,14 @@ export function AppDashboard({
             </button>
             <button
               className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
+              onClick={() => {
+                if (selfHostedUser) {
+                  setFormMessage("家庭共享当前仅在 Supabase 测试路线可用");
+                  return;
+                }
+
+                setShowFamilySettings(true);
+              }}
               type="button"
             >
               设置
@@ -2450,6 +2496,19 @@ export function AppDashboard({
             </form>
           </section>
         </div>
+      ) : null}
+
+      {showFamilySettings && state.status === "ready" ? (
+        <FamilySettings
+          householdId={state.summary.householdId}
+          householdName={state.summary.householdName}
+          isOwner={
+            households.find(
+              (household) => household.id === state.summary.householdId,
+            )?.role === "owner"
+          }
+          onClose={() => setShowFamilySettings(false)}
+        />
       ) : null}
     </div>
   );
