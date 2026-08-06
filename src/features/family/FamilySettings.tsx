@@ -1,21 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  approveHouseholdJoinRequest,
-  createHouseholdInvitationLink,
-  listHouseholdInvitations,
-  listHouseholdJoinRequests,
-  listHouseholdMembers,
-  rejectHouseholdJoinRequest,
-  removeHouseholdMember,
-  revokeHouseholdInvitationLink,
-} from "./family-actions";
 import {
   getInvitationStatus,
   type FamilyJoinRequestRow,
   type FamilyMemberRow,
+  type FamilySettingsClient,
   type InvitationLinkRow,
 } from "./family-data";
 
@@ -23,6 +13,7 @@ type FamilySettingsProps = {
   householdId: string;
   householdName: string;
   isOwner: boolean;
+  client: FamilySettingsClient;
   onClose: () => void;
 };
 
@@ -34,6 +25,7 @@ export function FamilySettings({
   householdId,
   householdName,
   isOwner,
+  client,
   onClose,
 }: FamilySettingsProps) {
   const [links, setLinks] = useState<InvitationLinkRow[]>([]);
@@ -44,28 +36,18 @@ export function FamilySettings({
   const [isGenerating, setIsGenerating] = useState(false);
 
   const refresh = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
-
     const [linksResult, requestsResult, membersResult] = await Promise.all([
-      listHouseholdInvitations(supabase, { householdId }).catch((error) => {
-        throw error;
-      }),
+      client.listInvitations(householdId),
       isOwner
-        ? listHouseholdJoinRequests(supabase, { householdId }).catch(
-            (error) => {
-              throw error;
-            },
-          )
+        ? client.listJoinRequests(householdId)
         : Promise.resolve([]),
-      listHouseholdMembers(supabase, { householdId }).catch((error) => {
-        throw error;
-      }),
+      client.listMembers(householdId),
     ]);
 
     setLinks(linksResult);
     setRequests(requestsResult);
     setMembers(membersResult);
-  }, [householdId, isOwner]);
+  }, [client, householdId, isOwner]);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,18 +79,14 @@ export function FamilySettings({
     setIsGenerating(true);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const result = await createHouseholdInvitationLink(supabase, {
-        householdId,
-        origin: window.location.origin,
-      });
+      const result = await client.createInvitationLink(householdId);
 
       await navigator.clipboard?.writeText(result.url);
       setMessage({
         kind: "info",
         text: `邀请链接已生成并复制：${result.url}`,
       });
-      setLinks(await listHouseholdInvitations(supabase, { householdId }));
+      setLinks(await client.listInvitations(householdId));
     } catch (error) {
       setMessage({
         kind: "error",
@@ -127,9 +105,8 @@ export function FamilySettings({
     setMessage(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      await revokeHouseholdInvitationLink(supabase, { linkId });
-      setLinks(await listHouseholdInvitations(supabase, { householdId }));
+      await client.revokeInvitationLink(linkId);
+      setLinks(await client.listInvitations(householdId));
     } catch (error) {
       setMessage({
         kind: "error",
@@ -142,8 +119,7 @@ export function FamilySettings({
     setMessage(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      await approveHouseholdJoinRequest(supabase, { requestId });
+      await client.approveJoinRequest(requestId);
       await refresh();
     } catch (error) {
       setMessage({
@@ -161,8 +137,7 @@ export function FamilySettings({
     setMessage(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      await rejectHouseholdJoinRequest(supabase, { requestId });
+      await client.rejectJoinRequest(requestId);
       await refresh();
     } catch (error) {
       setMessage({
@@ -180,8 +155,7 @@ export function FamilySettings({
     setMessage(null);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      await removeHouseholdMember(supabase, { householdId, userId });
+      await client.removeMember(householdId, userId);
       await refresh();
     } catch (error) {
       setMessage({

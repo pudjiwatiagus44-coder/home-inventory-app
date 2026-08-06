@@ -34,25 +34,24 @@
 
 - 2026-08-06 用户确认将家庭成员共享纳入当前范围，邀请方式为“微信链接 + 对方自主申请 + 房主批准”，链接落地页含 Android 内测 APK 下载入口。
 - 产品、架构、数据库、验收真源已更新；本实施计划已建立。
-- 2026-08-06 已进入实施：`supabase/migrations/202608060001_family_sharing.sql` 已编写；家庭数据层 `src/features/family/`、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器代码已实现并通过本地测试/lint/build。
+- 2026-08-06 已进入实施：用户确认实施目标改为自托管部署（`homestorag.xyz`），Supabase 不作为实施目标。已完成 `supabase/migrations/202608060001_family_sharing.sql`（Supabase 历史参考）、自托管 SQL（`dev-docs/sql/family_sharing_self_hosted.sql`）、服务端 family repository/service、family API routes、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器。
 - Android 内测版本阶段不实现共享 UI，服务端权限模型保持兼容；APK 下载地址为部署配置项。
 
 ## 实施状态（2026-08-06）
 
 已完成（本地验证通过）：
 
-- migration 文件：`household_invitations` / `household_join_requests` / 六个安全函数 / RLS 策略，与 `database-design.md` 一致。
-- 家庭数据层：`src/features/family/family-data.ts`（token、有效期、链接状态、校验）和 `family-actions.ts`（生成/作废链接、申请、批准/拒绝、成员管理、家庭列表）。
-- 链接落地页：`/join/<token>`，含登录/注册、申请加入、Android APK 下载入口（`NEXT_PUBLIC_APK_DOWNLOAD_URL`）。
-- 家庭设置面板 `FamilySettings.tsx` 与当前家庭切换器已接入 `/app`（Supabase 测试路线）。
-- 验证：`npm test` 36 个测试文件 / 252 通过；`npm run lint` 通过；`npm run build` 通过并生成 `/join/[token]` 路由。
+- 自托管数据库 SQL：`dev-docs/sql/family_sharing_self_hosted.sql`（`household_invitations` / `household_join_requests` / 部分唯一索引），待应用到服务器数据库。
+- 服务端实现：`src/features/family/family-repository.ts`（PostgreSQL SQL）与 `family-service.ts`（服务端权限校验：owner 管理、member 读写、批准/拒绝、移除成员）。
+- family API routes：`/api/family/households|invitations|join-requests|members`、`/api/join/<token>` 与 `/api/join/<token>/apply`；dashboard 支持 `?householdId=`。
+- 前端：`family-client.ts`（HTTP）与 `FamilySettings.tsx`（生成/复制/作废链接、批准/拒绝申请、成员列表与移除）已接入 `/app`；当前家庭切换器在自托管与 Supabase 分支均可用；链接落地页 `/join/<token>` 为服务端组件（cookie session），含申请加入与 Android APK 下载入口。
+- 验证：`npm test` 39 个测试文件 / 268 通过；`npm run lint` 通过；`npm run build` 通过并生成全部 family 路由。
 
-未完成（需要用户或后续阶段）：
+未完成（部署与后续阶段）：
 
-- 在真实 Supabase 项目执行 migration。
-- 家庭共享权限负例（未申请不可访问、批准后可读写、member 不能管理、移除立即失效、无效 token 不能申请、非 owner 不能批准）。
+- 在 `homestorag.xyz` 服务器数据库执行自托管 SQL 并部署代码（本轮进行）。
+- 家庭共享权限负例（未申请不可访问、批准后可读写、member 不能管理、移除立即失效、无效 token 不能申请、非 owner 不能批准）线上验证。
 - 真实浏览器验收陪跑（房主生成链接 → 家人申请 → 批准 → 共同编辑 → 移除成员）。
-- 自托管（中国大陆正式版）路线的同步实现：API routes + 服务端权限 + `mainland_initial_schema.sql` 对应表与函数。
 - Android APK 服务器托管、构建后自动上传和版本检查更新。
 
 ## 范围

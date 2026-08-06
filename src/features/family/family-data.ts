@@ -32,6 +32,22 @@ export type HouseholdOption = {
 
 export type InvitationLinkStatus = "active" | "expired" | "revoked";
 
+export type FamilySettingsClient = {
+  listInvitations: (householdId: string) => Promise<InvitationLinkRow[]>;
+  createInvitationLink: (householdId: string) => Promise<{
+    id: string;
+    token: string;
+    expiresAt: string;
+    url: string;
+  }>;
+  revokeInvitationLink: (linkId: string) => Promise<void>;
+  listJoinRequests: (householdId: string) => Promise<FamilyJoinRequestRow[]>;
+  approveJoinRequest: (requestId: string) => Promise<void>;
+  rejectJoinRequest: (requestId: string) => Promise<void>;
+  listMembers: (householdId: string) => Promise<FamilyMemberRow[]>;
+  removeMember: (householdId: string, userId: string) => Promise<void>;
+};
+
 const TOKEN_CHARSET = /^[A-Za-z0-9_-]+$/;
 const BASE64URL_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";

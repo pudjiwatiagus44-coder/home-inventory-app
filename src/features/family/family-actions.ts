@@ -4,6 +4,7 @@ import {
   getInvitationExpiresAt,
   type FamilyJoinRequestRow,
   type FamilyMemberRow,
+  type FamilySettingsClient,
   type HouseholdOption,
   type InvitationLinkRow,
 } from "./family-data";
@@ -312,4 +313,41 @@ export async function listHouseholdsForUser(
       role: row.role === "member" ? "member" : "owner",
     };
   });
+}
+
+export function createSupabaseFamilySettingsClient(
+  supabase: FamilyActionClient,
+): FamilySettingsClient {
+  return {
+    listInvitations: (householdId) =>
+      listHouseholdInvitations(supabase, { householdId }),
+    createInvitationLink: async (householdId) => {
+      const link = await createHouseholdInvitationLink(supabase, {
+        householdId,
+        origin:
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "",
+      });
+
+      return {
+        id: link.id,
+        token: link.token,
+        expiresAt: link.expiresAt,
+        url: link.url,
+      };
+    },
+    revokeInvitationLink: (linkId) =>
+      revokeHouseholdInvitationLink(supabase, { linkId }),
+    listJoinRequests: (householdId) =>
+      listHouseholdJoinRequests(supabase, { householdId }),
+    approveJoinRequest: (requestId) =>
+      approveHouseholdJoinRequest(supabase, { requestId }),
+    rejectJoinRequest: (requestId) =>
+      rejectHouseholdJoinRequest(supabase, { requestId }),
+    listMembers: (householdId) =>
+      listHouseholdMembers(supabase, { householdId }),
+    removeMember: (householdId, userId) =>
+      removeHouseholdMember(supabase, { householdId, userId }),
+  };
 }

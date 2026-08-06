@@ -6,6 +6,8 @@
 
 第一版目标是：用户注册登录后管理自己家庭空间里的区域、位置和物品；2026-08-06 已确认将家庭成员共享纳入当前范围，`households` 和 `household_members` 直接承载共享，`household_invitations` 承载邀请链接，`household_join_requests` 承载加入申请。只有自己是成员的家庭数据可以读写，申请批准前不产生任何数据访问权。
 
+2026-08-06 用户确认实施路线改为自托管部署（`homestorag.xyz`）：本文件的 RLS 策略设计保留为 Supabase 历史参考；自托管路线使用相同表结构，但权限由 Next.js 服务端校验兜底（等价语义），对应 SQL 见 `dev-docs/sql/family_sharing_self_hosted.sql`。
+
 ## 业务对象
 
 | 对象 | 业务含义 | 第一版是否需要 | 说明 |

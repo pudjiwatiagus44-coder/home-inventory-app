@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { AuthForm } from "@/features/auth/AuthForm";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string }>;
+}) {
+  const { redirect } = await searchParams;
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-4 py-10">
       <div className="w-full max-w-md">
@@ -11,7 +17,7 @@ export default function LoginPage() {
         >
           返回首页
         </Link>
-        <AuthForm />
+        <AuthForm redirect={redirect} />
       </div>
     </main>
   );

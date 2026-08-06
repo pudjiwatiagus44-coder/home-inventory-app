@@ -23,7 +23,11 @@ import {
   LocationRow,
 } from "./dashboard-data";
 import { getOrCreateDefaultHouseholdId } from "./household-bootstrap";
-import { listHouseholdsForUser } from "../family/family-actions";
+import {
+  createSupabaseFamilySettingsClient,
+  listHouseholdsForUser,
+} from "../family/family-actions";
+import { createFamilyHttpClient } from "../family/family-client";
 import type { HouseholdOption } from "../family/family-data";
 import { FamilySettings } from "../family/FamilySettings";
 import {
@@ -233,10 +237,19 @@ export function AppDashboard({
     async (shouldUpdate: () => boolean = () => true) => {
       try {
         if (selfHostedUser) {
-          const data = await createSelfHostedInventoryClient().getDashboard();
+          const familyClient = createFamilyHttpClient();
+          const memberships = await familyClient.listHouseholds();
+          const activeMembership =
+            memberships.find(
+              (household) => household.id === activeHouseholdId,
+            ) ?? memberships[0];
+          const data = await createSelfHostedInventoryClient().getDashboard(
+            activeMembership?.id,
+          );
           const summary = buildDashboardSummary(data);
 
           if (shouldUpdate()) {
+            setHouseholds(memberships);
             setState({
               status: "ready",
               summary,
@@ -922,12 +935,12 @@ export function AppDashboard({
             <div className="min-w-0">
               <h1 className="truncate text-[18px] font-semibold leading-6">家中清单</h1>
             </div>
-            {!selfHostedUser && households.length > 1 ? (
+            {households.length > 1 ? (
               <select
                 aria-label="切换家庭"
                 className="h-8 max-w-[150px] rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2 text-[12px] outline-none focus:border-[var(--primary)]"
                 onChange={(event) => setActiveHouseholdId(event.target.value)}
-                value={activeHouseholdId ?? ""}
+                value={activeHouseholdId ?? households[0]?.id ?? ""}
               >
                 {households.map((household) => (
                   <option key={household.id} value={household.id}>
@@ -1010,11 +1023,6 @@ export function AppDashboard({
             <button
               className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
               onClick={() => {
-                if (selfHostedUser) {
-                  setFormMessage("家庭共享当前仅在 Supabase 测试路线可用");
-                  return;
-                }
-
                 setShowFamilySettings(true);
               }}
               type="button"
@@ -2506,6 +2514,13 @@ export function AppDashboard({
             households.find(
               (household) => household.id === state.summary.householdId,
             )?.role === "owner"
+          }
+          client={
+            selfHostedUser
+              ? createFamilyHttpClient()
+              : createSupabaseFamilySettingsClient(
+                  createSupabaseBrowserClient(),
+                )
           }
           onClose={() => setShowFamilySettings(false)}
         />
