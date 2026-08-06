@@ -99,7 +99,7 @@ export function createFamilyHandlers(
           id: link.id,
           token: link.token,
           expiresAt: link.expires_at,
-          url: `${request.nextUrl.origin}/join/${encodeURIComponent(link.token)}`,
+          url: `${publicOrigin(request)}/join/${encodeURIComponent(link.token)}`,
         });
       } catch (error) {
         return familyErrorResponse(error);
@@ -342,6 +342,17 @@ async function readJsonObject(request: NextRequest): Promise<JsonObject> {
 function textField(body: JsonObject, key: string) {
   const value = body[key];
   return typeof value === "string" ? value : "";
+}
+
+function publicOrigin(request: NextRequest) {
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+  const forwardedHost =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    request.nextUrl.host;
+
+  return `${forwardedProto}://${forwardedHost}`;
 }
 
 function familyErrorResponse(error: unknown) {
