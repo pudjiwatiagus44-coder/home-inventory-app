@@ -57,7 +57,9 @@ fun ItemList(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(
-                    onClick = {},
+                    onClick = {
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
                     onDoubleClick = {
                         scope.launch { listState.animateScrollToItem(0) }
                     },
