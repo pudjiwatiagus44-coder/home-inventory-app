@@ -139,7 +139,7 @@ class InventoryRepositoryTest {
         val result = repository.createItemOnline(
             name = "牛奶",
             note = "",
-            expireDate = null,
+            expireDate = "2026-08-29T16:00:00.000Z",
             locationId = "location-1",
         )
 
@@ -148,6 +148,8 @@ class InventoryRepositoryTest {
         val item = repository.observeInventory().first().items.single()
         assertEquals("synced", item.syncStatus)
         assertEquals("牛奶", item.name)
+        assertEquals(10, item.expireDate?.length)
+        assertEquals("2026-08-29T16:00:00.000Z" != item.expireDate, true)
     }
 
     private fun repositoryWith(api: TestApiStub): InventoryRepository =

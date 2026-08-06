@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -66,7 +67,8 @@ fun LocationStrip(
                             if (selected) Primary else Border,
                             RoundedCornerShape(9.dp),
                         )
-                        .size(width = 84.dp, height = 44.dp)
+                        .size(width = 84.dp, height = 58.dp)
+                        .padding(vertical = 4.dp)
                         .clickable { onSelectLocation(location.id) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -82,6 +84,7 @@ fun LocationStrip(
                         text = count.toString(),
                         fontSize = 10.sp,
                         color = MutedForeground,
+                        maxLines = 1,
                     )
                 }
             }
@@ -90,7 +93,8 @@ fun LocationStrip(
                     modifier = Modifier
                         .clip(RoundedCornerShape(9.dp))
                         .border(1.dp, Border, RoundedCornerShape(9.dp))
-                        .size(width = 84.dp, height = 44.dp)
+                        .size(width = 84.dp, height = 58.dp)
+                        .padding(vertical = 4.dp)
                         .clickable(onClick = onAddLocation),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,

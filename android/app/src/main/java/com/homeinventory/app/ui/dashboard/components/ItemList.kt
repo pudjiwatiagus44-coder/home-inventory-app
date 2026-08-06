@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -71,7 +72,9 @@ fun ItemList(
                 modifier = Modifier.padding(vertical = 24.dp),
             )
         } else {
-            LazyColumn {
+            LazyColumn(
+                contentPadding = PaddingValues(bottom = 88.dp),
+            ) {
                 items(items, key = { it.id }) { item ->
                     ItemRow(item = item, onClick = { onEditItem(item) })
                 }
