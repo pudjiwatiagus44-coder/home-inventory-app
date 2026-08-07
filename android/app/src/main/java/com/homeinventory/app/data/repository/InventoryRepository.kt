@@ -3,6 +3,8 @@ package com.homeinventory.app.data.repository
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.homeinventory.app.core.network.HomeInventoryApi
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import com.homeinventory.app.data.local.AreaDao
 import com.homeinventory.app.data.local.AreaEntity
 import com.homeinventory.app.data.local.ItemDao
@@ -29,6 +31,7 @@ import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.remote.RecognitionResponseDto
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
 import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
 import com.homeinventory.app.data.sync.SyncEngine
@@ -36,7 +39,17 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.ResponseBody
+import okhttp3.RequestBody.Companion.toRequestBody
+
+data class RecognitionDraft(
+    val mode: String,
+    val name: String? = null,
+    val expireDate: String? = null,
+    val thumbnailId: String? = null,
+)
 
 class InventoryRepository(
     private val api: HomeInventoryApi,
@@ -187,6 +200,55 @@ class InventoryRepository(
         return Result.success(body)
     }
 
+    suspend fun recognizeItemPhoto(
+        mode: String,
+        jpegBytes: ByteArray,
+    ): Result<RecognitionDraft> {
+        val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
+        val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+        val response = try {
+            api.recognize(part, mode)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+
+        if (!response.isSuccessful || envelope?.ok != true || envelope.data == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "识别失败",
+                ),
+            )
+        }
+
+        val data = envelope.data
+        return Result.success(
+            RecognitionDraft(
+                mode = data.mode,
+                name = data.name,
+                expireDate = data.expireDate,
+                thumbnailId = data.thumbnailId,
+            ),
+        )
+    }
+
+    suspend fun loadItemPhoto(itemId: String): Result<Bitmap> {
+        val response = try {
+            api.itemPhoto(itemId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val bytes = response.body()?.bytes()
+
+        if (!response.isSuccessful || bytes == null) {
+            return Result.failure(IllegalStateException("加载物品图片失败"))
+        }
+
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: return Result.failure(IllegalStateException("图片数据无效"))
+        return Result.success(bitmap)
+    }
+
     suspend fun createItemOffline(
         name: String,
         note: String = "",
@@ -237,8 +299,9 @@ class InventoryRepository(
         note: String,
         expireDate: String?,
         locationId: String?,
+        photoKey: String? = null,
     ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
-        request = { api.createItem(ItemCreateRequest(name, note, expireDate, locationId)) },
+        request = { api.createItem(ItemCreateRequest(name, note, expireDate, locationId, photoKey)) },
         onSuccess = { remoteItem ->
             itemDao.upsert(
                 ItemEntity(
@@ -248,6 +311,7 @@ class InventoryRepository(
                     name = remoteItem.name,
                     note = remoteItem.note,
                     expireDate = DateNormalizer.normalizeExpireDate(remoteItem.expireDate),
+                    photoKey = remoteItem.photoKey,
                     serverUpdatedAt = remoteItem.updatedAt,
                     localUpdatedAt = System.currentTimeMillis(),
                     syncStatus = SyncStatus.Synced,
@@ -591,6 +655,7 @@ class InventoryRepository(
                     name = item.name,
                     note = item.note,
                     expireDate = DateNormalizer.normalizeExpireDate(item.expireDate),
+                    photoKey = item.photoKey,
                     serverUpdatedAt = item.updatedAt,
                     localUpdatedAt = now,
                     syncStatus = SyncStatus.Synced,

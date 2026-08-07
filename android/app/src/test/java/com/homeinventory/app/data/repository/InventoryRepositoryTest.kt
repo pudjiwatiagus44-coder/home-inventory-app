@@ -20,6 +20,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.remote.RecognitionResponseDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import java.io.IOException
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -36,6 +38,39 @@ import org.junit.Test
 import retrofit2.Response
 
 class InventoryRepositoryTest {
+    @Test
+    fun recognizeItemPhotoReturnsDraftOnSuccess() = runTest {
+        val repository = repositoryWith(api = FakeRecognizeApi())
+
+        val result = repository.recognizeItemPhoto("name", byteArrayOf(1, 2, 3))
+
+        assertTrue(result.isSuccess)
+        assertEquals("牛奶", result.getOrNull()?.name)
+        assertEquals("photo_1.jpg", result.getOrNull()?.thumbnailId)
+    }
+
+    @Test
+    fun recognizeItemPhotoFailsWhenServerRejects() = runTest {
+        val repository = repositoryWith(
+            api = object : TestApiStub() {
+                override suspend fun recognize(
+                    file: MultipartBody.Part,
+                    mode: String,
+                ): Response<ApiEnvelope<RecognitionResponseDto>> =
+                    Response.error(
+                        429,
+                        "{\"ok\":false,\"message\":\"识别太频繁，请稍后再试\"}"
+                            .toResponseBody("application/json".toMediaType()),
+                    )
+            },
+        )
+
+        val result = repository.recognizeItemPhoto("name", byteArrayOf(1))
+
+        assertTrue(result.isFailure)
+        assertEquals("识别太频繁，请稍后再试", result.exceptionOrNull()?.message)
+    }
+
     @Test
     fun offlineCreatedItemIsMarkedPendingCreate() {
         val item = ItemEntity.pendingCreate(
@@ -480,4 +515,23 @@ private class FakeSyncStateDao : SyncStateDao {
     }
 
     override suspend fun get(key: String): String? = states[key]
+}
+
+private class FakeRecognizeApi : TestApiStub() {
+    override suspend fun recognize(
+        file: MultipartBody.Part,
+        mode: String,
+    ): Response<ApiEnvelope<RecognitionResponseDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RecognitionResponseDto(
+                    mode = mode,
+                    recognized = true,
+                    name = "牛奶",
+                    expireDate = null,
+                    thumbnailId = "photo_1.jpg",
+                ),
+            ),
+        )
 }
