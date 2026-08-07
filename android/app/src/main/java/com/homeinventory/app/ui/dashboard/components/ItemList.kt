@@ -54,6 +54,7 @@ fun ItemList(
     onSortChange: (ItemSortMode) -> Unit,
     onEditItem: (DashboardUiItem) -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
+    onAddPhoto: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     isEmpty: Boolean,
     modifier: Modifier = Modifier,
@@ -106,6 +107,7 @@ fun ItemList(
                         item = item,
                         onClick = { onEditItem(item) },
                         onPhotoClick = onPhotoClick,
+                        onAddPhoto = onAddPhoto,
                         loadPhoto = loadPhoto,
                     )
                 }
@@ -154,6 +156,7 @@ private fun ItemRow(
     item: DashboardUiItem,
     onClick: () -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
+    onAddPhoto: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
 ) {
     val thumbnail by produceState<Bitmap?>(initialValue = null, item.id) {
@@ -169,15 +172,16 @@ private fun ItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(SurfaceMuted)
-            .clickable(enabled = item.photoKey != null) {
-                onPhotoClick(item)
-            },
-        contentAlignment = Alignment.Center,
+    if (item.photoKey != null) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(SurfaceMuted)
+                .clickable {
+                    onPhotoClick(item)
+                },
+            contentAlignment = Alignment.Center,
         ) {
             thumbnail?.let { bitmap ->
                 Image(
@@ -196,6 +200,25 @@ private fun ItemRow(
                 )
             }
         }
+    } else {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(SurfaceMuted)
+                .clickable {
+                    onAddPhoto(item)
+                }
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+        ) {
+            Text(
+                text = "拍照",
+                color = Primary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.name,

@@ -101,6 +101,7 @@ fun AreaDropdown(
     selectedAreaId: String,
     onSelect: (String) -> Unit,
     includeUnassigned: Boolean = true,
+    onAddArea: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -127,6 +128,15 @@ fun AreaDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
+            if (onAddArea != null) {
+                DropdownMenuItem(
+                    text = { Text("＋ 新增区域") },
+                    onClick = {
+                        expanded = false
+                        onAddArea()
+                    },
+                )
+            }
             if (includeUnassigned) {
                 DropdownMenuItem(
                     text = { Text("未分区") },

@@ -13,8 +13,8 @@ android {
         applicationId = "com.homeinventory.app.internal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.5.5"
+        versionCode = 12
+        versionName = "0.5.6"
         buildConfigField(
             "String",
             "HOME_INVENTORY_BASE_URL",

@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +62,7 @@ import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ItemFormDialog(
     title: String,
@@ -76,6 +78,10 @@ fun ItemFormDialog(
     },
     onSaveToDraft: (ItemFormValues, ByteArray?) -> Unit = { _, _ -> },
     showDraftButton: Boolean = true,
+    onAddArea: (() -> Unit)? = null,
+    onAddLocation: ((String) -> Unit)? = null,
+    onBatchImport: (String?, List<ByteArray>) -> Unit = { _, _ -> },
+    batchProgress: String? = null,
     loadCurrentPhoto: suspend () -> Result<Bitmap> = {
         Result.failure(IllegalStateException("图片不可用"))
     },
@@ -202,6 +208,18 @@ fun ItemFormDialog(
             pendingMode = null
         }
     }
+    val batchLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val photos = uris.mapNotNull { uri ->
+                ImageCompressor.compressToJpeg(context, uri)
+            }
+            if (photos.isNotEmpty()) {
+                onBatchImport(locationId, photos)
+            }
+        }
+    }
 
     val filteredLocations = locations.filter { location ->
         when (areaId) {
@@ -254,6 +272,7 @@ fun ItemFormDialog(
                     locationId = ""
                 },
                 includeUnassigned = false,
+                onAddArea = onAddArea,
             )
             val locationLabel = when {
                 areaId == "" -> "请先选择区域"
@@ -282,6 +301,15 @@ fun ItemFormDialog(
                     expanded = locationExpanded,
                     onDismissRequest = { locationExpanded = false },
                 ) {
+                    if (onAddLocation != null && areaId.isNotEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("＋ 新增格子") },
+                            onClick = {
+                                locationExpanded = false
+                                onAddLocation(areaId)
+                            },
+                        )
+                    }
                     filteredLocations.forEach { location ->
                         DropdownMenuItem(
                             text = { Text(location.name) },
@@ -299,7 +327,7 @@ fun ItemFormDialog(
                 label = { Text("备注") },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -312,6 +340,23 @@ fun ItemFormDialog(
                     enabled = recognizing == null,
                 ) {
                     Text(if (recognizing == "name") "识别中..." else "识别名称")
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (locationId.isBlank()) {
+                            recognitionError = "请先选择位置"
+                        } else {
+                            recognitionError = null
+                            batchLauncher.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        }
+                    },
+                    enabled = recognizing == null,
+                ) {
+                    Text(batchProgress?.let { "导入中 $it" } ?: "批量导入")
                 }
                 OutlinedButton(
                     onClick = {

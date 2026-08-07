@@ -90,6 +90,12 @@ data class DraftSaveInput(
     val photoKey: String?,
 )
 
+data class BatchImportUiState(
+    val isImporting: Boolean = false,
+    val done: Int = 0,
+    val total: Int = 0,
+)
+
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
@@ -134,6 +140,7 @@ class DashboardViewModel(
     private val joinRequests = MutableStateFlow(JoinRequestsUiState())
     private val updateCheck = MutableStateFlow(UpdateCheckUiState())
     private val drafts = MutableStateFlow(DraftsUiState())
+    private val batchImport = MutableStateFlow(BatchImportUiState())
 
     val draftsState: StateFlow<DraftsUiState> =
         (draftGateway?.observe() ?: flowOf(emptyList()))
@@ -230,6 +237,29 @@ class DashboardViewModel(
         val bitmap = gateway.readPhoto(draftId, photoKey)
             ?: return Result.failure(IllegalStateException("无图片"))
         return Result.success(bitmap)
+    }
+
+    fun batchImportState(): StateFlow<BatchImportUiState> = batchImport
+
+    fun batchImport(locationId: String?, photos: List<ByteArray>) {
+        if (photos.isEmpty() || batchImport.value.isImporting) {
+            return
+        }
+        viewModelScope.launch {
+            batchImport.value = BatchImportUiState(
+                isImporting = true,
+                done = 0,
+                total = photos.size,
+            )
+            photos.forEachIndexed { index, bytes ->
+                val recognized = recognizeItemPhoto("name", bytes).getOrNull()
+                val name = recognized?.name?.takeIf { it.isNotBlank() } ?: "未识别物品"
+                val note = recognized?.note.orEmpty()
+                confirmDraftCreate(name, note, null, locationId, recognized?.thumbnailId)
+                batchImport.value = batchImport.value.copy(done = index + 1)
+            }
+            batchImport.value = BatchImportUiState()
+        }
     }
 
     fun invitations(): StateFlow<InviteUiState> = invite

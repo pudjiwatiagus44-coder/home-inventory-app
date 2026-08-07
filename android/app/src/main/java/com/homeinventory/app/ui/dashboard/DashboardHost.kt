@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
+import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
@@ -56,12 +58,14 @@ fun DashboardHost(
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     val updateState by viewModel.updateCheckState().collectAsState()
     val draftsUi by viewModel.draftsState.collectAsState()
+    val batchState by viewModel.batchImportState().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
     var previewItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var showDraftsDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
+    var locationFormInitialAreaId by remember { mutableStateOf("") }
     var showLocationForm by remember { mutableStateOf(false) }
     var showAreaForm by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -72,6 +76,48 @@ fun DashboardHost(
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
     val editingDraft = editingDraftId?.let { id ->
         draftsUi.drafts.firstOrNull { it.id == id }
+    }
+
+    LaunchedEffect(batchState.isImporting, batchState.done, batchState.total) {
+        if (!batchState.isImporting && batchState.total > 0 && batchState.done >= batchState.total) {
+            showItemForm = false
+            editingDraftId = null
+        }
+    }
+    var pendingPhotoItem by remember { mutableStateOf<DashboardUiItem?>(null) }
+    val itemPhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        val item = pendingPhotoItem
+        pendingPhotoItem = null
+        if (uri != null && item != null) {
+            scope.launch {
+                val bytes = ImageCompressor.compressToJpeg(context, uri)
+                if (bytes == null) {
+                    Toast.makeText(context, "读取照片失败", Toast.LENGTH_LONG).show()
+                } else {
+                    repository.uploadThumbnailOnly(bytes)
+                        .onSuccess { key ->
+                            LocalPhotoStore.save(context, key, bytes)
+                            repository.updateItemOnline(
+                                item.id,
+                                item.name,
+                                item.note,
+                                item.expireDate,
+                                item.locationId,
+                                key,
+                            )
+                        }
+                        .onFailure { error ->
+                            Toast.makeText(
+                                context,
+                                error.message ?: "添加照片失败",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                }
+            }
+        }
     }
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -135,6 +181,14 @@ fun DashboardHost(
         },
         onPhotoClick = { item ->
             previewItem = item
+        },
+        onAddPhoto = { item ->
+            pendingPhotoItem = item
+            itemPhotoPicker.launch(
+                PickVisualMediaRequest(
+                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                ),
+            )
         },
         loadPhoto = viewModel::itemPhoto,
         onRefresh = {
@@ -275,6 +329,21 @@ fun DashboardHost(
                 )
                 showItemForm = false
             },
+            onAddArea = {
+                formError = null
+                showAreaForm = true
+            },
+            onAddLocation = { areaId ->
+                locationFormInitialAreaId = areaId
+                formError = null
+                showLocationForm = true
+            },
+            onBatchImport = viewModel::batchImport,
+            batchProgress = if (batchState.isImporting) {
+                "${batchState.done}/${batchState.total}"
+            } else {
+                null
+            },
             showDraftButton = editingItem == null && editingDraftId == null,
             loadCurrentPhoto = {
                 val draftId = editingDraftId
@@ -411,7 +480,10 @@ fun DashboardHost(
     if (showLocationForm) {
         LocationFormDialog(
             title = "新增位置",
-            initial = LocationFormValues(),
+            initial = LocationFormValues(
+                name = "",
+                areaId = locationFormInitialAreaId,
+            ),
             areas = state.areas,
             isSaving = isSaving,
             errorMessage = formError,
