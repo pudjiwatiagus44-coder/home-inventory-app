@@ -13,8 +13,8 @@ android {
         applicationId = "com.homeinventory.app.internal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.5.0"
         buildConfigField(
             "String",
             "HOME_INVENTORY_BASE_URL",
@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation(platform("androidx.compose:compose-bom:2024.10.00"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
