@@ -248,7 +248,7 @@ class DashboardViewModel(
                 values.photoKey,
             )
                 .onSuccess {
-                    gateway.delete(draftId)
+                    gateway.deleteAfterConfirm(draftId)
                 }
                 .onFailure { error ->
                     drafts.value = drafts.value.copy(
@@ -269,6 +269,14 @@ class DashboardViewModel(
         val gateway = draftGateway
             ?: return Result.failure(IllegalStateException("草稿不可用"))
         val bitmap = gateway.readPhoto(draftId, photoKey)
+            ?: return Result.failure(IllegalStateException("无图片"))
+        return Result.success(bitmap)
+    }
+
+    fun readDraftPhotoLarge(draftId: String, photoKey: String?): Result<Bitmap> {
+        val gateway = draftGateway
+            ?: return Result.failure(IllegalStateException("草稿不可用"))
+        val bitmap = gateway.readPhotoLarge(draftId, photoKey)
             ?: return Result.failure(IllegalStateException("无图片"))
         return Result.success(bitmap)
     }

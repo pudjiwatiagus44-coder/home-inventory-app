@@ -710,5 +710,12 @@ private class FakeDraftGateway(
         flow.value = flow.value.filterNot { it.id == id }
     }
 
+    override suspend fun deleteAfterConfirm(id: String) {
+        deleted.add(id)
+        flow.value = flow.value.filterNot { it.id == id }
+    }
+
     override fun readPhoto(id: String, photoKey: String?): android.graphics.Bitmap? = null
+
+    override fun readPhotoLarge(id: String, photoKey: String?): android.graphics.Bitmap? = null
 }

@@ -3,6 +3,7 @@ package com.homeinventory.app.ui.dashboard.dialogs
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,7 @@ fun DraftsDialog(
     savingDraftId: String?,
     errorMessage: String?,
     readPhoto: (DraftEntity) -> Bitmap?,
+    onPhotoClick: (DraftEntity) -> Unit,
     onEdit: (DraftEntity) -> Unit,
     onConfirm: (DraftEntity) -> Unit,
     onDelete: (DraftEntity) -> Unit,
@@ -93,6 +95,7 @@ fun DraftsDialog(
                             draft = draft,
                             isSaving = savingDraftId == draft.id,
                             photo = remember(draft.id, draft.photoKey) { readPhoto(draft) },
+                            onPhotoClick = { onPhotoClick(draft) },
                             onEdit = { onEdit(draft) },
                             onConfirm = { onConfirm(draft) },
                             onDelete = { onDelete(draft) },
@@ -109,6 +112,7 @@ private fun DraftRow(
     draft: DraftEntity,
     isSaving: Boolean,
     photo: Bitmap?,
+    onPhotoClick: () -> Unit,
     onEdit: () -> Unit,
     onConfirm: () -> Unit,
     onDelete: () -> Unit,
@@ -124,7 +128,8 @@ private fun DraftRow(
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceMuted),
+                .background(SurfaceMuted)
+                .clickable(onClick = onPhotoClick),
             contentAlignment = Alignment.Center,
         ) {
             if (photo != null) {

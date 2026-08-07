@@ -65,6 +65,9 @@ fun AppRoot() {
             readPhotoFile = { fileName ->
                 LocalPhotoStore.read(app.applicationContext, fileName, 256)
             },
+            readPhotoFileLarge = { fileName ->
+                LocalPhotoStore.read(app.applicationContext, fileName, 1600)
+            },
             readPhotoBytes = { fileName ->
                 LocalPhotoStore.readBytes(app.applicationContext, fileName)
             },

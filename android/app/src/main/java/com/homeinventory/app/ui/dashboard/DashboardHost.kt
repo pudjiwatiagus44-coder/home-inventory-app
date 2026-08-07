@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
+import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.remote.ImportPreviewDto
@@ -67,6 +68,7 @@ fun DashboardHost(
     var showItemForm by remember { mutableStateOf(false) }
     var previewItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var showDraftsDialog by remember { mutableStateOf(false) }
+    var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
@@ -502,6 +504,9 @@ fun DashboardHost(
             readPhoto = { draft ->
                 viewModel.readDraftPhoto(draft.id, draft.photoKey).getOrNull()
             },
+            onPhotoClick = { draft ->
+                previewDraft = draft
+            },
             onEdit = { draft ->
                 editingDraftId = draft.id
                 showDraftsDialog = false
@@ -716,9 +721,23 @@ fun DashboardHost(
 
     previewItem?.let { item ->
         PhotoPreviewDialog(
-            item = item,
-            loadPhoto = viewModel::itemPhoto,
+            title = item.name,
+            loadBitmap = {
+                item.photoKey?.let { key ->
+                    LocalPhotoStore.read(context, key, 1600)?.let { Result.success(it) }
+                } ?: viewModel.itemPhoto(item.id)
+            },
             onDismiss = { previewItem = null },
+        )
+    }
+
+    previewDraft?.let { draft ->
+        PhotoPreviewDialog(
+            title = draft.name.ifBlank { "草稿" },
+            loadBitmap = {
+                viewModel.readDraftPhotoLarge(draft.id, draft.photoKey)
+            },
+            onDismiss = { previewDraft = null },
         )
     }
 }

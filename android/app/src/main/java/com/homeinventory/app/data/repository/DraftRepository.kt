@@ -31,7 +31,11 @@ interface DraftGateway {
 
     suspend fun delete(id: String)
 
+    suspend fun deleteAfterConfirm(id: String)
+
     fun readPhoto(id: String, photoKey: String?): Bitmap?
+
+    fun readPhotoLarge(id: String, photoKey: String?): Bitmap?
 }
 
 class DraftRepository(
@@ -39,6 +43,7 @@ class DraftRepository(
     private val api: HomeInventoryApi,
     private val savePhoto: (fileName: String, bytes: ByteArray) -> Unit,
     private val readPhotoFile: (fileName: String) -> Bitmap?,
+    private val readPhotoFileLarge: (fileName: String) -> Bitmap?,
     private val readPhotoBytes: (fileName: String) -> ByteArray?,
     private val deletePhotoFile: (fileName: String) -> Unit,
 ) : DraftGateway {
@@ -134,10 +139,23 @@ class DraftRepository(
         current?.photoKey?.let { deletePhotoFile(it) }
     }
 
+    override suspend fun deleteAfterConfirm(id: String) {
+        draftDao.deleteById(id)
+        deletePhotoFile(draftFileName(id))
+        // keep the photoKey local file: it now belongs to the saved item
+    }
+
     override fun readPhoto(id: String, photoKey: String?): Bitmap? {
         if (photoKey != null) {
             readPhotoFile(photoKey)?.let { return it }
         }
         return readPhotoFile(draftFileName(id))
+    }
+
+    override fun readPhotoLarge(id: String, photoKey: String?): Bitmap? {
+        if (photoKey != null) {
+            readPhotoFileLarge(photoKey)?.let { return it }
+        }
+        return readPhotoFileLarge(draftFileName(id))
     }
 }
