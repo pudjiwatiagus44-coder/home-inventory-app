@@ -567,6 +567,45 @@ class DashboardViewModelTest {
         }
     }
 
+    @Test
+    fun resumePendingRecognitionsRetriesBlankNameDrafts() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var recognized = 0
+            val gateway = FakeDraftGateway(
+                fillName = false,
+                onRecognize = { _ -> recognized += 1 },
+            )
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                draftGateway = gateway,
+            )
+            advanceUntilIdle()
+
+            viewModel.saveToDraft(
+                DraftSaveInput(
+                    bytes = byteArrayOf(1),
+                    name = "",
+                    note = "",
+                    expireDate = null,
+                    areaId = null,
+                    locationId = null,
+                    photoKey = null,
+                ),
+            )
+            advanceUntilIdle()
+            val before = recognized
+            assertTrue(before >= 1)
+
+            viewModel.resumePendingRecognitions()
+            advanceUntilIdle()
+
+            assertTrue(recognized > before)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun item(
         id: String,
         name: String,
@@ -588,6 +627,7 @@ class DashboardViewModelTest {
 
 private class FakeDraftGateway(
     private val onRecognize: suspend (String) -> Unit = { _ -> },
+    private val fillName: Boolean = true,
 ) : DraftGateway {
     val created = mutableListOf<DraftEntity>()
     val deleted = mutableListOf<String>()
@@ -627,7 +667,14 @@ private class FakeDraftGateway(
     override suspend fun recognize(id: String): DraftEntity? {
         onRecognize(id)
         flow.value = flow.value.map {
-            if (it.id == id) it.copy(status = DraftStatus.Ready) else it
+            if (it.id == id) {
+                it.copy(
+                    status = DraftStatus.Ready,
+                    name = if (fillName) "牛奶" else it.name,
+                )
+            } else {
+                it
+            }
         }
         return flow.value.firstOrNull { it.id == id }
     }

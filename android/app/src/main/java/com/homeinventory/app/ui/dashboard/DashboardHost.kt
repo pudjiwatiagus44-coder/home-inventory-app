@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +70,8 @@ fun DashboardHost(
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
     var locationFormInitialAreaId by remember { mutableStateOf("") }
+    var lastItemAreaId by remember { mutableStateOf("") }
+    var lastItemLocationId by remember { mutableStateOf("") }
     var showLocationForm by remember { mutableStateOf(false) }
     var showAreaForm by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -76,6 +82,27 @@ fun DashboardHost(
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
     val editingDraft = editingDraftId?.let { id ->
         draftsUi.drafts.firstOrNull { it.id == id }
+    }
+    val defaultAreaId = editingDraft?.areaId
+        ?: editingItem?.areaId
+        ?: lastItemAreaId.takeIf { id -> state.areas.any { it.id == id } }
+        ?: ""
+    val defaultLocationId = editingDraft?.locationId
+        ?: editingItem?.locationId
+        ?: lastItemLocationId.takeIf { id -> state.locations.any { it.id == id } }
+        ?: ""
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.resumePendingRecognitions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     LaunchedEffect(batchState.isImporting, batchState.done, batchState.total) {
@@ -303,8 +330,8 @@ fun DashboardHost(
             },
             initial = ItemFormValues(
                 name = editingDraft?.name ?: editingItem?.name ?: "",
-                areaId = editingDraft?.areaId ?: editingItem?.areaId ?: "",
-                locationId = editingDraft?.locationId ?: editingItem?.locationId ?: "",
+                areaId = defaultAreaId,
+                locationId = defaultLocationId,
                 note = editingDraft?.note ?: editingItem?.note ?: "",
                 expireDate = editingDraft?.expireDate ?: editingItem?.expireDate,
                 photoKey = editingDraft?.photoKey ?: editingItem?.photoKey ?: "",
@@ -327,6 +354,8 @@ fun DashboardHost(
                         photoKey = values.photoKey?.takeIf { it.isNotBlank() },
                     ),
                 )
+                lastItemAreaId = values.areaId
+                lastItemLocationId = values.locationId
                 showItemForm = false
             },
             onAddArea = {
@@ -338,7 +367,6 @@ fun DashboardHost(
                 formError = null
                 showLocationForm = true
             },
-            onBatchImport = viewModel::batchImport,
             onBatchImportToDrafts = viewModel::batchImportToDrafts,
             batchProgress = if (batchState.isImporting) {
                 "${batchState.done}/${batchState.total}"
@@ -392,6 +420,10 @@ fun DashboardHost(
                     }
                     result
                         .onSuccess {
+                            if (editingItem == null) {
+                                lastItemAreaId = values.areaId
+                                lastItemLocationId = values.locationId
+                            }
                             isSaving = false
                             formError = null
                             showItemForm = false
@@ -457,6 +489,8 @@ fun DashboardHost(
                 showItemForm = true
             },
             onConfirm = { draft ->
+                lastItemAreaId = draft.areaId ?: ""
+                lastItemLocationId = draft.locationId ?: ""
                 viewModel.confirmSaveDraft(
                     draft.id,
                     ItemFormValues(

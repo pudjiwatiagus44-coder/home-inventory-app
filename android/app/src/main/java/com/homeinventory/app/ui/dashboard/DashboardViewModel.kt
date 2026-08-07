@@ -226,10 +226,7 @@ class DashboardViewModel(
     }
 
     private suspend fun processPendingRecognitions() {
-        val pending = draftsState.value.drafts.filter {
-            it.status == DraftStatus.Recognizing
-        }
-        pending.forEach { draft ->
+        draftsNeedingRecognition().forEach { draft ->
             recognizeDraftSafely(draft.id)
         }
     }
@@ -276,27 +273,6 @@ class DashboardViewModel(
 
     fun batchImportState(): StateFlow<BatchImportUiState> = batchImport
 
-    fun batchImport(locationId: String?, photos: List<ByteArray>) {
-        if (photos.isEmpty() || batchImport.value.isImporting) {
-            return
-        }
-        viewModelScope.launch {
-            batchImport.value = BatchImportUiState(
-                isImporting = true,
-                done = 0,
-                total = photos.size,
-            )
-            photos.forEachIndexed { index, bytes ->
-                val recognized = recognizeItemPhoto("name", bytes).getOrNull()
-                val name = recognized?.name?.takeIf { it.isNotBlank() } ?: "未识别物品"
-                val note = recognized?.note.orEmpty()
-                confirmDraftCreate(name, note, null, locationId, recognized?.thumbnailId)
-                batchImport.value = batchImport.value.copy(done = index + 1)
-            }
-            batchImport.value = BatchImportUiState()
-        }
-    }
-
     fun batchImportToDrafts(
         areaId: String?,
         locationId: String?,
@@ -326,6 +302,23 @@ class DashboardViewModel(
                 batchImport.value = batchImport.value.copy(done = index + 1)
             }
             batchImport.value = BatchImportUiState()
+        }
+    }
+
+    private fun draftsNeedingRecognition(): List<DraftEntity> =
+        draftsState.value.drafts.filter {
+            it.status == DraftStatus.Recognizing ||
+                (it.status == DraftStatus.Ready &&
+                    it.name.isBlank() &&
+                    it.photoKey == null)
+        }
+
+    fun resumePendingRecognitions() {
+        val gateway = draftGateway ?: return
+        draftsNeedingRecognition().forEach { draft ->
+            viewModelScope.launch {
+                recognizeDraftSafely(draft.id)
+            }
         }
     }
 
