@@ -122,7 +122,8 @@ fun ItemFormDialog(
         contract = ActivityResultContracts.TakePicture(),
     ) { success ->
         if (success) {
-            val bytes = cameraFile.readBytes()
+            val bytes = ImageCompressor.compressToJpeg(context, cameraUri)
+                ?: cameraFile.readBytes()
             cameraFile.delete()
             runRecognition(pendingMode, bytes)
         } else {
