@@ -81,6 +81,7 @@ fun ItemFormDialog(
     onAddArea: (() -> Unit)? = null,
     onAddLocation: ((String) -> Unit)? = null,
     onBatchImport: (String?, List<ByteArray>) -> Unit = { _, _ -> },
+    onBatchImportToDrafts: (String?, String?, List<ByteArray>) -> Unit = { _, _, _ -> },
     batchProgress: String? = null,
     loadCurrentPhoto: suspend () -> Result<Bitmap> = {
         Result.failure(IllegalStateException("图片不可用"))
@@ -100,6 +101,8 @@ fun ItemFormDialog(
     var recognitionError by remember { mutableStateOf<String?>(null) }
     var pendingMode by remember { mutableStateOf<String?>(null) }
     var sourceDialogVisible by remember { mutableStateOf(false) }
+    var batchModeChooserVisible by remember { mutableStateOf(false) }
+    var batchMode by remember { mutableStateOf<String?>(null) }
     var currentPhoto by remember { mutableStateOf<Bitmap?>(null) }
     var lastPhotoBytes by remember { mutableStateOf<ByteArray?>(null) }
     LaunchedEffect(initial.photoKey) {
@@ -216,7 +219,12 @@ fun ItemFormDialog(
                 ImageCompressor.compressToJpeg(context, uri)
             }
             if (photos.isNotEmpty()) {
-                onBatchImport(locationId, photos)
+                if (batchMode == "draft") {
+                    onBatchImportToDrafts(areaId, locationId, photos)
+                } else {
+                    onBatchImport(locationId, photos)
+                }
+                batchMode = null
             }
         }
     }
@@ -347,11 +355,7 @@ fun ItemFormDialog(
                             recognitionError = "请先选择位置"
                         } else {
                             recognitionError = null
-                            batchLauncher.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
+                            batchModeChooserVisible = true
                         }
                     },
                     enabled = recognizing == null,
@@ -415,6 +419,43 @@ fun ItemFormDialog(
                                 },
                             ) {
                                 Text("从相册选择")
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+            if (batchModeChooserVisible) {
+                AlertDialog(
+                    onDismissRequest = { batchModeChooserVisible = false },
+                    title = { Text("批量导入方式") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    batchModeChooserVisible = false
+                                    batchMode = "direct"
+                                    batchLauncher.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                            ) {
+                                Text("直接保存到清单")
+                            }
+                            TextButton(
+                                onClick = {
+                                    batchModeChooserVisible = false
+                                    batchMode = "draft"
+                                    batchLauncher.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                            ) {
+                                Text("存入草稿箱")
                             }
                         }
                     },

@@ -539,6 +539,34 @@ class DashboardViewModelTest {
         }
     }
 
+    @Test
+    fun batchImportToDraftsCreatesDraftsAndRecognizes() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var recognized = 0
+            val gateway = FakeDraftGateway(onRecognize = { _, _ -> recognized += 1 })
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                draftGateway = gateway,
+            )
+            advanceUntilIdle()
+
+            viewModel.batchImportToDrafts(
+                "area-1",
+                "location-1",
+                listOf(byteArrayOf(1), byteArrayOf(2)),
+            )
+            advanceUntilIdle()
+
+            assertEquals(2, gateway.created.size)
+            assertEquals(2, recognized)
+            assertEquals("area-1", gateway.created[0].areaId)
+            assertEquals("location-1", gateway.created[0].locationId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun item(
         id: String,
         name: String,

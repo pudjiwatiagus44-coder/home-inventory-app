@@ -262,6 +262,38 @@ class DashboardViewModel(
         }
     }
 
+    fun batchImportToDrafts(
+        areaId: String?,
+        locationId: String?,
+        photos: List<ByteArray>,
+    ) {
+        val gateway = draftGateway ?: return
+        if (photos.isEmpty() || batchImport.value.isImporting) {
+            return
+        }
+        viewModelScope.launch {
+            batchImport.value = BatchImportUiState(
+                isImporting = true,
+                done = 0,
+                total = photos.size,
+            )
+            photos.forEachIndexed { index, bytes ->
+                val draft = gateway.create(
+                    bytes = bytes,
+                    name = "",
+                    note = "",
+                    expireDate = null,
+                    areaId = areaId,
+                    locationId = locationId,
+                    photoKey = null,
+                )
+                gateway.recognize(draft.id, bytes)
+                batchImport.value = batchImport.value.copy(done = index + 1)
+            }
+            batchImport.value = BatchImportUiState()
+        }
+    }
+
     fun invitations(): StateFlow<InviteUiState> = invite
 
     fun generateInvitationLink() {

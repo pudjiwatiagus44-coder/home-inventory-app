@@ -339,6 +339,7 @@ fun DashboardHost(
                 showLocationForm = true
             },
             onBatchImport = viewModel::batchImport,
+            onBatchImportToDrafts = viewModel::batchImportToDrafts,
             batchProgress = if (batchState.isImporting) {
                 "${batchState.done}/${batchState.total}"
             } else {
