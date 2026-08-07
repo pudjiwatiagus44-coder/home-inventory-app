@@ -40,6 +40,7 @@ data class ItemEntity(
     val locationId: String?,
     val name: String,
     val note: String,
+    val photoKey: String? = null,
     val expireDate: String?,
     val serverUpdatedAt: String?,
     val localUpdatedAt: Long,
