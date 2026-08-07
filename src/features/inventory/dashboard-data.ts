@@ -36,6 +36,7 @@ export type ItemRow = {
   note: string;
   expire_date: string | null;
   location_id: string | null;
+  photo_key?: string | null;
   updatedAt?: string;
 };
 
@@ -73,6 +74,7 @@ export type DashboardItem = {
     areaId: string | null;
     areaName: string;
     expirationStatus: ExpirationStatus;
+    photoKey?: string | null;
 };
 
 export function isMissingAuthSessionError(error: { message?: string } | null) {
@@ -146,6 +148,7 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
           ? areaNameForLocation(areaId, areaNames)
           : "未分区",
         expirationStatus: getExpirationStatus(expireDate),
+        photoKey: item.photo_key ?? null,
       };
     }),
   };

@@ -27,6 +27,17 @@ function createAuthenticatedDependencies(
       }),
     },
     inventoryService: createInventoryServiceDouble(service),
+    recognitionService: {
+      recognizeForCurrentUser: async () => ({
+        mode: "name",
+        recognized: false,
+        name: null,
+      }),
+      attachPhotoToItem: async () => false,
+      getItemPhoto: async () => null,
+      deleteItemPhoto: async () => undefined,
+      cleanupExpiredPendingPhotos: async () => 0,
+    },
   };
 }
 

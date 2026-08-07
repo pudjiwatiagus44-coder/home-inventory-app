@@ -183,7 +183,7 @@ export function createPostgresInventoryRepository(
         ),
         client.query<PostgresItemRow>(
           `
-            select id, name, note, expire_date, location_id, updated_at as "updatedAt"
+            select id, name, note, expire_date, location_id, photo_key, updated_at as "updatedAt"
             from items
             where household_id = $1
             order by created_at desc
@@ -464,6 +464,7 @@ export function createPostgresInventoryRepository(
         note: string;
         expire_date: string | null;
         location_id: string | null;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
@@ -476,7 +477,7 @@ export function createPostgresInventoryRepository(
             created_by
           )
           values ($1, $2, $3, $4, $5, $6)
-          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
+          returning id, name, note, expire_date, location_id, photo_key, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -508,6 +509,7 @@ export function createPostgresInventoryRepository(
         note: string;
         expire_date: string | null;
         location_id: string | null;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
@@ -520,7 +522,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
+          returning id, name, note, expire_date, location_id, photo_key, updated_at as "updatedAt"
         `,
         [
           input.itemId,
@@ -558,7 +560,7 @@ export function createPostgresInventoryRepository(
           where id = $1
             and household_id = $2
             and updated_at = $7::timestamptz
-          returning id, name, note, expire_date, location_id, updated_at as "updatedAt"
+          returning id, name, note, expire_date, location_id, photo_key, updated_at as "updatedAt"
         `,
         [
           input.itemId,

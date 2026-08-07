@@ -6,13 +6,20 @@ import {
   textField,
   type InventoryMutationDependencies,
 } from "../../route-helpers";
+import {
+  createRouteRecognitionService,
+  type RecognitionDependencies,
+} from "../../../recognition/handlers";
 
 type ItemRouteContext = {
   params: Promise<{ itemId: string }>;
 };
 
+type ItemItemHandlersDependencies = InventoryMutationDependencies &
+  RecognitionDependencies;
+
 export function createItemItemHandlers(
-  dependencies: InventoryMutationDependencies = {},
+  dependencies: ItemItemHandlersDependencies = {},
 ) {
   return {
     async PATCH(request: NextRequest, context: ItemRouteContext) {
@@ -39,6 +46,10 @@ export function createItemItemHandlers(
       return runInventoryMutation(
         request,
         async ({ service, userId }) => {
+          const photoService =
+            dependencies.recognitionService ??
+            createRouteRecognitionService();
+          await photoService.deleteItemPhoto({ userId, itemId });
           await service.deleteItemForCurrentUser({ userId, itemId });
           return null;
         },
