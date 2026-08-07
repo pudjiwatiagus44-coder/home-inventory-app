@@ -17,9 +17,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 data class DashboardUiItem(
     val id: String,
@@ -141,6 +143,16 @@ class DashboardViewModel(
     private val updateCheck = MutableStateFlow(UpdateCheckUiState())
     private val drafts = MutableStateFlow(DraftsUiState())
     private val batchImport = MutableStateFlow(BatchImportUiState())
+    private val recognizingDrafts = mutableSetOf<String>()
+
+    init {
+        if (draftGateway != null) {
+            viewModelScope.launch {
+                draftGateway.observe().first { it.isNotEmpty() }
+                processPendingRecognitions()
+            }
+        }
+    }
 
     val draftsState: StateFlow<DraftsUiState> =
         (draftGateway?.observe() ?: flowOf(emptyList()))
@@ -193,9 +205,32 @@ class DashboardViewModel(
                 locationId = input.locationId,
                 photoKey = input.photoKey,
             )
-            if (draft.status == DraftStatus.Recognizing && input.bytes != null) {
-                gateway.recognize(draft.id, input.bytes)
+            if (draft.status == DraftStatus.Recognizing) {
+                recognizeDraftSafely(draft.id)
             }
+        }
+    }
+
+    private suspend fun recognizeDraftSafely(draftId: String) {
+        val gateway = draftGateway ?: return
+        if (!recognizingDrafts.add(draftId)) {
+            return
+        }
+        try {
+            withTimeout(35_000) { gateway.recognize(draftId) }
+        } catch (_: Exception) {
+            // repository marks ready on failure; timeout must not leave it pending
+        } finally {
+            recognizingDrafts.remove(draftId)
+        }
+    }
+
+    private suspend fun processPendingRecognitions() {
+        val pending = draftsState.value.drafts.filter {
+            it.status == DraftStatus.Recognizing
+        }
+        pending.forEach { draft ->
+            recognizeDraftSafely(draft.id)
         }
     }
 
@@ -287,7 +322,7 @@ class DashboardViewModel(
                     locationId = locationId,
                     photoKey = null,
                 )
-                gateway.recognize(draft.id, bytes)
+                recognizeDraftSafely(draft.id)
                 batchImport.value = batchImport.value.copy(done = index + 1)
             }
             batchImport.value = BatchImportUiState()

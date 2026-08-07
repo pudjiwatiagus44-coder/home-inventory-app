@@ -40,6 +40,20 @@ object LocalPhotoStore {
         }
     }
 
+    fun readBytes(context: Context, photoKey: String): ByteArray? {
+        val file = File(dir(context), photoKey)
+        if (!file.exists() || !file.isFile) {
+            return null
+        }
+        return try {
+            file.readBytes()
+        } catch (_: Exception) {
+            null
+        } catch (_: OutOfMemoryError) {
+            null
+        }
+    }
+
     fun delete(context: Context, photoKey: String) {
         File(dir(context), photoKey).delete()
     }

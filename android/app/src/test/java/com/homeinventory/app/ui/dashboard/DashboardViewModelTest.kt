@@ -431,7 +431,7 @@ class DashboardViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
             var recognized = false
-            val gateway = FakeDraftGateway(onRecognize = { _, _ -> recognized = true })
+            val gateway = FakeDraftGateway(onRecognize = { _ -> recognized = true })
             val viewModel = DashboardViewModel(
                 inventory = MutableStateFlow(InventorySnapshot()),
                 draftGateway = gateway,
@@ -544,7 +544,7 @@ class DashboardViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
             var recognized = 0
-            val gateway = FakeDraftGateway(onRecognize = { _, _ -> recognized += 1 })
+            val gateway = FakeDraftGateway(onRecognize = { _ -> recognized += 1 })
             val viewModel = DashboardViewModel(
                 inventory = MutableStateFlow(InventorySnapshot()),
                 draftGateway = gateway,
@@ -587,7 +587,7 @@ class DashboardViewModelTest {
 }
 
 private class FakeDraftGateway(
-    private val onRecognize: suspend (String, ByteArray) -> Unit = { _, _ -> },
+    private val onRecognize: suspend (String) -> Unit = { _ -> },
 ) : DraftGateway {
     val created = mutableListOf<DraftEntity>()
     val deleted = mutableListOf<String>()
@@ -624,8 +624,11 @@ private class FakeDraftGateway(
         return draft
     }
 
-    override suspend fun recognize(id: String, bytes: ByteArray): DraftEntity? {
-        onRecognize(id, bytes)
+    override suspend fun recognize(id: String): DraftEntity? {
+        onRecognize(id)
+        flow.value = flow.value.map {
+            if (it.id == id) it.copy(status = DraftStatus.Ready) else it
+        }
         return flow.value.firstOrNull { it.id == id }
     }
 

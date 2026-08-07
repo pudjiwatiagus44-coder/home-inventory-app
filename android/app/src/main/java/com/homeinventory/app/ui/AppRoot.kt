@@ -65,6 +65,9 @@ fun AppRoot() {
             readPhotoFile = { fileName ->
                 LocalPhotoStore.read(app.applicationContext, fileName, 256)
             },
+            readPhotoBytes = { fileName ->
+                LocalPhotoStore.readBytes(app.applicationContext, fileName)
+            },
             deletePhotoFile = { fileName ->
                 LocalPhotoStore.delete(app.applicationContext, fileName)
             },
