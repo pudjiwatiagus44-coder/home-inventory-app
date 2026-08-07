@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -43,8 +45,15 @@ fun PhotoPreviewDialog(
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 5f)
-        offset += offsetChange
+        val newScale = (scale * zoomChange).coerceIn(1f, 6f)
+        if (newScale != scale) {
+            scale = newScale
+            if (scale <= 1f) {
+                offset = Offset.Zero
+            } else {
+                offset += offsetChange
+            }
+        }
     }
     Dialog(
         onDismissRequest = onDismiss,
@@ -80,7 +89,15 @@ fun PhotoPreviewDialog(
                             translationX = offset.x,
                             translationY = offset.y,
                         )
-                        .transformable(transformableState),
+                        .transformable(transformableState)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    scale = if (scale > 1f) 1f else 4f
+                                    offset = Offset.Zero
+                                },
+                            )
+                        },
                 )
             } else {
                 Text(
