@@ -50,6 +50,8 @@ data class RemoteItemDto(
     val expireDate: String? = null,
     @SerializedName("location_id")
     val locationId: String? = null,
+    @SerializedName("photo_key")
+    val photoKey: String? = null,
     val updatedAt: String? = null,
 )
 
@@ -106,6 +108,7 @@ data class ItemCreateRequest(
     val note: String = "",
     val expireDate: String? = null,
     val locationId: String? = null,
+    val photoKey: String? = null,
 )
 
 data class ItemUpdateRequest(
@@ -208,4 +211,12 @@ data class ApkVersionDto(
     val size: Long = 0,
     @SerializedName("updatedAt")
     val updatedAt: String? = null,
+)
+
+data class RecognitionResponseDto(
+    val mode: String,
+    val recognized: Boolean,
+    val name: String? = null,
+    val expireDate: String? = null,
+    val thumbnailId: String? = null,
 )

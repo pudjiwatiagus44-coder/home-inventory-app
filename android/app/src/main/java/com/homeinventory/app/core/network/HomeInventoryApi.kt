@@ -21,7 +21,9 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.remote.RecognitionResponseDto
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -86,6 +88,16 @@ interface HomeInventoryApi {
 
     @DELETE("api/inventory/items/{itemId}")
     suspend fun deleteItem(@Path("itemId") itemId: String): Response<ApiEnvelope<Unit>>
+
+    @Multipart
+    @POST("api/recognition")
+    suspend fun recognize(
+        @Part file: MultipartBody.Part,
+        @Query("mode") mode: String,
+    ): Response<ApiEnvelope<RecognitionResponseDto>>
+
+    @GET("api/inventory/items/{itemId}/photo")
+    suspend fun itemPhoto(@Path("itemId") itemId: String): Response<ResponseBody>
 
     @Multipart
     @POST("api/inventory/import")

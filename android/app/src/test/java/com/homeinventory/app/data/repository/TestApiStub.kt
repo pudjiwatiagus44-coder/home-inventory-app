@@ -23,7 +23,11 @@ import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.remote.RecognitionResponseDto
 import okhttp3.MultipartBody
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 
 abstract class TestApiStub : HomeInventoryApi {
@@ -65,6 +69,26 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun deleteItem(itemId: String): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun recognize(
+        file: MultipartBody.Part,
+        mode: String,
+    ): Response<ApiEnvelope<RecognitionResponseDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RecognitionResponseDto(
+                    mode = mode,
+                    recognized = true,
+                    name = "牛奶",
+                    expireDate = null,
+                    thumbnailId = "photo_1.jpg",
+                ),
+            ),
+        )
+
+    override suspend fun itemPhoto(itemId: String): Response<ResponseBody> =
+        Response.success("not-a-real-jpeg".toResponseBody("image/jpeg".toMediaType()))
 
     override suspend fun previewImport(file: MultipartBody.Part): Response<ApiEnvelope<ImportPreviewDto>> =
         Response.success(ApiEnvelope(ok = true, data = ImportPreviewDto()))
