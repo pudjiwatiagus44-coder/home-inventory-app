@@ -22,7 +22,8 @@
 | `locations` | 具体位置，如 A1、上橱柜 | 是 | 属于一个 household，可归属 area |
 | `items` | 物品 | 是 | 属于 household，可放在 location |
 | `audit_logs` | 操作审计 | 否 | MVP 暂不做，后续公开用户阶段再评估 |
-| `attachments` | 图片/附件 | 否 | 第一版不上传照片 |
+| `attachments` | 高清原图/多附件 | 否 | 第一版不上传高清原图；2026-08-07 起仅保存物品缩略图（`items.photo_key` + `pending_photos`） |
+| `pending_photos` | 待关联缩略图暂存 | 是 | 2026-08-07 新增；识别接口暂存缩略图，保存物品时关联，超时未关联自动清理 |
 | `subscriptions` | 会员/付费权益 | 否 | 第一版不做支付 |
 
 ## 关系设计
@@ -188,6 +189,7 @@ create table public.items (
   name text not null,
   note text not null default '',
   expire_date date,
+  photo_key text,   -- 2026-08-07 新增：物品缩略图文件名，可空，唯一
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -201,6 +203,26 @@ create table public.items (
 ```
 
 注意：`items.location_id` 必须和 `items.household_id` 属于同一个 household。初始 migration 使用 `(location_id, household_id)` 复合外键约束处理。
+
+### pending_photos
+
+```sql
+create table public.pending_photos (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  photo_key text not null,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  status text not null default 'pending',
+  constraint pending_photos_photo_key_unique unique (photo_key),
+  constraint pending_photos_status_check check (status in ('pending', 'attached'))
+);
+```
+
+- 用途：识别接口（`mode=name`）暂存缩略图；保存物品时把 `items.photo_key` 指向文件并把记录置为 `attached`。
+- 权限：只有创建人（且归属家庭）能读取/关联自己的 pending 记录；`items.photo_key` 的读取沿用 items 的成员权限。
+- 清理：`created_at` 超过 24 小时仍为 `pending` 的记录由清理任务删除（含文件）；`attached` 记录不清理。
+- 该表随拍照识别阶段 migration 落地（尚未实施）；Supabase 参考路线用 RLS，自托管路线用服务端校验，语义一致。
 
 ## 索引
 
@@ -222,6 +244,10 @@ create index locations_household_id_sort_idx on public.locations(household_id, s
 create index items_household_id_created_at_idx on public.items(household_id, created_at desc);
 create index items_location_id_idx on public.items(location_id);
 create index items_expire_date_idx on public.items(expire_date) where expire_date is not null;
+create unique index items_photo_key_unique on public.items(photo_key) where photo_key is not null;
+create index pending_photos_created_by_idx on public.pending_photos(created_by);
+create index pending_photos_household_id_idx on public.pending_photos(household_id);
+create index pending_photos_status_created_at_idx on public.pending_photos(status, created_at);
 ```
 
 搜索 MVP 可以先用 `ilike` 查询 `items.name` 和 `items.note`。如果后续数据量变大，再加全文搜索索引。
@@ -427,6 +453,7 @@ alter table public.household_join_requests enable row level security;
 alter table public.areas enable row level security;
 alter table public.locations enable row level security;
 alter table public.items enable row level security;
+alter table public.pending_photos enable row level security;
 ```
 
 ### profiles
@@ -674,6 +701,13 @@ on public.items for delete
 using (public.is_household_member(household_id));
 ```
 
+### pending_photos
+
+规则：
+
+- 只有创建人（`created_by = auth.uid()`）能读取自己的待关联缩略图记录；`attached` 后的图片读取走 items 的成员权限。
+- 不允许普通前端直接 insert/update/delete：写入与关联由识别接口/物品保存接口在服务端完成（Supabase 参考路线用 security definer 函数或服务端 role，自托管路线用服务端校验）。
+
 ## 初始化流程
 
 新用户首次进入应用时需要一个默认 household。
@@ -731,6 +765,8 @@ using (public.is_household_member(household_id));
 | 移除成员 | 必须登录 | 仅 owner 可移除，且不能移除自己 | RLS | member 删除他人失败；owner 删除自己失败 |
 | 查看成员 | 必须登录 | 仅本家庭成员可见 | RLS | 非成员看不到成员列表 |
 | 查看申请 | 必须登录 | owner 看自己家庭的申请；申请人只看自己的申请 | RLS | 用户 B 看不到用户 A 家庭的申请 |
+| 拍照识别（name/expiry） | 必须登录 | 只能识别当前用户家庭上下文中的图片，结果不跨用户 | 服务端校验 + 限频 | 未登录返回 401；超限返回 429 |
+| 读取物品缩略图 | 必须登录 | 仅物品所属 household 成员可见 | 服务端/RLS | 用户 B 访问用户 A 家庭物品照片返回 403/404 |
 
 ## 验收负例
 
@@ -752,6 +788,10 @@ using (public.is_household_member(household_id));
 - 被移除的成员再次读取家庭 areas/locations/items 返回 0 行；家庭数据仍保留在数据库中。
 - 同一家庭同一时间只能存在一个未作废邀请链接；重复创建违反部分唯一索引。
 - 申请人无法通过普通查询读取 `household_invitations`（token 不暴露）；owner 之外的账号查询返回 0 行。
+- 用户 B 无法读取用户 A 的 pending 缩略图或物品照片（403/404）。
+- 用户 B 不能用用户 A 的 `photoKey` 关联到自己的物品。
+- 超过 24 小时未关联的 pending 缩略图及其文件被清理；已 `attached` 的不被清理。
+- 识别接口超过每账号频率上限返回 429。
 
 ## 当前验证状态
 
@@ -762,6 +802,7 @@ using (public.is_household_member(household_id));
 - 2026-07-04 用户 A/B 权限负例已在真实 Supabase 项目验证：A 可创建自己的 area/location/item；B 读取 A 的 household/area/location/item 均为 0 行；B 向 A household 插入 area/item 被 RLS 拒绝；B 更新/删除 A item 返回 0 行；未登录 anon 读取 A item 返回 0 行。结果记录见 `dev-docs/acceptance.md`。
 - 当前证据支持第一版“用户只能访问自己 household 数据”的 RLS 边界。
 - 2026-08-06 家庭成员共享设计已写入真源（`project-brief.md` / `architecture.md` / `database-design.md` / `acceptance.md` / `stages/family-sharing.md`）：邀请方式为分享链接 + 自主申请 + 房主批准，链接落地页含 Android 内测 APK 下载入口。migration（`202608060001_family_sharing.sql`）已编写并与本设计一致，尚未在任何数据库执行。
+- 2026-08-07 拍照识别数据设计（`items.photo_key` + `pending_photos`）已写入本文件，migration 尚未编写/执行。
 
 ## 仍需补充验证
 

@@ -71,6 +71,7 @@ auth.users
   -> areas
   -> locations
   -> items
+  -> pending_photos（2026-08-07：拍照识别缩略图暂存）
 ```
 
 每个用户注册后自动拥有一个默认家庭空间。2026-08-06 已确认将家庭成员共享纳入当前范围，`households` / `household_members` 直接承载共享，`household_invitations` 承载邀请链接，`household_join_requests` 承载加入申请；areas / locations / items 继续以 `household_id` 归属家庭，不需要因共享做数据迁移。
@@ -148,6 +149,7 @@ auth.users
 - `name`
 - `note`
 - `expire_date`
+- `photo_key`（2026-08-07 新增：物品缩略图文件名，可空、唯一）
 - `created_by`
 - `created_at`
 - `updated_at`
@@ -250,3 +252,31 @@ auth.users
 - 离线编辑和删除进入 `pending_operations` 队列；恢复网络后按队列提交，冲突时服务器状态优先，客户端展示需用户重新确认的状态。
 - 第一版同步触发点：登录后、App 启动、手动刷新/同步、网络恢复、在线写入成功后。不做后台长时间同步、推送实时同步或复杂合并 UI。
 - 家庭成员共享先做 Web/PWA（2026-08-06 确认）；Android 内测版包含房主邀请分享与申请审批能力（App 内生成邀请链接并分享/复制，App 内批准/拒绝加入申请），成员管理等以 Web 端为主，服务端权限模型保持兼容，Android 仍按当前 session 推导的 household 读取数据。
+
+## 2026-08-07 拍照识别物品架构（Android 内测版先行）
+
+用户确认在 Android 内测版新增拍照识别物品能力，边界：只保存缩略图、原图即弃、豆包识别、Android 先行。详见设计文档 `docs/superpowers/specs/2026-08-07-photo-recognition-design.md`。
+
+识别与保存链路（mode=name）：
+
+```text
+Android 拍物品正面照
+  -> 本地压缩到约 1280px（200–400KB）
+  -> POST /api/recognition（mode=name）
+  -> 服务器校验登录与家庭
+  -> 生成缩略图暂存（pending_photos）+ 调豆包识别名称
+  -> 返回名称 + 缩略图暂存 id
+  -> 用户确认表单
+  -> 保存物品时带 photoKey -> items.photo_key 关联缩略图
+  -> 物品列表展示缩略图
+```
+
+有效期识别链路（mode=expiry）：只调豆包读日期，不存图，识别结果回填过期日。
+
+关键边界：
+
+- 豆包 API key 只存服务器环境变量，App/前端不接触。
+- 缩略图访问走登录态接口，服务端校验物品所属家庭成员身份；不允许公开静态访问。
+- 未关联缩略图 24 小时后清理；识别接口按账号限频，防刷额度。
+- 第一版缩略图存服务器本地磁盘，经存储抽象层访问，后续可切换 OSS。
+- `items` 表新增 `photo_key` 列（可空、唯一）；新增 `pending_photos` 表；具体字段与 RLS 见 `dev-docs/database-design.md`。

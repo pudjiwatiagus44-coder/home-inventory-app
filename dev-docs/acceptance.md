@@ -738,3 +738,12 @@
 - Excel 层证据：`ExcelBackupGenerator` 用 Apache POI 生成 `物品清单_YYYY-MM-DD_HH-mm-ss.xlsx`（表头 `序号/名称/格子编号/所在区域/备注/有效期`），导出写入系统下载目录；导入走系统文件选择器 → multipart 上传 `/api/inventory/import?mode=preview` 预检 → 冲突行选择（跳过/都保留/覆盖）→ commit 提交 → 汇总提示（新增/覆盖/保留重复/跳过/失败行）。
 - 验证证据：`gradle :app:testDebugUnitTest --no-daemon` 通过 9 个测试文件 / 26 个测试（会话、仓库、同步、校验、ViewModel、Excel、导入契约）；`gradle :app:assembleDebug --no-daemon` 成功，debug APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`；服务端契约回归 `npm test` 通过 34 个文件 / 225 个测试，`npm run lint` 通过。
 - 剩余未验证：Android 真机安装后的完整点击验收（自动登录、在线增删改、搜索/筛选/排序/过期、导出/导入、断网离线编辑、恢复自动同步、冲突提示、退出清理）；这些需要在真机按验收清单执行后写回证据。服务器无需变更（复用现有 API）。
+
+## 2026-08-07 拍照识别物品设计确认
+
+- 用户确认将「拍照识别物品」纳入 Android 内测版阶段范围（原真源「第一版不做照片上传、AI 图片识别」相应调整，仍不做高清原图与扫码识别）。
+- 已确认决策：拍物品正面照识别名称自动填表 + 可选拍有效期照片识别过期日；只保存 160–200px 缩略图（约 5–15KB），原图识别后即弃；AI 服务用火山引擎豆包视觉（API key 仅存服务器）；识别链路为 Android 本地压缩（约 1280px、200–400KB）→ 服务器生成缩略图暂存并调豆包 → 返回名称/日期与缩略图 id → 保存物品时关联；第一版缩略图存服务器本地磁盘并预留 OSS 抽象；Android 先行，Web/PWA 后续。
+- 成本评估：单次识别约 0.005–0.02 元；缩略图方案下 10 万张约 1GB，存储与流量成本可忽略，第一版不接 OSS。
+- 设计文档：`docs/superpowers/specs/2026-08-07-photo-recognition-design.md`；已同步更新 `dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/database-design.md`、`dev-docs/technical-selection.md`。
+- 验收前置：识别接口 TDD（mock 豆包）、用户 A/B 缩略图与 photoKey 权限负例、孤儿清理、频率限制；Android 端压缩上传与失败兜底；真机验收清单见设计文档。
+- 未验证/未实施：数据库 migration（`items.photo_key` + `pending_photos`）尚未编写执行；识别接口与 Android 端尚未实现；豆包账号与 API key 尚未开通；隐私政策关于照片发送至火山引擎的条款待公开推广前补齐。
