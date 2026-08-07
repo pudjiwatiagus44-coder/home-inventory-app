@@ -504,7 +504,7 @@ fun ItemFormDialog(
                                 lastPhotoBytes,
                             )
                         },
-                        enabled = !isSaving && recognizing == null,
+                        enabled = !isSaving,
                     ) {
                         Text("存入草稿箱")
                     }

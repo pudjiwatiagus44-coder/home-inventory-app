@@ -819,3 +819,11 @@
 - 测试：`DashboardViewModelTest` 新增 `batchImportToDraftsCreatesDraftsAndRecognizes`（2 张照片建 2 条草稿并触发识别、区域/位置预填）。Android 单测 + `assembleDebug` 通过。
 - 版本：0.5.7 / code 13，已上传服务器，version.json 返回 0.5.7/code 13，APK SHA-256 与本地一致。服务器无需变更。
 - 待办：真机验收批量导入的两种方式。
+
+## 2026-08-07 0.5.8 识别中可存草稿证据
+
+- 需求：拍照识别过程中（名称尚未识别出来）即可存入草稿箱，不等识别完成。
+- 实现：新增物品弹窗「存入草稿箱」按钮在识别进行中不再禁用（仅 `isSaving` 时禁用）；识别中存草稿时草稿以「识别中」状态保存，弹窗关闭后由 ViewModel 后台继续识别并自动更新名称/备注（原有草稿后台更新机制）。
+- 测试：Android 单测全通过，`assembleDebug` 通过。
+- 版本：0.5.8 / code 14，已上传服务器，version.json 返回 0.5.8/code 14，APK SHA-256 与本地一致。服务器无需变更。
+- 待办：真机验收（拍照识别中途直接存草稿，草稿稍后自动补名称/备注）。
