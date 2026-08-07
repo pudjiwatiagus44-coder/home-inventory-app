@@ -28,6 +28,7 @@ import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
+import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.InviteDialog
@@ -54,10 +55,13 @@ fun DashboardHost(
     val inviteState by viewModel.invitations().collectAsState()
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     val updateState by viewModel.updateCheckState().collectAsState()
+    val draftsUi by viewModel.draftsState.collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
     var previewItem by remember { mutableStateOf<DashboardUiItem?>(null) }
+    var showDraftsDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
+    var editingDraftId by remember { mutableStateOf<String?>(null) }
     var showLocationForm by remember { mutableStateOf(false) }
     var showAreaForm by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -66,6 +70,9 @@ fun DashboardHost(
     var importError by remember { mutableStateOf<String?>(null) }
     var isCommittingImport by remember { mutableStateOf(false) }
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
+    val editingDraft = editingDraftId?.let { id ->
+        draftsUi.drafts.firstOrNull { it.id == id }
+    }
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -108,6 +115,7 @@ fun DashboardHost(
         },
         onAddItem = {
             editingItem = null
+            editingDraftId = null
             formError = null
             showItemForm = true
         },
@@ -121,6 +129,7 @@ fun DashboardHost(
         },
         onEditItem = { item ->
             editingItem = item
+            editingDraftId = null
             formError = null
             showItemForm = true
         },
@@ -171,6 +180,10 @@ fun DashboardHost(
             viewModel.generateInvitationLink()
             viewModel.refreshJoinRequests()
         },
+        onDraftsClick = {
+            showDraftsDialog = true
+        },
+        draftCount = draftsUi.drafts.size,
         onSignOut = {
             scope.launch {
                 authRepository.logout()
@@ -229,14 +242,18 @@ fun DashboardHost(
 
     if (showItemForm) {
         ItemFormDialog(
-            title = if (editingItem == null) "新增物品" else "编辑物品",
+            title = when {
+                editingDraftId != null -> "编辑草稿"
+                editingItem == null -> "新增物品"
+                else -> "编辑物品"
+            },
             initial = ItemFormValues(
-                name = editingItem?.name ?: "",
-                areaId = editingItem?.areaId ?: "",
-                locationId = editingItem?.locationId ?: "",
-                note = editingItem?.note ?: "",
-                expireDate = editingItem?.expireDate,
-                photoKey = editingItem?.photoKey ?: "",
+                name = editingDraft?.name ?: editingItem?.name ?: "",
+                areaId = editingDraft?.areaId ?: editingItem?.areaId ?: "",
+                locationId = editingDraft?.locationId ?: editingItem?.locationId ?: "",
+                note = editingDraft?.note ?: editingItem?.note ?: "",
+                expireDate = editingDraft?.expireDate ?: editingItem?.expireDate,
+                photoKey = editingDraft?.photoKey ?: editingItem?.photoKey ?: "",
             ),
             areas = state.areas,
             locations = state.locations,
@@ -244,17 +261,45 @@ fun DashboardHost(
             errorMessage = formError,
             onRecognize = viewModel::recognizeItemPhoto,
             onAddPhoto = repository::uploadThumbnailOnly,
+            onSaveToDraft = { values, bytes ->
+                viewModel.saveToDraft(
+                    DraftSaveInput(
+                        bytes = bytes,
+                        name = values.name,
+                        note = values.note,
+                        expireDate = values.expireDate,
+                        areaId = values.areaId.ifBlank { null },
+                        locationId = values.locationId.ifBlank { null },
+                        photoKey = values.photoKey,
+                    ),
+                )
+                showItemForm = false
+            },
+            showDraftButton = editingItem == null && editingDraftId == null,
             loadCurrentPhoto = {
-                val editing = editingItem
-                if (editing == null) {
-                    Result.failure(IllegalStateException("无图片"))
+                val draftId = editingDraftId
+                if (draftId != null && editingDraft != null) {
+                    viewModel.readDraftPhoto(draftId, editingDraft.photoKey)
                 } else {
-                    editing.photoKey?.let { key ->
-                        LocalPhotoStore.read(context, key)?.let { Result.success(it) }
-                    } ?: viewModel.itemPhoto(editing.id)
+                    val editing = editingItem
+                    if (editing == null) {
+                        Result.failure(IllegalStateException("无图片"))
+                    } else {
+                        editing.photoKey?.let { key ->
+                            LocalPhotoStore.read(context, key)?.let { Result.success(it) }
+                        } ?: viewModel.itemPhoto(editing.id)
+                    }
                 }
             },
             onSave = { values ->
+                val draftId = editingDraftId
+                if (draftId != null) {
+                    viewModel.confirmSaveDraft(draftId, values)
+                    editingDraftId = null
+                    showItemForm = false
+                    formError = null
+                    return@ItemFormDialog
+                }
                 scope.launch {
                     val validation = validateItemForm(values.name, values.note)
                     if (!validation.isValid) {
@@ -308,6 +353,7 @@ fun DashboardHost(
             },
             onDismiss = {
                 showItemForm = false
+                editingDraftId = null
                 formError = null
             },
             onDelete = editingItem?.let { item ->
@@ -322,6 +368,42 @@ fun DashboardHost(
                         showItemForm = false
                     }
                 }
+            },
+        )
+    }
+
+    if (showDraftsDialog) {
+        DraftsDialog(
+            drafts = draftsUi.drafts,
+            savingDraftId = draftsUi.savingDraftId,
+            errorMessage = draftsUi.errorMessage,
+            readPhoto = { draft ->
+                viewModel.readDraftPhoto(draft.id, draft.photoKey).getOrNull()
+            },
+            onEdit = { draft ->
+                editingDraftId = draft.id
+                showDraftsDialog = false
+                formError = null
+                showItemForm = true
+            },
+            onConfirm = { draft ->
+                viewModel.confirmSaveDraft(
+                    draft.id,
+                    ItemFormValues(
+                        name = draft.name,
+                        areaId = draft.areaId ?: "",
+                        locationId = draft.locationId ?: "",
+                        note = draft.note,
+                        expireDate = draft.expireDate,
+                        photoKey = draft.photoKey,
+                    ),
+                )
+            },
+            onDelete = { draft ->
+                viewModel.deleteDraft(draft.id)
+            },
+            onDismiss = {
+                showDraftsDialog = false
             },
         )
     }

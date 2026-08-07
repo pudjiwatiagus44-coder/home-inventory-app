@@ -25,6 +25,8 @@ import com.homeinventory.app.ui.theme.Surface
 
 @Composable
 fun TopBar(
+    onDraftsClick: () -> Unit,
+    draftCount: Int,
     onBackup: () -> Unit,
     onImport: () -> Unit,
     onInvite: () -> Unit,
@@ -64,6 +66,25 @@ fun TopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        TextButton(onClick = onDraftsClick) {
+            Text("草稿")
+            if (draftCount > 0) {
+                Spacer(modifier = Modifier.width(3.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Primary)
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        text = "$draftCount",
+                        color = Surface,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
         TextButton(onClick = onBackup) { Text("备份") }
         TextButton(onClick = onImport) { Text("导入") }

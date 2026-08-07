@@ -2,8 +2,12 @@ package com.homeinventory.app.ui.dashboard
 
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.data.repository.RecognitionDraft
+import com.homeinventory.app.data.repository.DraftGateway
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.local.DraftEntity
+import com.homeinventory.app.data.local.DraftStatus
+import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -422,6 +426,119 @@ class DashboardViewModelTest {
         }
     }
 
+    @Test
+    fun saveToDraftCreatesDraftAndRunsBackgroundRecognition() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var recognized = false
+            val gateway = FakeDraftGateway(onRecognize = { _, _ -> recognized = true })
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                draftGateway = gateway,
+            )
+            advanceUntilIdle()
+
+            viewModel.saveToDraft(
+                DraftSaveInput(
+                    bytes = byteArrayOf(1),
+                    name = "",
+                    note = "",
+                    expireDate = null,
+                    areaId = null,
+                    locationId = null,
+                    photoKey = null,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(recognized)
+            assertEquals(1, gateway.created.size)
+            assertEquals(DraftStatus.Recognizing, gateway.created[0].status)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun confirmSaveDraftCreatesItemAndDeletesDraft() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var created = false
+            val gateway = FakeDraftGateway()
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                draftGateway = gateway,
+                confirmDraftCreate = { _, _, _, _, _ ->
+                    created = true
+                    Result.success(Unit)
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.saveToDraft(
+                DraftSaveInput(
+                    bytes = null,
+                    name = "牛奶",
+                    note = "常温保存",
+                    expireDate = null,
+                    areaId = null,
+                    locationId = null,
+                    photoKey = "photo_1.jpg",
+                ),
+            )
+            advanceUntilIdle()
+            val draft = gateway.created[0]
+
+            viewModel.confirmSaveDraft(
+                draft.id,
+                ItemFormValues(
+                    name = "牛奶",
+                    areaId = "",
+                    locationId = "",
+                    note = "常温保存",
+                    expireDate = null,
+                    photoKey = "photo_1.jpg",
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(created)
+            assertEquals(listOf(draft.id), gateway.deleted)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun draftsStateExposesDraftList() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val gateway = FakeDraftGateway()
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                draftGateway = gateway,
+            )
+            advanceUntilIdle()
+
+            viewModel.saveToDraft(
+                DraftSaveInput(
+                    bytes = null,
+                    name = "x",
+                    note = "",
+                    expireDate = null,
+                    areaId = null,
+                    locationId = null,
+                    photoKey = "p.jpg",
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.draftsState.value.drafts.size)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun item(
         id: String,
         name: String,
@@ -439,4 +556,55 @@ class DashboardViewModelTest {
         locationName = locationName,
         syncStatus = "synced",
     )
+}
+
+private class FakeDraftGateway(
+    private val onRecognize: suspend (String, ByteArray) -> Unit = { _, _ -> },
+) : DraftGateway {
+    val created = mutableListOf<DraftEntity>()
+    val deleted = mutableListOf<String>()
+    private val flow = MutableStateFlow<List<DraftEntity>>(emptyList())
+
+    override fun observe(): kotlinx.coroutines.flow.Flow<List<DraftEntity>> = flow
+
+    override suspend fun create(
+        bytes: ByteArray?,
+        name: String,
+        note: String,
+        expireDate: String?,
+        areaId: String?,
+        locationId: String?,
+        photoKey: String?,
+    ): DraftEntity {
+        val draft = DraftEntity(
+            id = "draft-${created.size + 1}",
+            photoKey = photoKey,
+            name = name,
+            note = note,
+            expireDate = expireDate,
+            areaId = areaId,
+            locationId = locationId,
+            status = if (name.isNotBlank() && photoKey != null) {
+                DraftStatus.Ready
+            } else {
+                DraftStatus.Recognizing
+            },
+            createdAt = System.currentTimeMillis(),
+        )
+        created.add(draft)
+        flow.value = flow.value + draft
+        return draft
+    }
+
+    override suspend fun recognize(id: String, bytes: ByteArray): DraftEntity? {
+        onRecognize(id, bytes)
+        return flow.value.firstOrNull { it.id == id }
+    }
+
+    override suspend fun delete(id: String) {
+        deleted.add(id)
+        flow.value = flow.value.filterNot { it.id == id }
+    }
+
+    override fun readPhoto(id: String, photoKey: String?): android.graphics.Bitmap? = null
 }

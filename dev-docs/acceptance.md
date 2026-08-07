@@ -793,3 +793,12 @@
 - 测试：`doubao-vision.test.ts` 新增两行解析/无备注用例并改 `recognizeItemDetails`；`recognition-service.test.ts` 断言 note；Android `InventoryRepositoryTest`/`TestApiStub` 补 note 断言。全量 `npm test` 1087 通过 / 8 跳过，lint/build 通过；Android 单测 + 打包通过。
 - 版本：0.5.4 / code 10 已上传（version.json 确认），服务器识别代码已同步重建并重启；线上 smoke：`mode=name` 返回 `{"name":"蒙牛纯牛奶250m","note":null,...}`（纯文字测试图无备注属预期）。
 - 备注：服务器本次通过 scp 直接同步两个识别文件重建（GitHub 推送当时网络中断，提交 `dddae7b` 待网络恢复后补推，服务器 git 工作区有 2 个文件未提交，需在下次正式部署时通过克隆对齐）。
+
+## 2026-08-07 0.5.5 草稿箱功能证据
+
+- 需求：识别较慢，支持「拍照 → 存入草稿箱 → 继续识别下一个 → 草稿列表 → 编辑或直接保存」的批量录入流程；识别完成自动更新草稿名称/备注。
+- 已确认设计：草稿只存手机本地（换设备不带走）；存入草稿箱不等待识别（后台识别完成自动更新名称/备注）；主界面顶部「草稿」按钮 + 数量角标；草稿条目支持 编辑 / 直接保存 / 删除。
+- 实现：新增 Room `drafts` 表（`DraftEntity`/`DraftDao`，DB 版本 4 + `MIGRATION_3_4`）；`DraftRepository` 实现 `DraftGateway`（本地照片 `draft_<id>.jpg` + 识别后补存 `photoKey` 文件、后台 `recognize(mode=name)` 更新草稿名称/备注/状态）；`DashboardViewModel` 增加 `draftsState`、`saveToDraft`（空名称时后台识别）、`confirmSaveDraft`（调 `createItemOnline` 建档后删草稿）、`deleteDraft`、`readDraftPhoto`；`ItemFormDialog` 保存按钮旁加「存入草稿箱」按钮（仅新增模式，记录最近照片字节）；`TopBar` 加「草稿」角标按钮；新增 `DraftsDialog` 列表（缩略图/识别中…/备注/编辑/保存/删除）；`DashboardHost` 接线草稿编辑（编辑草稿 → 表单 → 保存即建档）。
+- 测试：`DashboardViewModelTest` 新增 3 例（存草稿触发后台识别、确认保存建档并删草稿、草稿列表状态）。Android 单测 + `assembleDebug` 通过。
+- 版本：0.5.5 / code 11，APK 20,082,103 字节，`aapt` 确认 `application-label:'家庭物品'`；已上传服务器，version.json 返回 0.5.5/code 11，服务器 APK SHA-256 与本地一致。服务器无需变更（建档复用 POST items + photoKey 关联）。
+- 待办：真机验收草稿流程（新增 → 拍照识别 → 存入草稿箱 → 连续录入 → 草稿列表自动更新名称/备注 → 编辑或直接保存）；确认保存后草稿删除且物品出现在清单。

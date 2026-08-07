@@ -15,6 +15,8 @@ import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.BuildConfig
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
+import com.homeinventory.app.data.media.LocalPhotoStore
+import com.homeinventory.app.data.repository.DraftRepository
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
@@ -53,6 +55,21 @@ fun AppRoot() {
             syncStateDao = app.database.syncStateDao(),
         )
     }
+    val draftRepository = remember {
+        DraftRepository(
+            draftDao = app.database.draftDao(),
+            api = api,
+            savePhoto = { fileName, bytes ->
+                LocalPhotoStore.save(app.applicationContext, fileName, bytes)
+            },
+            readPhotoFile = { fileName ->
+                LocalPhotoStore.read(app.applicationContext, fileName)
+            },
+            deletePhotoFile = { fileName ->
+                LocalPhotoStore.delete(app.applicationContext, fileName)
+            },
+        )
+    }
     val factory = remember(repository) {
         viewModelFactory {
             initializer {
@@ -66,6 +83,8 @@ fun AppRoot() {
                     checkForUpdate = repository::checkForUpdate,
                     recognizePhoto = repository::recognizeItemPhoto,
                     loadPhoto = repository::loadItemPhoto,
+                    draftGateway = draftRepository,
+                    confirmDraftCreate = repository::createItemOnline,
                     localVersionCode = BuildConfig.VERSION_CODE,
                 )
             }

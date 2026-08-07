@@ -37,6 +37,8 @@ fun DashboardScreen(
     onBackup: () -> Unit,
     onImport: () -> Unit,
     onInvite: () -> Unit,
+    onDraftsClick: () -> Unit,
+    draftCount: Int,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -44,6 +46,8 @@ fun DashboardScreen(
         containerColor = Background,
         topBar = {
             TopBar(
+                onDraftsClick = onDraftsClick,
+                draftCount = draftCount,
                 onBackup = onBackup,
                 onImport = onImport,
                 onInvite = onInvite,

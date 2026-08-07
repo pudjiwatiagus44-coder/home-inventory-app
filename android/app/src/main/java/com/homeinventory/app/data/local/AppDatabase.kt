@@ -15,8 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ItemEntity::class,
         PendingOperationEntity::class,
         SyncStateEntity::class,
+        DraftEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
     abstract fun pendingOperationDao(): PendingOperationDao
     abstract fun syncStateDao(): SyncStateDao
+    abstract fun draftDao(): DraftDao
 
     @Transaction
     suspend fun clearAll() {
@@ -44,6 +46,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS drafts (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        photoKey TEXT,
+                        name TEXT NOT NULL,
+                        note TEXT NOT NULL,
+                        expireDate TEXT,
+                        areaId TEXT,
+                        locationId TEXT,
+                        status TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -55,6 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "home_inventory.db",
                 )
                     .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_3_4)
                     // v1 从未有真实数据（旧 UI 不写 Room），内测阶段允许重建
                     .fallbackToDestructiveMigration()
                     .build()

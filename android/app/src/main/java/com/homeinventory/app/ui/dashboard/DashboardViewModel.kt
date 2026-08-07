@@ -5,14 +5,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.local.DraftEntity
+import com.homeinventory.app.data.local.DraftStatus
+import com.homeinventory.app.data.repository.DraftGateway
 import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -69,6 +74,22 @@ data class UpdateCheckUiState(
     val downloadUrl: String? = null,
 )
 
+data class DraftsUiState(
+    val drafts: List<DraftEntity> = emptyList(),
+    val savingDraftId: String? = null,
+    val errorMessage: String? = null,
+)
+
+data class DraftSaveInput(
+    val bytes: ByteArray?,
+    val name: String,
+    val note: String,
+    val expireDate: String?,
+    val areaId: String?,
+    val locationId: String?,
+    val photoKey: String?,
+)
+
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
@@ -93,6 +114,16 @@ class DashboardViewModel(
     private val loadPhoto: suspend (itemId: String) -> Result<Bitmap> = {
         Result.failure(IllegalStateException("图片加载不可用"))
     },
+    private val draftGateway: DraftGateway? = null,
+    private val confirmDraftCreate: suspend (
+        name: String,
+        note: String,
+        expireDate: String?,
+        locationId: String?,
+        photoKey: String?,
+    ) -> Result<Unit> = { _, _, _, _, _ ->
+        Result.failure(IllegalStateException("草稿保存不可用"))
+    },
     private val localVersionCode: Int = 0,
     private val today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
@@ -102,6 +133,12 @@ class DashboardViewModel(
     private val invite = MutableStateFlow(InviteUiState())
     private val joinRequests = MutableStateFlow(JoinRequestsUiState())
     private val updateCheck = MutableStateFlow(UpdateCheckUiState())
+    private val drafts = MutableStateFlow(DraftsUiState())
+
+    val draftsState: StateFlow<DraftsUiState> =
+        (draftGateway?.observe() ?: flowOf(emptyList()))
+            .combine(drafts) { list, ui -> ui.copy(drafts = list) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, DraftsUiState())
 
     fun updateCheckState(): StateFlow<UpdateCheckUiState> = updateCheck
 
@@ -136,6 +173,64 @@ class DashboardViewModel(
         recognizePhoto(mode, bytes)
 
     suspend fun itemPhoto(itemId: String): Result<Bitmap> = loadPhoto(itemId)
+
+    fun saveToDraft(input: DraftSaveInput) {
+        val gateway = draftGateway ?: return
+        viewModelScope.launch {
+            val draft = gateway.create(
+                bytes = input.bytes,
+                name = input.name,
+                note = input.note,
+                expireDate = input.expireDate,
+                areaId = input.areaId,
+                locationId = input.locationId,
+                photoKey = input.photoKey,
+            )
+            if (draft.status == DraftStatus.Recognizing && input.bytes != null) {
+                gateway.recognize(draft.id, input.bytes)
+            }
+        }
+    }
+
+    fun confirmSaveDraft(draftId: String, values: ItemFormValues) {
+        val gateway = draftGateway ?: return
+        viewModelScope.launch {
+            drafts.value = drafts.value.copy(
+                savingDraftId = draftId,
+                errorMessage = null,
+            )
+            confirmDraftCreate(
+                values.name,
+                values.note,
+                values.expireDate,
+                values.locationId.ifBlank { null },
+                values.photoKey,
+            )
+                .onSuccess {
+                    gateway.delete(draftId)
+                }
+                .onFailure { error ->
+                    drafts.value = drafts.value.copy(
+                        errorMessage = error.message ?: "保存失败",
+                    )
+                }
+            drafts.value = drafts.value.copy(savingDraftId = null)
+        }
+    }
+
+    fun deleteDraft(draftId: String) {
+        viewModelScope.launch {
+            draftGateway?.delete(draftId)
+        }
+    }
+
+    fun readDraftPhoto(draftId: String, photoKey: String?): Result<Bitmap> {
+        val gateway = draftGateway
+            ?: return Result.failure(IllegalStateException("草稿不可用"))
+        val bitmap = gateway.readPhoto(draftId, photoKey)
+            ?: return Result.failure(IllegalStateException("无图片"))
+        return Result.success(bitmap)
+    }
 
     fun invitations(): StateFlow<InviteUiState> = invite
 

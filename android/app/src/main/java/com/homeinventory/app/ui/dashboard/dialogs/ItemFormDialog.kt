@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,6 +74,8 @@ fun ItemFormDialog(
     onAddPhoto: suspend (bytes: ByteArray) -> Result<String> = {
         Result.failure(IllegalStateException("添加照片不可用"))
     },
+    onSaveToDraft: (ItemFormValues, ByteArray?) -> Unit = { _, _ -> },
+    showDraftButton: Boolean = true,
     loadCurrentPhoto: suspend () -> Result<Bitmap> = {
         Result.failure(IllegalStateException("图片不可用"))
     },
@@ -92,6 +95,7 @@ fun ItemFormDialog(
     var pendingMode by remember { mutableStateOf<String?>(null) }
     var sourceDialogVisible by remember { mutableStateOf(false) }
     var currentPhoto by remember { mutableStateOf<Bitmap?>(null) }
+    var lastPhotoBytes by remember { mutableStateOf<ByteArray?>(null) }
     LaunchedEffect(initial.photoKey) {
         currentPhoto = loadCurrentPhoto().getOrNull()
     }
@@ -99,6 +103,7 @@ fun ItemFormDialog(
     fun runRecognition(mode: String?, bytes: ByteArray) {
         val targetMode = mode ?: return
         pendingMode = null
+        lastPhotoBytes = bytes
         if (bytes.isEmpty()) {
             recognitionError = "读取照片失败，请重试"
             return
@@ -131,6 +136,7 @@ fun ItemFormDialog(
     }
 
     fun runAddPhoto(bytes: ByteArray) {
+        lastPhotoBytes = bytes
         if (bytes.isEmpty()) {
             recognitionError = "读取照片失败，请重试"
             return
@@ -384,7 +390,8 @@ fun ItemFormDialog(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onDelete != null) {
                     TextButton(onClick = onDelete) {
@@ -393,6 +400,27 @@ fun ItemFormDialog(
                 } else {
                     TextButton(onClick = onDismiss) {
                         Text("取消")
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (showDraftButton) {
+                    OutlinedButton(
+                        onClick = {
+                            onSaveToDraft(
+                                ItemFormValues(
+                                    name = name,
+                                    areaId = areaId,
+                                    locationId = locationId,
+                                    note = note,
+                                    expireDate = expireDate,
+                                    photoKey = photoKey,
+                                ),
+                                lastPhotoBytes,
+                            )
+                        },
+                        enabled = !isSaving && recognizing == null,
+                    ) {
+                        Text("存入草稿箱")
                     }
                 }
                 Button(
