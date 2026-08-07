@@ -784,3 +784,12 @@
   - 测试：服务器 `recognition-service.test.ts` 新增 photo 模式（存缩略图、不调豆包）、`recognition/route.test.ts` 新增 `mode=photo` 返回 thumbnailId、`photo-attach.test.ts` 新增 PATCH 关联；Android `InventoryRepositoryTest` 新增 `uploadThumbnailOnly` 成功用例。全量 `npm test` 1086 通过 / 8 跳过，`npx eslint src` 通过，`npm run build` 通过；Android 单测 + `assembleDebug` 通过。
   - 版本：0.5.3 / code 9，APK 20,032,951 字节，`aapt dump badging` 确认 `application-label:'家庭物品'`；已上传服务器，version.json 返回 0.5.3/code 9，服务器 APK SHA-256 与本地一致。
   - 待办：服务器新代码（`mode=photo` + PATCH photoKey）部署上线；真机验收（点缩略图放大、编辑看图、无图加图、换图）；换设备/重装后放大查看回退为服务器模糊缩略图（符合既定存储决策）。
+
+## 2026-08-07 0.5.4 识别详情与弹窗布局修复证据
+
+- 用户反馈：新增物品识别后照片预览把保存按钮挤出屏幕（弹窗内容过高）；识别名称太短；希望自动补备注。
+- 布局修复：不采用滚动方案（用户明确不需要），改为把照片预览从独立行移到标题行右侧（44dp 小缩略图）、弹窗间距 14dp→10dp、按钮文案缩短（识别名称/识别日期/添加照片），弹窗高度明显降低，保存按钮回到可视区。
+- 识别详情：豆包提示词改为「第一行返回详细中文名称（尽量含品牌/规格，如 蒙牛纯牛奶250ml），第二行返回一句简短备注（如 常温保存）」，服务端解析两行并新增 `note` 字段；Android `RecognitionDraft`/DTO 增加 `note`，备注为空时自动填入识别备注。
+- 测试：`doubao-vision.test.ts` 新增两行解析/无备注用例并改 `recognizeItemDetails`；`recognition-service.test.ts` 断言 note；Android `InventoryRepositoryTest`/`TestApiStub` 补 note 断言。全量 `npm test` 1087 通过 / 8 跳过，lint/build 通过；Android 单测 + 打包通过。
+- 版本：0.5.4 / code 10 已上传（version.json 确认），服务器识别代码已同步重建并重启；线上 smoke：`mode=name` 返回 `{"name":"蒙牛纯牛奶250m","note":null,...}`（纯文字测试图无备注属预期）。
+- 备注：服务器本次通过 scp 直接同步两个识别文件重建（GitHub 推送当时网络中断，提交 `dddae7b` 待网络恢复后补推，服务器 git 工作区有 2 个文件未提交，需在下次正式部署时通过克隆对齐）。
