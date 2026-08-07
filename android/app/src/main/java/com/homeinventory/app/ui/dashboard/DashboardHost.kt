@@ -88,10 +88,12 @@ fun DashboardHost(
     }
     val defaultAreaId = editingDraft?.areaId
         ?: editingItem?.areaId
+        ?: state.filters.areaId.takeIf { id -> state.areas.any { it.id == id } }
         ?: lastItemAreaId.takeIf { id -> state.areas.any { it.id == id } }
         ?: ""
     val defaultLocationId = editingDraft?.locationId
         ?: editingItem?.locationId
+        ?: state.filters.locationId.takeIf { id -> state.locations.any { it.id == id } }
         ?: lastItemLocationId.takeIf { id -> state.locations.any { it.id == id } }
         ?: ""
 
@@ -197,6 +199,7 @@ fun DashboardHost(
         },
         onAddLocation = {
             editingLocation = null
+            locationFormInitialAreaId = state.filters.areaId ?: ""
             formError = null
             showLocationForm = true
         },
