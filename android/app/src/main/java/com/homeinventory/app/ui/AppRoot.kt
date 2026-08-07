@@ -64,6 +64,8 @@ fun AppRoot() {
                     approveJoinRequest = repository::approveJoinRequest,
                     rejectJoinRequest = repository::rejectJoinRequest,
                     checkForUpdate = repository::checkForUpdate,
+                    recognizePhoto = repository::recognizeItemPhoto,
+                    loadPhoto = repository::loadItemPhoto,
                     localVersionCode = BuildConfig.VERSION_CODE,
                 )
             }

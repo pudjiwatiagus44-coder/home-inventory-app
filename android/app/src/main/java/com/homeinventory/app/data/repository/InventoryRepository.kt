@@ -83,6 +83,7 @@ class InventoryRepository(
                         locationId = it.locationId,
                         areaId = it.locationId?.let { id -> areaIds[id] },
                         locationName = it.locationId?.let { id -> locationNames[id] },
+                        photoKey = it.photoKey,
                         serverUpdatedAt = it.serverUpdatedAt,
                         syncStatus = it.syncStatus,
                     )

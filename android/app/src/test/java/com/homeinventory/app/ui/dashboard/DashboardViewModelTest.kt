@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard
 
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import java.time.LocalDate
@@ -13,6 +14,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -366,6 +368,55 @@ class DashboardViewModelTest {
 
             assertEquals(false, viewModel.updateCheckState().value.updateAvailable)
             assertEquals(false, viewModel.updateCheckState().value.isChecking)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun recognizeItemPhotoDelegatesToRepository() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                recognizePhoto = { mode, _ ->
+                    Result.success(
+                        RecognitionDraft(
+                            mode = mode,
+                            name = "牛奶",
+                            thumbnailId = "photo_1.jpg",
+                        ),
+                    )
+                },
+            )
+            advanceUntilIdle()
+
+            val result = viewModel.recognizeItemPhoto("name", byteArrayOf(1))
+
+            assertTrue(result.isSuccess)
+            assertEquals("牛奶", result.getOrNull()?.name)
+            assertEquals("photo_1.jpg", result.getOrNull()?.thumbnailId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun recognizeItemPhotoSurfacesFailure() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                recognizePhoto = { _, _ ->
+                    Result.failure(IllegalStateException("识别失败"))
+                },
+            )
+            advanceUntilIdle()
+
+            val result = viewModel.recognizeItemPhoto("name", byteArrayOf(1))
+
+            assertTrue(result.isFailure)
+            assertEquals("识别失败", result.exceptionOrNull()?.message)
         } finally {
             Dispatchers.resetMain()
         }

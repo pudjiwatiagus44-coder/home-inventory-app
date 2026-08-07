@@ -8,6 +8,7 @@ data class ItemFormValues(
     val locationId: String = "",
     val note: String = "",
     val expireDate: String? = null,
+    val photoKey: String? = null,
 )
 
 data class LocationFormValues(

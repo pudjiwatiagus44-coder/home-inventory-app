@@ -1,5 +1,6 @@
 package com.homeinventory.app.ui.dashboard
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ fun DashboardScreen(
     onAddLocation: () -> Unit,
     onAddArea: () -> Unit,
     onEditItem: (DashboardUiItem) -> Unit,
+    loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     onRefresh: () -> Unit,
     onBackup: () -> Unit,
     onImport: () -> Unit,
@@ -87,6 +89,7 @@ fun DashboardScreen(
                 sortMode = state.sortMode,
                 onSortChange = onSortChange,
                 onEditItem = onEditItem,
+                loadPhoto = loadPhoto,
                 isEmpty = state.items.isEmpty(),
                 modifier = Modifier.weight(1f),
             )

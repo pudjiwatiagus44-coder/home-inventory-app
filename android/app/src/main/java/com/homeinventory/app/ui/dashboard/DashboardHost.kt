@@ -121,6 +121,7 @@ fun DashboardHost(
             formError = null
             showItemForm = true
         },
+        loadPhoto = viewModel::itemPhoto,
         onRefresh = {
             scope.launch {
                 repository.syncPendingOperations()
@@ -229,11 +230,13 @@ fun DashboardHost(
                 locationId = editingItem?.locationId ?: "",
                 note = editingItem?.note ?: "",
                 expireDate = editingItem?.expireDate,
+                photoKey = editingItem?.photoKey ?: "",
             ),
             areas = state.areas,
             locations = state.locations,
             isSaving = isSaving,
             errorMessage = formError,
+            onRecognize = viewModel::recognizeItemPhoto,
             onSave = { values ->
                 scope.launch {
                     val validation = validateItemForm(values.name, values.note)
@@ -244,7 +247,7 @@ fun DashboardHost(
                     isSaving = true
                     val locationId = values.locationId.ifBlank { null }
                     val result = if (editingItem == null) {
-                        repository.createItemOnline(values.name, values.note, values.expireDate, locationId)
+                        repository.createItemOnline(values.name, values.note, values.expireDate, locationId, values.photoKey)
                     } else {
                         repository.updateItemOnline(
                             editingItem!!.id,

@@ -1,6 +1,8 @@
 package com.homeinventory.app.ui.dashboard.components
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,10 +27,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +53,7 @@ fun ItemList(
     sortMode: ItemSortMode,
     onSortChange: (ItemSortMode) -> Unit,
     onEditItem: (DashboardUiItem) -> Unit,
+    loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     isEmpty: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -94,7 +101,11 @@ fun ItemList(
                 contentPadding = PaddingValues(bottom = 104.dp),
             ) {
                 items(items, key = { it.id }) { item ->
-                    ItemRow(item = item, onClick = { onEditItem(item) })
+                    ItemRow(
+                        item = item,
+                        onClick = { onEditItem(item) },
+                        loadPhoto = loadPhoto,
+                    )
                 }
             }
         }
@@ -140,7 +151,13 @@ private fun SortMenu(
 private fun ItemRow(
     item: DashboardUiItem,
     onClick: () -> Unit,
+    loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
 ) {
+    val thumbnail by produceState<Bitmap?>(initialValue = null, item.id) {
+        if (item.photoKey != null) {
+            value = loadPhoto(item.id).getOrNull()
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,13 +173,22 @@ private fun ItemRow(
                 .background(SurfaceMuted),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = item.name.take(1),
-                color = Primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
+            thumbnail?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } ?: run {
+                Text(
+                    text = item.name.take(1),
+                    color = Primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(

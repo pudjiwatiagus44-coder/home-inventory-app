@@ -1,6 +1,9 @@
 package com.homeinventory.app.ui.dashboard.dialogs
 
 import android.app.DatePickerDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -24,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,13 +38,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
+import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.ui.theme.Border
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Foreground
 import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Surface
+import java.io.File
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +61,7 @@ fun ItemFormDialog(
     isSaving: Boolean,
     errorMessage: String?,
     onSave: (ItemFormValues) -> Unit,
+    onRecognize: suspend (mode: String, bytes: ByteArray) -> Result<RecognitionDraft>,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
 ) {
@@ -59,6 +71,74 @@ fun ItemFormDialog(
     var locationId by remember { mutableStateOf(initial.locationId) }
     var note by remember { mutableStateOf(initial.note) }
     var expireDate by remember { mutableStateOf(initial.expireDate) }
+    var photoKey by remember { mutableStateOf(initial.photoKey) }
+    val scope = rememberCoroutineScope()
+    var recognizing by remember { mutableStateOf<String?>(null) }
+    var recognitionError by remember { mutableStateOf<String?>(null) }
+    var pendingMode by remember { mutableStateOf<String?>(null) }
+    var sourceDialogVisible by remember { mutableStateOf(false) }
+
+    fun runRecognition(mode: String?, bytes: ByteArray) {
+        val targetMode = mode ?: return
+        pendingMode = null
+        if (bytes.isEmpty()) {
+            recognitionError = "读取照片失败，请重试"
+            return
+        }
+        scope.launch {
+            recognizing = targetMode
+            recognitionError = null
+            onRecognize(targetMode, bytes)
+                .onSuccess { draft ->
+                    if (draft.name != null) {
+                        name = draft.name
+                    }
+                    if (draft.expireDate != null) {
+                        expireDate = draft.expireDate
+                    }
+                    if (draft.thumbnailId != null) {
+                        photoKey = draft.thumbnailId
+                    }
+                }
+                .onFailure { error ->
+                    recognitionError = error.message ?: "识别失败，请重试或手动填写"
+                }
+            recognizing = null
+        }
+    }
+
+    val cameraFile = remember {
+        File(context.cacheDir, "camera").apply { mkdirs() }
+        File(context.cacheDir, "camera/photo_${System.currentTimeMillis()}.jpg")
+    }
+    val cameraUri = remember {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            cameraFile,
+        )
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        if (success) {
+            val bytes = cameraFile.readBytes()
+            cameraFile.delete()
+            runRecognition(pendingMode, bytes)
+        } else {
+            pendingMode = null
+        }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            val bytes = ImageCompressor.compressToJpeg(context, uri)
+            runRecognition(pendingMode, bytes ?: ByteArray(0))
+        } else {
+            pendingMode = null
+        }
+    }
 
     val filteredLocations = locations.filter { location ->
         when (areaId) {
@@ -137,6 +217,68 @@ fun ItemFormDialog(
                 label = { Text("备注") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = {
+                        pendingMode = "name"
+                        recognitionError = null
+                        sourceDialogVisible = true
+                    },
+                    enabled = recognizing == null,
+                ) {
+                    Text(if (recognizing == "name") "识别中..." else "拍照识别名称")
+                }
+                OutlinedButton(
+                    onClick = {
+                        pendingMode = "expiry"
+                        recognitionError = null
+                        sourceDialogVisible = true
+                    },
+                    enabled = recognizing == null,
+                ) {
+                    Text(if (recognizing == "expiry") "识别中..." else "拍摄有效期")
+                }
+            }
+            if (sourceDialogVisible) {
+                AlertDialog(
+                    onDismissRequest = {
+                        sourceDialogVisible = false
+                        pendingMode = null
+                    },
+                    title = { Text(if (pendingMode == "expiry") "选择有效期照片来源" else "选择物品照片来源") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    sourceDialogVisible = false
+                                    cameraLauncher.launch(cameraUri)
+                                },
+                            ) {
+                                Text("拍照")
+                            }
+                            TextButton(
+                                onClick = {
+                                    sourceDialogVisible = false
+                                    galleryLauncher.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                            ) {
+                                Text("从相册选择")
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
+            recognitionError?.let {
+                Text(text = it, color = Danger, fontSize = 13.sp)
+            }
             ExpireDateField(
                 expireDate = expireDate,
                 onPickDate = { date ->
@@ -168,6 +310,7 @@ fun ItemFormDialog(
                                 locationId = locationId,
                                 note = note,
                                 expireDate = expireDate,
+                                photoKey = photoKey,
                             ),
                         )
                     },

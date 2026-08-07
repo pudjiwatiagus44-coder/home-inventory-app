@@ -1,9 +1,11 @@
 package com.homeinventory.app.ui.dashboard
 
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.data.repository.InventorySnapshot
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +27,7 @@ data class DashboardUiItem(
     val serverUpdatedAt: String?,
     val syncStatus: String,
     val expirationStatus: String,
+    val photoKey: String? = null,
 )
 
 data class DashboardFilters(
@@ -84,6 +87,12 @@ class DashboardViewModel(
     private val checkForUpdate: suspend () -> Result<ApkVersionDto> = {
         Result.failure(IllegalStateException("更新检查不可用"))
     },
+    private val recognizePhoto: suspend (mode: String, bytes: ByteArray) -> Result<RecognitionDraft> = { _, _ ->
+        Result.failure(IllegalStateException("拍照识别不可用"))
+    },
+    private val loadPhoto: suspend (itemId: String) -> Result<Bitmap> = {
+        Result.failure(IllegalStateException("图片加载不可用"))
+    },
     private val localVersionCode: Int = 0,
     private val today: LocalDate = LocalDate.now(),
 ) : ViewModel() {
@@ -122,6 +131,11 @@ class DashboardViewModel(
     fun dismissUpdatePrompt() {
         updateCheck.value = updateCheck.value.copy(updateAvailable = false)
     }
+
+    suspend fun recognizeItemPhoto(mode: String, bytes: ByteArray): Result<RecognitionDraft> =
+        recognizePhoto(mode, bytes)
+
+    suspend fun itemPhoto(itemId: String): Result<Bitmap> = loadPhoto(itemId)
 
     fun invitations(): StateFlow<InviteUiState> = invite
 
@@ -227,6 +241,7 @@ class DashboardViewModel(
                     serverUpdatedAt = item.serverUpdatedAt,
                     syncStatus = item.syncStatus,
                     expirationStatus = expirationStatus(item.expireDate),
+                    photoKey = item.photoKey,
                 )
             }
             val visible = filterItems(items, filter, snapshot).sortedWith(itemComparator(sort))

@@ -29,6 +29,7 @@ data class InventorySnapshot(
         val locationId: String?,
         val areaId: String?,
         val locationName: String?,
+        val photoKey: String? = null,
         val serverUpdatedAt: String? = null,
         val syncStatus: String,
     )
