@@ -32,6 +32,7 @@ import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
+import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
@@ -74,6 +75,8 @@ fun DashboardHost(
     var lastItemLocationId by remember { mutableStateOf("") }
     var showLocationForm by remember { mutableStateOf(false) }
     var showAreaForm by remember { mutableStateOf(false) }
+    var editingArea by remember { mutableStateOf<InventorySnapshot.AreaView?>(null) }
+    var editingLocation by remember { mutableStateOf<InventorySnapshot.LocationView?>(null) }
     var formError by remember { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var importPreview by remember { mutableStateOf<ImportPreviewDto?>(null) }
@@ -193,12 +196,24 @@ fun DashboardHost(
             showItemForm = true
         },
         onAddLocation = {
+            editingLocation = null
             formError = null
             showLocationForm = true
         },
         onAddArea = {
+            editingArea = null
             formError = null
             showAreaForm = true
+        },
+        onLongPressArea = { area ->
+            editingArea = area
+            formError = null
+            showAreaForm = true
+        },
+        onLongPressLocation = { location ->
+            editingLocation = location
+            formError = null
+            showLocationForm = true
         },
         onEditItem = { item ->
             editingItem = item
@@ -217,6 +232,8 @@ fun DashboardHost(
                 ),
             )
         },
+        unassignedFilter = state.unassignedFilter,
+        onToggleUnassigned = viewModel::toggleUnassignedFilter,
         loadPhoto = viewModel::itemPhoto,
         onRefresh = {
             scope.launch {
@@ -514,8 +531,13 @@ fun DashboardHost(
 
     if (showLocationForm) {
         LocationFormDialog(
-            title = "新增位置",
-            initial = LocationFormValues(
+            title = if (editingLocation == null) "新增位置" else "编辑位置",
+            initial = editingLocation?.let { location ->
+                LocationFormValues(
+                    name = location.name,
+                    areaId = location.areaId ?: "",
+                )
+            } ?: LocationFormValues(
                 name = "",
                 areaId = locationFormInitialAreaId,
             ),
@@ -531,17 +553,27 @@ fun DashboardHost(
                     }
                     isSaving = true
                     val areaId = values.areaId.takeUnless { it == UNASSIGNED_MARKER || it.isBlank() }
-                    repository.createLocationOnline(values.name, areaId)
+                    val location = editingLocation
+                    val result = if (location == null) {
+                        repository.createLocationOnline(values.name, areaId)
+                    } else {
+                        repository.updateLocationOnline(location.id, values.name, areaId)
+                    }
+                    result
                         .onSuccess {
                             isSaving = false
                             formError = null
                             showLocationForm = false
+                            editingLocation = null
                         }
                         .onFailure { error ->
                             if (isNetworkError(error)) {
-                                repository.createLocationOffline(values.name, areaId)
+                                if (location == null) {
+                                    repository.createLocationOffline(values.name, areaId)
+                                }
                                 isSaving = false
                                 showLocationForm = false
+                                editingLocation = null
                             } else {
                                 isSaving = false
                                 formError = error.message
@@ -551,15 +583,33 @@ fun DashboardHost(
             },
             onDismiss = {
                 showLocationForm = false
+                editingLocation = null
                 formError = null
+            },
+            onDelete = editingLocation?.let { location ->
+                {
+                    scope.launch {
+                        repository.deleteLocationOnline(location.id)
+                            .onFailure { error ->
+                                if (!isNetworkError(error)) {
+                                    formError = error.message
+                                }
+                            }
+                        showLocationForm = false
+                        editingLocation = null
+                        formError = null
+                    }
+                }
             },
         )
     }
 
     if (showAreaForm) {
         AreaFormDialog(
-            title = "新增区域",
-            initial = AreaFormValues(),
+            title = if (editingArea == null) "新增区域" else "编辑区域",
+            initial = editingArea?.let { area ->
+                AreaFormValues(name = area.name, color = area.color)
+            } ?: AreaFormValues(),
             isSaving = isSaving,
             errorMessage = formError,
             onSave = { values ->
@@ -570,17 +620,27 @@ fun DashboardHost(
                         return@launch
                     }
                     isSaving = true
-                    repository.createAreaOnline(values.name, values.color)
+                    val area = editingArea
+                    val result = if (area == null) {
+                        repository.createAreaOnline(values.name, values.color)
+                    } else {
+                        repository.updateAreaOnline(area.id, values.name, values.color)
+                    }
+                    result
                         .onSuccess {
                             isSaving = false
                             formError = null
                             showAreaForm = false
+                            editingArea = null
                         }
                         .onFailure { error ->
                             if (isNetworkError(error)) {
-                                repository.createAreaOffline(values.name, values.color)
+                                if (area == null) {
+                                    repository.createAreaOffline(values.name, values.color)
+                                }
                                 isSaving = false
                                 showAreaForm = false
+                                editingArea = null
                             } else {
                                 isSaving = false
                                 formError = error.message
@@ -590,7 +650,23 @@ fun DashboardHost(
             },
             onDismiss = {
                 showAreaForm = false
+                editingArea = null
                 formError = null
+            },
+            onDelete = editingArea?.let { area ->
+                {
+                    scope.launch {
+                        repository.deleteAreaOnline(area.id)
+                            .onFailure { error ->
+                                if (!isNetworkError(error)) {
+                                    formError = error.message
+                                }
+                            }
+                        showAreaForm = false
+                        editingArea = null
+                        formError = null
+                    }
+                }
             },
         )
     }

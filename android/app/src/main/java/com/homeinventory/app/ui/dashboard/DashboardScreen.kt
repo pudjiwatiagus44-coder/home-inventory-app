@@ -18,6 +18,7 @@ import com.homeinventory.app.ui.dashboard.components.ItemList
 import com.homeinventory.app.ui.dashboard.components.LocationStrip
 import com.homeinventory.app.ui.dashboard.components.SearchBar
 import com.homeinventory.app.ui.dashboard.components.TopBar
+import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Background
 
 @Composable
@@ -26,6 +27,8 @@ fun DashboardScreen(
     onSearchChange: (String) -> Unit,
     onSelectArea: (String?) -> Unit,
     onSelectLocation: (String?) -> Unit,
+    onLongPressArea: (InventorySnapshot.AreaView) -> Unit,
+    onLongPressLocation: (InventorySnapshot.LocationView) -> Unit,
     onSortChange: (ItemSortMode) -> Unit,
     onAddItem: () -> Unit,
     onAddLocation: () -> Unit,
@@ -33,6 +36,8 @@ fun DashboardScreen(
     onEditItem: (DashboardUiItem) -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
     onAddPhoto: (DashboardUiItem) -> Unit,
+    unassignedFilter: Boolean,
+    onToggleUnassigned: () -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     onRefresh: () -> Unit,
     onBackup: () -> Unit,
@@ -76,6 +81,7 @@ fun DashboardScreen(
                 itemCountByArea = state.items.groupBy { it.areaId }.mapValues { it.value.size },
                 onSelectArea = onSelectArea,
                 onAddArea = onAddArea,
+                onLongPressArea = onLongPressArea,
             )
             LocationStrip(
                 locations = if (state.filters.areaId == null) {
@@ -89,6 +95,7 @@ fun DashboardScreen(
                 onSelectLocation = onSelectLocation,
                 onClearArea = { onSelectArea(null) },
                 onAddLocation = onAddLocation,
+                onLongPressLocation = onLongPressLocation,
             )
             ItemList(
                 items = state.visibleItems,
@@ -97,6 +104,8 @@ fun DashboardScreen(
                 onEditItem = onEditItem,
                 onPhotoClick = onPhotoClick,
                 onAddPhoto = onAddPhoto,
+                unassignedFilter = unassignedFilter,
+                onToggleUnassigned = onToggleUnassigned,
                 loadPhoto = loadPhoto,
                 isEmpty = state.items.isEmpty(),
                 modifier = Modifier.weight(1f),

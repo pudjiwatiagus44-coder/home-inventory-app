@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +56,8 @@ fun ItemList(
     onEditItem: (DashboardUiItem) -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
     onAddPhoto: (DashboardUiItem) -> Unit,
+    unassignedFilter: Boolean,
+    onToggleUnassigned: () -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     isEmpty: Boolean,
     modifier: Modifier = Modifier,
@@ -81,6 +84,13 @@ fun ItemList(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
             )
+            TextButton(onClick = onToggleUnassigned) {
+                Text(
+                    text = if (unassignedFilter) "未分配 ✓" else "未分配",
+                    fontSize = 12.sp,
+                    color = if (unassignedFilter) Primary else MutedForeground,
+                )
+            }
             SortMenu(sortMode = sortMode, onSortChange = onSortChange)
         }
         if (isEmpty) {

@@ -606,6 +606,32 @@ class DashboardViewModelTest {
         }
     }
 
+    @Test
+    fun unassignedFilterShowsOnlyLocationlessItems() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val snapshot = InventorySnapshot(
+                items = listOf(
+                    item("item-1", "牛奶", areaId = "area-1", locationId = "location-1"),
+                    item("item-2", "散件", areaId = null, locationId = null),
+                ),
+            )
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(snapshot),
+                syncPending = { Result.success(Unit) },
+            )
+            advanceUntilIdle()
+
+            viewModel.toggleUnassignedFilter()
+            advanceUntilIdle()
+
+            assertEquals(listOf("散件"), viewModel.state.value.visibleItems.map { it.name })
+            assertEquals(true, viewModel.state.value.unassignedFilter)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun item(
         id: String,
         name: String,

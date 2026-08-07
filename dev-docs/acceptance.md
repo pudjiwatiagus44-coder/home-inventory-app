@@ -858,3 +858,11 @@
 - 测试：Android 单测新增 `resumePendingRecognitionsRetriesBlankNameDrafts`（前台恢复会重试空名称草稿），全量通过；`assembleDebug` 通过（仅 LocalLifecycleOwner 弃用警告，无碍）。
 - 版本：0.5.12 / code 18，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
 - 待办：真机验收（记忆区域/格子默认值、批量导入直进选图、锁屏后重开草稿自动补识别）。
+
+## 2026-08-07 0.5.13 长按管理区域/位置、未分配筛选证据
+
+- 长按管理：区域条、位置条支持长按（combinedClickable）打开编辑弹窗——区域可重命名/改颜色/删除；位置可重命名/重新分配区域（弹窗内区域下拉）/删除。删除区域时其位置与物品按数据库外键规则处理（位置归未分区、物品保留）；删除位置时物品变为未分配。
+- 未分配筛选：物品列表标题「物品」旁新增「未分配」按钮（激活时显示「未分配 ✓」），点击筛选出所有未选择位置（含未选区域）的物品；不选区域/位置直接保存的物品照常出现在清单和「未分配」列表；切换未分配会清空区域/位置筛选，选择区域/位置也会自动退出未分配。
+- 测试：`DashboardViewModelTest` 新增 `unassignedFilterShowsOnlyLocationlessItems`，全量通过；`assembleDebug` 通过（LocalLifecycleOwner 弃用警告无碍）。
+- 版本：0.5.13 / code 19，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
+- 待办：真机验收（长按区域/位置改名删除重分配、未分配筛选、不选位置直接保存）。

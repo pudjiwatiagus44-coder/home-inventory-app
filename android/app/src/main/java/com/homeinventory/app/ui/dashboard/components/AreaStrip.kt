@@ -3,6 +3,8 @@ package com.homeinventory.app.ui.dashboard.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.Surface
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AreaStrip(
     areas: List<InventorySnapshot.AreaView>,
@@ -36,6 +39,7 @@ fun AreaStrip(
     itemCountByArea: Map<String?, Int>,
     onSelectArea: (String?) -> Unit,
     onAddArea: () -> Unit,
+    onLongPressArea: (InventorySnapshot.AreaView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -61,9 +65,14 @@ fun AreaStrip(
                             shape = RoundedCornerShape(9.dp),
                         )
                         .size(width = 84.dp, height = 52.dp)
-                        .clickable {
-                            onSelectArea(if (selected) null else area.id)
-                        },
+                        .combinedClickable(
+                            onClick = {
+                                onSelectArea(if (selected) null else area.id)
+                            },
+                            onLongClick = {
+                                onLongPressArea(area)
+                            },
+                        ),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

@@ -3,6 +3,8 @@ package com.homeinventory.app.ui.dashboard.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,6 +30,7 @@ import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.Surface
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LocationStrip(
     locations: List<InventorySnapshot.LocationView>,
@@ -37,6 +40,7 @@ fun LocationStrip(
     onSelectLocation: (String?) -> Unit,
     onClearArea: () -> Unit,
     onAddLocation: () -> Unit,
+    onLongPressLocation: (InventorySnapshot.LocationView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -73,9 +77,14 @@ fun LocationStrip(
                         )
                         .size(width = 84.dp, height = 58.dp)
                         .padding(vertical = 4.dp)
-                        .clickable {
-                            onSelectLocation(if (selected) null else location.id)
-                        },
+                        .combinedClickable(
+                            onClick = {
+                                onSelectLocation(if (selected) null else location.id)
+                            },
+                            onLongClick = {
+                                onLongPressLocation(location)
+                            },
+                        ),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

@@ -41,6 +41,7 @@ data class DashboardFilters(
     val search: String = "",
     val areaId: String? = null,
     val locationId: String? = null,
+    val unassigned: Boolean = false,
 )
 
 enum class ItemSortMode { ExpireSoon, ExpireLate, Name }
@@ -52,6 +53,7 @@ data class DashboardUiState(
     val visibleItems: List<DashboardUiItem> = emptyList(),
     val filters: DashboardFilters = DashboardFilters(),
     val sortMode: ItemSortMode = ItemSortMode.ExpireSoon,
+    val unassignedFilter: Boolean = false,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -437,6 +439,7 @@ class DashboardViewModel(
                 visibleItems = visible,
                 filters = filter,
                 sortMode = sort,
+                unassignedFilter = filter.unassigned,
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, DashboardUiState())
 
@@ -445,11 +448,26 @@ class DashboardViewModel(
     }
 
     fun selectArea(areaId: String?) {
-        filters.value = filters.value.copy(areaId = areaId, locationId = null)
+        filters.value = filters.value.copy(
+            areaId = areaId,
+            locationId = null,
+            unassigned = false,
+        )
     }
 
     fun selectLocation(locationId: String?) {
-        filters.value = filters.value.copy(locationId = locationId)
+        filters.value = filters.value.copy(
+            locationId = locationId,
+            unassigned = false,
+        )
+    }
+
+    fun toggleUnassignedFilter() {
+        filters.value = filters.value.copy(
+            unassigned = !filters.value.unassigned,
+            areaId = null,
+            locationId = null,
+        )
     }
 
     fun sortByExpireSoon() {
@@ -483,6 +501,9 @@ class DashboardViewModel(
                 item.name.contains(filter.search, ignoreCase = true) ||
                 item.note.contains(filter.search, ignoreCase = true) ||
                 item.locationName?.contains(filter.search, ignoreCase = true) == true
+            if (filter.unassigned) {
+                return@filter matchesSearch && item.locationId == null
+            }
             val matchesArea = filter.areaId == null || areaOfItem[item.id] == filter.areaId
             val matchesLocation = filter.locationId == null || locationOfItem[item.id] == filter.locationId
             matchesSearch && matchesArea && matchesLocation
