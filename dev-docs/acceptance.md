@@ -767,4 +767,5 @@
 - 路由上线验证：未登录 `POST https://homestorag.xyz/api/recognition` 与 `GET https://homestorag.xyz/api/inventory/items/test/photo` 均返回 401 `{"ok":false,"message":"Authentication required"}`（旧版本无此路由）。
 - APK 托管：`scripts/upload-apk.ps1` 构建并上传 0.5.0（code 6，19,850,305 字节）；`https://homestorag.xyz/apk/version.json` 返回 0.5.0/code 6；APK 下载返回 200。
 - 部署中发现的问题与修复：全新克隆后 `public/` 目录不存在（git 不跟踪空目录），上传脚本创建的 `public/apk` 在服务启动之后才出现，Next.js 启动后未服务该目录，`/apk/*` 一度 404；重启 `home-inventory-app.service` 后 `/apk/version.json` 与 APK 均返回 200。教训：APK 上传后若 `/apk/*` 404，需重启服务（或部署时先创建 `public/apk` 再启动）。
+- 识别接口 501 事故与修复：真机拍照秒弹「识别失败」，服务器端 curl 复现返回 501 `DOUBAO_API_KEY is required`。根因：`/etc/home-inventory-app/app.env` 中 `DOUBAO_API_KEY` 行在 nano 粘贴时被拆坏——第 7 行残留值仅 4 字符且含特殊字符（systemd 实际加载为空值），完整 Key（`ark-…-a072`，46 字符）被粘贴到无 `=` 的独立行。修复：备份 app.env 后用完整 Key 重建该行、删除孤立行、重启服务，systemd 加载长度变为 46；curl 端到端复测识别接口返回 200（纯色测试图 `recognized:false` 属预期），临时调试用户与测试缩略图已清理。教训：粘贴 API Key 后应检查文件中无孤立行，且可用 `tr '\0' '\n' < /proc/<pid>/environ | grep DOUBAO` 核对服务实际加载值。
 - 未验证/待办：豆包真实识别未验证（需 App 0.5.0 真机拍照验收；若识别报模型不存在需核对 `DOUBAO_VISION_MODEL` 与已开通模型 ID）；`data/photos` 备份策略待纳入备份范围；隐私政策「照片发送至火山引擎」条款待公开推广前补齐。
