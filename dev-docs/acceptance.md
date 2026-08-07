@@ -757,3 +757,14 @@
 - Android 实现：FileProvider + `res/xml/file_paths.xml`；版本 0.5.0 / code 6；DTO 扩展（`RecognitionResponseDto`、`ItemCreateRequest.photoKey`、`RemoteItemDto.photoKey`）；API 接口 `recognize`/`itemPhoto`；`ImageCompressor`（本地压缩到约 1280px JPEG）；`InventoryRepository` 新增 `recognizeItemPhoto`/`loadItemPhoto`、`createItemOnline` 携带 photoKey；Room v3 + `MIGRATION_2_3`（`items.photoKey`）；`ItemFormDialog` 新增「拍照识别名称」「拍摄有效期」入口（拍照/相册来源选择，识别结果回填名称/过期日/缩略图 id，失败提示手动兜底）；`ItemList` 物品行显示缩略图；`DashboardViewModel` 委托 `recognizeItemPhoto`/`itemPhoto`。
 - Android TDD 证据：`InventoryRepositoryTest` 新增识别成功/服务端拒绝 2 例；`DashboardViewModelTest` 新增委托成功/失败 2 例；`gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --quiet` 通过（49 个单测），debug APK 19,911,801 字节。
 - 未验证/待办：豆包账号与 API key 未开通（缺 key 时识别接口返回 501，App 手动输入兜底）；migration 未在真实 PostgreSQL 执行；服务器未部署（需执行 migration，`app.env` 增加 `DOUBAO_API_KEY`/`DOUBAO_VISION_MODEL`/`DOUBAO_VISION_BASE_URL`/`PHOTO_STORAGE_DIR`，`data/photos` 纳入备份）；Android 真机拍照识别点击验收未做；隐私政策「拍照识别会把照片发送给火山引擎处理」条款待公开推广前补齐。
+
+## 2026-08-07 拍照识别部署上线证据
+
+- 代码部署：分支 `codex/photo-recognition` 已合并进 main 并推送 GitHub（`d493059..e1aee64`）；服务器 `/opt/home-inventory-app` 为全新克隆 + `npm ci` + `npm run build`，`git log --oneline -1` = `e1aee64`，systemd 服务运行正常。
+- 数据库：`dev-docs/sql/photo_recognition_self_hosted.sql` 已在 `home_inventory_test` 执行；重跑输出显示 `photo_key` 列、`items_photo_key_unique` 索引、`pending_photos` 表与索引均 already exists（此前已执行），`GRANT` 正常。
+- 环境变量：`/etc/home-inventory-app/app.env` 已追加 `DOUBAO_API_KEY`/`DOUBAO_VISION_MODEL`/`DOUBAO_VISION_BASE_URL`/`PHOTO_STORAGE_DIR`；`data/photos` 目录已创建并归属 `deploy`；服务已重启。
+- Nginx：`client_max_body_size` 从 1m 调整为 8m（识别图片最大 4MB），`nginx -t` 通过并 reload。
+- 路由上线验证：未登录 `POST https://homestorag.xyz/api/recognition` 与 `GET https://homestorag.xyz/api/inventory/items/test/photo` 均返回 401 `{"ok":false,"message":"Authentication required"}`（旧版本无此路由）。
+- APK 托管：`scripts/upload-apk.ps1` 构建并上传 0.5.0（code 6，19,850,305 字节）；`https://homestorag.xyz/apk/version.json` 返回 0.5.0/code 6；APK 下载返回 200。
+- 部署中发现的问题与修复：全新克隆后 `public/` 目录不存在（git 不跟踪空目录），上传脚本创建的 `public/apk` 在服务启动之后才出现，Next.js 启动后未服务该目录，`/apk/*` 一度 404；重启 `home-inventory-app.service` 后 `/apk/version.json` 与 APK 均返回 200。教训：APK 上传后若 `/apk/*` 404，需重启服务（或部署时先创建 `public/apk` 再启动）。
+- 未验证/待办：豆包真实识别未验证（需 App 0.5.0 真机拍照验收；若识别报模型不存在需核对 `DOUBAO_VISION_MODEL` 与已开通模型 ID）；`data/photos` 备份策略待纳入备份范围；隐私政策「照片发送至火山引擎」条款待公开推广前补齐。
