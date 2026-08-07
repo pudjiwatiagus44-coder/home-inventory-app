@@ -81,6 +81,7 @@ abstract class TestApiStub : HomeInventoryApi {
                     mode = mode,
                     recognized = true,
                     name = "牛奶",
+                    note = "常温保存",
                     expireDate = null,
                     thumbnailId = "photo_1.jpg",
                 ),

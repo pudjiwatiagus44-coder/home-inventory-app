@@ -47,6 +47,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 data class RecognitionDraft(
     val mode: String,
     val name: String? = null,
+    val note: String? = null,
     val expireDate: String? = null,
     val thumbnailId: String? = null,
 )
@@ -227,6 +228,7 @@ class InventoryRepository(
             RecognitionDraft(
                 mode = data.mode,
                 name = data.name,
+                note = data.note,
                 expireDate = data.expireDate,
                 thumbnailId = data.thumbnailId,
             ),

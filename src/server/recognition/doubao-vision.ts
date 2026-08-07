@@ -3,9 +3,18 @@ export type DoubaoRecognitionResult =
   | { ok: false; reason: "api_key_missing" | "upstream_error" | "not_recognized" };
 
 export type DoubaoVisionClient = {
-  recognizeName: (jpegBuffer: Buffer) => Promise<DoubaoRecognitionResult>;
+  recognizeItemDetails: (jpegBuffer: Buffer) => Promise<DoubaoItemDetailsResult>;
   recognizeExpireDate: (jpegBuffer: Buffer) => Promise<DoubaoRecognitionResult>;
 };
+
+export type DoubaoItemDetails = {
+  name: string;
+  note: string | null;
+};
+
+export type DoubaoItemDetailsResult =
+  | { ok: true; value: DoubaoItemDetails }
+  | { ok: false; reason: "api_key_missing" | "upstream_error" | "not_recognized" };
 
 export class DoubaoApiKeyMissingError extends Error {
   constructor() {
@@ -21,8 +30,8 @@ type DoubaoVisionDependencies = {
   fetchImpl?: typeof fetch;
 };
 
-const NAME_PROMPT =
-  "你是一个家庭物品识别助手。请识别图片中最主要的物品，只返回物品的中文名称，不要解释，不要加标点。如果无法识别，只返回“无法识别”。";
+const ITEM_DETAILS_PROMPT =
+  "请识别图片中的物品。第一行只返回一个详细的中文名称，尽量包含品牌和规格等关键信息，例如“蒙牛纯牛奶250ml”，不要解释，不要加标点。第二行返回一句简短备注，说明规格、材质或保存方式等，例如“常温保存”或“约500g”，如果没有可补充的信息就不要输出第二行。如果无法识别，只返回“无法识别”。";
 
 const EXPIRE_PROMPT =
   "请识别图片中印刷的有效期（或保质期、过期日期、生产日期）。只返回 YYYY-MM-DD 或 YYYY-MM 格式的日期；如果图片里没有日期，只返回“无”。不要解释。";
@@ -98,22 +107,33 @@ export function createDoubaoVisionClient(
   }
 
   return {
-    recognizeName: async (jpegBuffer) => {
-      const result = await complete(NAME_PROMPT, jpegBuffer);
+    recognizeItemDetails: async (jpegBuffer) => {
+      const result = await complete(ITEM_DETAILS_PROMPT, jpegBuffer);
 
       if (!result.ok) {
         return result;
       }
 
-      const cleaned = result.value
+      const lines = result.value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      const rawName = (lines[0] ?? "")
         .replace(/^["“”'‘’]+|["“”'‘’]+$/g, "")
         .trim();
 
-      if (!cleaned || cleaned.includes("无法识别") || cleaned.length > 120) {
+      if (!rawName || rawName.includes("无法识别") || rawName.length > 40) {
         return { ok: false, reason: "not_recognized" };
       }
 
-      return { ok: true, value: cleaned };
+      const noteLine = lines
+        .slice(1)
+        .join(" ")
+        .replace(/^备注[:：]?\s*/i, "")
+        .trim();
+      const note = noteLine && noteLine.length <= 200 ? noteLine : null;
+
+      return { ok: true, value: { name: rawName, note } };
     },
     recognizeExpireDate: async (jpegBuffer) => {
       const result = await complete(EXPIRE_PROMPT, jpegBuffer);

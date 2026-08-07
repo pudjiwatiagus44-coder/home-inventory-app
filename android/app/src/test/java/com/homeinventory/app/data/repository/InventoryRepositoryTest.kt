@@ -46,6 +46,7 @@ class InventoryRepositoryTest {
 
         assertTrue(result.isSuccess)
         assertEquals("牛奶", result.getOrNull()?.name)
+        assertEquals("常温保存", result.getOrNull()?.note)
         assertEquals("photo_1.jpg", result.getOrNull()?.thumbnailId)
     }
 
@@ -539,6 +540,7 @@ private class FakeRecognizeApi : TestApiStub() {
                     mode = mode,
                     recognized = true,
                     name = "牛奶",
+                    note = "常温保存",
                     expireDate = null,
                     thumbnailId = "photo_1.jpg",
                 ),

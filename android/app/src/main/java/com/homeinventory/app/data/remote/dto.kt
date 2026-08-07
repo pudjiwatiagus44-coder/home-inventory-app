@@ -218,6 +218,7 @@ data class RecognitionResponseDto(
     val mode: String,
     val recognized: Boolean,
     val name: String? = null,
+    val note: String? = null,
     val expireDate: String? = null,
     val thumbnailId: String? = null,
 )

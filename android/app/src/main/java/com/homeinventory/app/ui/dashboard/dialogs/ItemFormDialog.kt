@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -109,6 +110,9 @@ fun ItemFormDialog(
                 .onSuccess { draft ->
                     if (draft.name != null) {
                         name = draft.name
+                    }
+                    if (draft.note != null && note.isBlank()) {
+                        note = draft.note
                     }
                     if (draft.expireDate != null) {
                         expireDate = draft.expireDate
@@ -207,9 +211,28 @@ fun ItemFormDialog(
                 .clip(RoundedCornerShape(12.dp))
                 .background(Surface)
                 .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(text = title, fontSize = 16.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                currentPhoto?.let { photo ->
+                    Image(
+                        bitmap = photo.asImageBitmap(),
+                        contentDescription = "物品照片",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                    )
+                }
+            }
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -282,7 +305,7 @@ fun ItemFormDialog(
                     },
                     enabled = recognizing == null,
                 ) {
-                    Text(if (recognizing == "name") "识别中..." else "拍照识别名称")
+                    Text(if (recognizing == "name") "识别中..." else "识别名称")
                 }
                 OutlinedButton(
                     onClick = {
@@ -292,7 +315,7 @@ fun ItemFormDialog(
                     },
                     enabled = recognizing == null,
                 ) {
-                    Text(if (recognizing == "expiry") "识别中..." else "拍摄有效期")
+                    Text(if (recognizing == "expiry") "识别中..." else "识别日期")
                 }
                 OutlinedButton(
                     onClick = {
@@ -302,18 +325,8 @@ fun ItemFormDialog(
                     },
                     enabled = recognizing == null,
                 ) {
-                    Text(if (recognizing == "photo") "上传中..." else "添加/更换照片")
+                    Text(if (recognizing == "photo") "上传中..." else "添加照片")
                 }
-            }
-            currentPhoto?.let { photo ->
-                Image(
-                    bitmap = photo.asImageBitmap(),
-                    contentDescription = "物品照片",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(10.dp)),
-                )
             }
             if (sourceDialogVisible) {
                 AlertDialog(

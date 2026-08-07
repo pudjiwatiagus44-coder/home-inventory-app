@@ -10,7 +10,26 @@ function jsonResponse(status: number, body: unknown) {
 }
 
 describe("doubao vision client", () => {
-  it("returns the recognized name", async () => {
+  it("returns a detailed name and note", async () => {
+    const fetchImpl = async () =>
+      jsonResponse(200, {
+        choices: [{ message: { content: "蒙牛纯牛奶250ml\n常温保存" } }],
+      });
+    const client = createDoubaoVisionClient({
+      apiKey: "key",
+      model: "model",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await expect(
+      client.recognizeItemDetails(Buffer.from("jpeg")),
+    ).resolves.toEqual({
+      ok: true,
+      value: { name: "蒙牛纯牛奶250ml", note: "常温保存" },
+    });
+  });
+
+  it("returns null note when the model only outputs a name", async () => {
     const fetchImpl = async () =>
       jsonResponse(200, {
         choices: [{ message: { content: "牛奶" } }],
@@ -21,9 +40,11 @@ describe("doubao vision client", () => {
       fetchImpl: fetchImpl as typeof fetch,
     });
 
-    await expect(client.recognizeName(Buffer.from("jpeg"))).resolves.toEqual({
+    await expect(
+      client.recognizeItemDetails(Buffer.from("jpeg")),
+    ).resolves.toEqual({
       ok: true,
-      value: "牛奶",
+      value: { name: "牛奶", note: null },
     });
   });
 
@@ -54,7 +75,9 @@ describe("doubao vision client", () => {
       fetchImpl: fetchImpl as typeof fetch,
     });
 
-    await expect(client.recognizeName(Buffer.from("jpeg"))).resolves.toEqual({
+    await expect(
+      client.recognizeItemDetails(Buffer.from("jpeg")),
+    ).resolves.toEqual({
       ok: false,
       reason: "not_recognized",
     });
@@ -63,7 +86,9 @@ describe("doubao vision client", () => {
   it("reports api_key_missing without an api key", async () => {
     const client = createDoubaoVisionClient({ model: "model" });
 
-    await expect(client.recognizeName(Buffer.from("jpeg"))).resolves.toEqual({
+    await expect(
+      client.recognizeItemDetails(Buffer.from("jpeg")),
+    ).resolves.toEqual({
       ok: false,
       reason: "api_key_missing",
     });
@@ -77,7 +102,9 @@ describe("doubao vision client", () => {
       fetchImpl: fetchImpl as typeof fetch,
     });
 
-    await expect(client.recognizeName(Buffer.from("jpeg"))).resolves.toEqual({
+    await expect(
+      client.recognizeItemDetails(Buffer.from("jpeg")),
+    ).resolves.toEqual({
       ok: false,
       reason: "upstream_error",
     });

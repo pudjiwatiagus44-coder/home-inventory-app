@@ -61,7 +61,10 @@ function createFakes(overrides: Partial<{
     },
   };
   const doubaoVision: DoubaoVisionClient = {
-    recognizeName: async () => ({ ok: true, value: "牛奶" }),
+    recognizeItemDetails: async () => ({
+      ok: true,
+      value: { name: "牛奶", note: "常温保存" },
+    }),
     recognizeExpireDate: async () => ({ ok: true, value: "2026-08-30" }),
   };
 
@@ -93,6 +96,7 @@ describe("recognition service", () => {
     expect(result.mode).toBe("name");
     expect(result.recognized).toBe(true);
     expect(result.name).toBe("牛奶");
+    expect(result.note).toBe("常温保存");
     expect(result.thumbnailId).toMatch(/^photo_/);
     expect(fakes.pending).toHaveLength(1);
     expect(fakes.saved.has(result.thumbnailId as string)).toBe(true);
@@ -218,7 +222,10 @@ describe("recognition service", () => {
       photoRepository: fakes.photoRepository,
       photoStore: fakes.photoStore,
       doubaoVision: {
-        recognizeName: async () => ({ ok: false, reason: "api_key_missing" }),
+        recognizeItemDetails: async () => ({
+          ok: false,
+          reason: "api_key_missing",
+        }),
         recognizeExpireDate: async () => ({
           ok: false,
           reason: "api_key_missing",

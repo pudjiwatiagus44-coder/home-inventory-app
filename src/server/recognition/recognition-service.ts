@@ -12,6 +12,7 @@ export type RecognitionOutcome = {
   mode: "name" | "expiry" | "photo";
   recognized: boolean;
   name?: string | null;
+  note?: string | null;
   expireDate?: string | null;
   thumbnailId?: string | null;
 };
@@ -90,7 +91,7 @@ export function createRecognitionService(
         photoKey,
       });
 
-      const result = await deps.doubaoVision.recognizeName(input.jpegBuffer);
+      const result = await deps.doubaoVision.recognizeItemDetails(input.jpegBuffer);
 
       if (!result.ok) {
         if (result.reason === "api_key_missing") {
@@ -101,6 +102,7 @@ export function createRecognitionService(
           mode: "name",
           recognized: false,
           name: null,
+          note: null,
           thumbnailId: photoKey,
         };
       }
@@ -108,7 +110,8 @@ export function createRecognitionService(
       return {
         mode: "name",
         recognized: true,
-        name: result.value,
+        name: result.value.name,
+        note: result.value.note,
         thumbnailId: photoKey,
       };
     },
