@@ -134,7 +134,7 @@ fun ItemFormDialog(
                     if (draft.thumbnailId != null) {
                         photoKey = draft.thumbnailId
                         LocalPhotoStore.save(context, draft.thumbnailId, bytes)
-                        currentPhoto = ImageCompressor.bytesToBitmap(bytes)
+                        currentPhoto = ImageCompressor.bytesToBitmap(bytes, 256)
                     }
                 }
                 .onFailure { error ->
@@ -161,7 +161,7 @@ fun ItemFormDialog(
                     if (old != null && old != key) {
                         LocalPhotoStore.delete(context, old)
                     }
-                    currentPhoto = ImageCompressor.bytesToBitmap(bytes)
+                    currentPhoto = ImageCompressor.bytesToBitmap(bytes, 256)
                 }
                 .onFailure { error ->
                     recognitionError = error.message ?: "添加照片失败"

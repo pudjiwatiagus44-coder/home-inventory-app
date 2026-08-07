@@ -37,7 +37,7 @@ fun PhotoPreviewDialog(
     val context = LocalContext.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(item.id, item.photoKey) {
-        val local = item.photoKey?.let { LocalPhotoStore.read(context, it) }
+        val local = item.photoKey?.let { LocalPhotoStore.read(context, it, 1600) }
         bitmap = local ?: loadPhoto(item.id).getOrNull()
     }
     Dialog(

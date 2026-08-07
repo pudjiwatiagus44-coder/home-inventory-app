@@ -63,7 +63,7 @@ fun AppRoot() {
                 LocalPhotoStore.save(app.applicationContext, fileName, bytes)
             },
             readPhotoFile = { fileName ->
-                LocalPhotoStore.read(app.applicationContext, fileName)
+                LocalPhotoStore.read(app.applicationContext, fileName, 256)
             },
             deletePhotoFile = { fileName ->
                 LocalPhotoStore.delete(app.applicationContext, fileName)

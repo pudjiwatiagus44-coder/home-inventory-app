@@ -324,7 +324,7 @@ fun DashboardHost(
                         expireDate = values.expireDate,
                         areaId = values.areaId.ifBlank { null },
                         locationId = values.locationId.ifBlank { null },
-                        photoKey = values.photoKey,
+                        photoKey = values.photoKey?.takeIf { it.isNotBlank() },
                     ),
                 )
                 showItemForm = false
@@ -356,7 +356,7 @@ fun DashboardHost(
                         Result.failure(IllegalStateException("无图片"))
                     } else {
                         editing.photoKey?.let { key ->
-                            LocalPhotoStore.read(context, key)?.let { Result.success(it) }
+                            LocalPhotoStore.read(context, key, 256)?.let { Result.success(it) }
                         } ?: viewModel.itemPhoto(editing.id)
                     }
                 }

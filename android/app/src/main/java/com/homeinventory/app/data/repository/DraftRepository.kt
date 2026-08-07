@@ -52,13 +52,14 @@ class DraftRepository(
         photoKey: String?,
     ): DraftEntity {
         val id = "draft-${UUID.randomUUID()}"
+        val normalizedPhotoKey = photoKey?.takeIf { it.isNotBlank() }
         if (bytes != null) {
             savePhoto(draftFileName(id), bytes)
         }
-        val ready = name.isNotBlank() && photoKey != null
+        val ready = name.isNotBlank() && normalizedPhotoKey != null
         val draft = DraftEntity(
             id = id,
-            photoKey = photoKey,
+            photoKey = normalizedPhotoKey,
             name = name,
             note = note,
             expireDate = expireDate,
@@ -89,11 +90,11 @@ class DraftRepository(
         val data = envelope?.data
         val updated = if (response.isSuccessful && envelope?.ok == true && data != null) {
             val key = data.thumbnailId
-            if (key != null) {
+            if (key != null && key.isNotBlank()) {
                 savePhoto(key, bytes)
             }
             current.copy(
-                photoKey = key ?: current.photoKey,
+                photoKey = key?.takeIf { it.isNotBlank() } ?: current.photoKey,
                 name = data.name ?: current.name,
                 note = data.note ?: current.note,
                 status = DraftStatus.Ready,

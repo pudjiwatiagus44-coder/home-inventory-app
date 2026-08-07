@@ -7,8 +7,27 @@ import android.net.Uri
 import java.io.ByteArrayOutputStream
 
 object ImageCompressor {
-    fun bytesToBitmap(bytes: ByteArray): Bitmap? =
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    fun bytesToBitmap(
+        bytes: ByteArray,
+        maxDimension: Int = Int.MAX_VALUE,
+    ): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (
+            maxDimension < Int.MAX_VALUE &&
+            (bounds.outWidth / sample > maxDimension * 2 ||
+                bounds.outHeight / sample > maxDimension * 2)
+        ) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return try {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        } catch (_: OutOfMemoryError) {
+            null
+        }
+    }
 
     fun compressToJpeg(
         context: Context,
