@@ -53,6 +53,7 @@ fun ItemList(
     sortMode: ItemSortMode,
     onSortChange: (ItemSortMode) -> Unit,
     onEditItem: (DashboardUiItem) -> Unit,
+    onPhotoClick: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
     isEmpty: Boolean,
     modifier: Modifier = Modifier,
@@ -104,6 +105,7 @@ fun ItemList(
                     ItemRow(
                         item = item,
                         onClick = { onEditItem(item) },
+                        onPhotoClick = onPhotoClick,
                         loadPhoto = loadPhoto,
                     )
                 }
@@ -151,6 +153,7 @@ private fun SortMenu(
 private fun ItemRow(
     item: DashboardUiItem,
     onClick: () -> Unit,
+    onPhotoClick: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
 ) {
     val thumbnail by produceState<Bitmap?>(initialValue = null, item.id) {
@@ -166,12 +169,15 @@ private fun ItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(SurfaceMuted),
-            contentAlignment = Alignment.Center,
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(SurfaceMuted)
+            .clickable(enabled = item.photoKey != null) {
+                onPhotoClick(item)
+            },
+        contentAlignment = Alignment.Center,
         ) {
             thumbnail?.let { bitmap ->
                 Image(

@@ -233,6 +233,27 @@ class InventoryRepository(
         )
     }
 
+    suspend fun uploadThumbnailOnly(jpegBytes: ByteArray): Result<String> {
+        val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
+        val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+        val response = try {
+            api.recognize(part, "photo")
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+
+        if (!response.isSuccessful || envelope?.ok != true || envelope.data?.thumbnailId == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "上传照片失败",
+                ),
+            )
+        }
+
+        return Result.success(envelope.data.thumbnailId)
+    }
+
     suspend fun loadItemPhoto(itemId: String): Result<Bitmap> {
         val response = try {
             api.itemPhoto(itemId)
@@ -327,8 +348,9 @@ class InventoryRepository(
         note: String,
         expireDate: String?,
         locationId: String?,
+        photoKey: String? = null,
     ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
-        request = { api.updateItem(serverId, ItemUpdateRequest(name, note, expireDate, locationId)) },
+        request = { api.updateItem(serverId, ItemUpdateRequest(name, note, expireDate, locationId, photoKey)) },
         onSuccess = { remoteItem ->
             itemDao.upsert(
                 ItemEntity(
@@ -338,6 +360,7 @@ class InventoryRepository(
                     name = remoteItem.name,
                     note = remoteItem.note,
                     expireDate = DateNormalizer.normalizeExpireDate(remoteItem.expireDate),
+                    photoKey = remoteItem.photoKey,
                     serverUpdatedAt = remoteItem.updatedAt,
                     localUpdatedAt = System.currentTimeMillis(),
                     syncStatus = SyncStatus.Synced,

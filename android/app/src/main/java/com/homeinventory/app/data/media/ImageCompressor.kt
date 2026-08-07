@@ -7,6 +7,9 @@ import android.net.Uri
 import java.io.ByteArrayOutputStream
 
 object ImageCompressor {
+    fun bytesToBitmap(bytes: ByteArray): Bitmap? =
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+
     fun compressToJpeg(
         context: Context,
         uri: Uri,

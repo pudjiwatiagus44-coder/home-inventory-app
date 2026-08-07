@@ -1,10 +1,12 @@
 package com.homeinventory.app.ui.dashboard.dialogs
 
 import android.app.DatePickerDialog
+import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -26,6 +29,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,12 +38,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import com.homeinventory.app.data.media.ImageCompressor
+import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.ui.theme.Border
@@ -62,6 +69,12 @@ fun ItemFormDialog(
     errorMessage: String?,
     onSave: (ItemFormValues) -> Unit,
     onRecognize: suspend (mode: String, bytes: ByteArray) -> Result<RecognitionDraft>,
+    onAddPhoto: suspend (bytes: ByteArray) -> Result<String> = {
+        Result.failure(IllegalStateException("添加照片不可用"))
+    },
+    loadCurrentPhoto: suspend () -> Result<Bitmap> = {
+        Result.failure(IllegalStateException("图片不可用"))
+    },
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
 ) {
@@ -77,6 +90,10 @@ fun ItemFormDialog(
     var recognitionError by remember { mutableStateOf<String?>(null) }
     var pendingMode by remember { mutableStateOf<String?>(null) }
     var sourceDialogVisible by remember { mutableStateOf(false) }
+    var currentPhoto by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(initial.photoKey) {
+        currentPhoto = loadCurrentPhoto().getOrNull()
+    }
 
     fun runRecognition(mode: String?, bytes: ByteArray) {
         val targetMode = mode ?: return
@@ -98,10 +115,37 @@ fun ItemFormDialog(
                     }
                     if (draft.thumbnailId != null) {
                         photoKey = draft.thumbnailId
+                        LocalPhotoStore.save(context, draft.thumbnailId, bytes)
+                        currentPhoto = ImageCompressor.bytesToBitmap(bytes)
                     }
                 }
                 .onFailure { error ->
                     recognitionError = error.message ?: "识别失败，请重试或手动填写"
+                }
+            recognizing = null
+        }
+    }
+
+    fun runAddPhoto(bytes: ByteArray) {
+        if (bytes.isEmpty()) {
+            recognitionError = "读取照片失败，请重试"
+            return
+        }
+        scope.launch {
+            recognizing = "photo"
+            recognitionError = null
+            onAddPhoto(bytes)
+                .onSuccess { key ->
+                    val old = photoKey
+                    photoKey = key
+                    LocalPhotoStore.save(context, key, bytes)
+                    if (old != null && old != key) {
+                        LocalPhotoStore.delete(context, old)
+                    }
+                    currentPhoto = ImageCompressor.bytesToBitmap(bytes)
+                }
+                .onFailure { error ->
+                    recognitionError = error.message ?: "添加照片失败"
                 }
             recognizing = null
         }
@@ -125,7 +169,11 @@ fun ItemFormDialog(
             val bytes = ImageCompressor.compressToJpeg(context, cameraUri)
                 ?: cameraFile.readBytes()
             cameraFile.delete()
-            runRecognition(pendingMode, bytes)
+            if (pendingMode == "photo") {
+                runAddPhoto(bytes)
+            } else {
+                runRecognition(pendingMode, bytes)
+            }
         } else {
             pendingMode = null
         }
@@ -135,7 +183,11 @@ fun ItemFormDialog(
     ) { uri ->
         if (uri != null) {
             val bytes = ImageCompressor.compressToJpeg(context, uri)
-            runRecognition(pendingMode, bytes ?: ByteArray(0))
+            if (pendingMode == "photo") {
+                runAddPhoto(bytes ?: ByteArray(0))
+            } else {
+                runRecognition(pendingMode, bytes ?: ByteArray(0))
+            }
         } else {
             pendingMode = null
         }
@@ -242,6 +294,26 @@ fun ItemFormDialog(
                 ) {
                     Text(if (recognizing == "expiry") "识别中..." else "拍摄有效期")
                 }
+                OutlinedButton(
+                    onClick = {
+                        pendingMode = "photo"
+                        recognitionError = null
+                        sourceDialogVisible = true
+                    },
+                    enabled = recognizing == null,
+                ) {
+                    Text(if (recognizing == "photo") "上传中..." else "添加/更换照片")
+                }
+            }
+            currentPhoto?.let { photo ->
+                Image(
+                    bitmap = photo.asImageBitmap(),
+                    contentDescription = "物品照片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                )
             }
             if (sourceDialogVisible) {
                 AlertDialog(
@@ -249,7 +321,15 @@ fun ItemFormDialog(
                         sourceDialogVisible = false
                         pendingMode = null
                     },
-                    title = { Text(if (pendingMode == "expiry") "选择有效期照片来源" else "选择物品照片来源") },
+                    title = {
+                        Text(
+                            when (pendingMode) {
+                                "expiry" -> "选择有效期照片来源"
+                                "photo" -> "选择照片来源"
+                                else -> "选择物品照片来源"
+                            },
+                        )
+                    },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(

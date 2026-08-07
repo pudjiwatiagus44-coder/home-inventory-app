@@ -116,6 +116,7 @@ data class ItemUpdateRequest(
     val note: String = "",
     val expireDate: String? = null,
     val locationId: String? = null,
+    val photoKey: String? = null,
 )
 
 data class ImportRowDto(

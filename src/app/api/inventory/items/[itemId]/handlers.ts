@@ -27,15 +27,34 @@ export function createItemItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) =>
-          service.updateItemForCurrentUser({
+        async ({ service, userId, body }) => {
+          const item = await service.updateItemForCurrentUser({
             userId,
             itemId,
             name: textField(body, "name"),
             note: textField(body, "note"),
             expireDate: optionalTextField(body, "expireDate"),
             locationId: optionalTextField(body, "locationId"),
-          }),
+          });
+          const photoKey = optionalTextField(body, "photoKey");
+
+          if (photoKey) {
+            const photoService =
+              dependencies.recognitionService ??
+              createRouteRecognitionService();
+            const attached = await photoService.attachPhotoToItem({
+              userId,
+              itemId,
+              photoKey,
+            });
+
+            if (attached) {
+              return { ...item, photo_key: photoKey };
+            }
+          }
+
+          return item;
+        },
         dependencies,
       );
     },

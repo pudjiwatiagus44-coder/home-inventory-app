@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
+import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
@@ -34,6 +35,7 @@ import com.homeinventory.app.ui.dashboard.dialogs.ImportPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ImportSummaryMessage
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
+import com.homeinventory.app.ui.dashboard.dialogs.PhotoPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
 import kotlinx.coroutines.launch
 
@@ -53,6 +55,7 @@ fun DashboardHost(
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     val updateState by viewModel.updateCheckState().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
+    var previewItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var showLocationForm by remember { mutableStateOf(false) }
@@ -120,6 +123,9 @@ fun DashboardHost(
             editingItem = item
             formError = null
             showItemForm = true
+        },
+        onPhotoClick = { item ->
+            previewItem = item
         },
         loadPhoto = viewModel::itemPhoto,
         onRefresh = {
@@ -237,6 +243,17 @@ fun DashboardHost(
             isSaving = isSaving,
             errorMessage = formError,
             onRecognize = viewModel::recognizeItemPhoto,
+            onAddPhoto = repository::uploadThumbnailOnly,
+            loadCurrentPhoto = {
+                val editing = editingItem
+                if (editing == null) {
+                    Result.failure(IllegalStateException("无图片"))
+                } else {
+                    editing.photoKey?.let { key ->
+                        LocalPhotoStore.read(context, key)?.let { Result.success(it) }
+                    } ?: viewModel.itemPhoto(editing.id)
+                }
+            },
             onSave = { values ->
                 scope.launch {
                     val validation = validateItemForm(values.name, values.note)
@@ -255,6 +272,7 @@ fun DashboardHost(
                             values.note,
                             values.expireDate,
                             locationId,
+                            values.photoKey,
                         )
                     }
                     result
@@ -425,6 +443,14 @@ fun DashboardHost(
                 importPreview = null
                 importError = null
             },
+        )
+    }
+
+    previewItem?.let { item ->
+        PhotoPreviewDialog(
+            item = item,
+            loadPhoto = viewModel::itemPhoto,
+            onDismiss = { previewItem = null },
         )
     }
 }

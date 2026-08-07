@@ -116,6 +116,38 @@ describe("recognition service", () => {
     expect(fakes.pending).toHaveLength(0);
   });
 
+  it("stores a thumbnail in photo mode without calling the vision api", async () => {
+    let visionCalls = 0;
+    const fakes = createFakes({ householdId: "household-1" });
+    const service = createRecognitionService({
+      loadHouseholdIdForUser: async () => fakes.householdId,
+      photoRepository: fakes.photoRepository,
+      photoStore: fakes.photoStore,
+      doubaoVision: {
+        recognizeName: async () => {
+          visionCalls += 1;
+          return { ok: true, value: "x" };
+        },
+        recognizeExpireDate: async () => {
+          visionCalls += 1;
+          return { ok: true, value: "2026-01-01" };
+        },
+      },
+    });
+
+    const result = await service.recognizeForCurrentUser({
+      userId: "user-1",
+      mode: "photo",
+      jpegBuffer: makeJpeg(),
+    });
+
+    expect(result.mode).toBe("photo");
+    expect(result.recognized).toBe(true);
+    expect(result.thumbnailId).toMatch(/^photo_/);
+    expect(fakes.pending).toHaveLength(1);
+    expect(visionCalls).toBe(0);
+  });
+
   it("rejects recognition when the user has no household", async () => {
     const fakes = createFakes({ householdId: null });
     const service = createRecognitionService({

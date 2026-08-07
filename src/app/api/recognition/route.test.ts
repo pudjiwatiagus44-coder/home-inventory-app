@@ -130,4 +130,37 @@ describe("recognition route", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("returns a thumbnail id for photo mode", async () => {
+    const handlers = createRecognitionHandlers({
+      authService: {
+        getCurrentUser: async () => ({ userId: "user-1", email: "a@b.c" }),
+      },
+      recognitionService: {
+        recognizeForCurrentUser: async ({ mode }) => ({
+          mode,
+          recognized: true,
+          thumbnailId: "photo_1.jpg",
+        }),
+        attachPhotoToItem: async () => true,
+        getItemPhoto: async () => null,
+        deleteItemPhoto: async () => undefined,
+        cleanupExpiredPendingPhotos: async () => 0,
+      },
+    });
+
+    const form = new FormData();
+    form.append("file", jpegBlob(), "photo.jpg");
+    const response = await handlers.POST(requestWithFormData(form, "photo"));
+
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      data: {
+        mode: "photo",
+        recognized: true,
+        thumbnailId: "photo_1.jpg",
+      },
+    });
+    expect(response.status).toBe(200);
+  });
 });

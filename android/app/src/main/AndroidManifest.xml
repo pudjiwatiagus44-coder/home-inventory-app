@@ -5,7 +5,9 @@
     <application
         android:name=".HomeInventoryApplication"
         android:allowBackup="false"
-        android:label="Home Inventory"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="家庭物品"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.HomeInventory">
         <provider

@@ -123,10 +123,13 @@ export function createRecognitionHandlers(
           );
         }
 
+        const rawMode = request.nextUrl.searchParams.get("mode");
         const mode =
-          request.nextUrl.searchParams.get("mode") === "expiry"
+          rawMode === "expiry"
             ? "expiry"
-            : "name";
+            : rawMode === "photo"
+              ? "photo"
+              : "name";
         const service =
           dependencies.recognitionService ?? createRouteRecognitionService();
         const data = await service.recognizeForCurrentUser({

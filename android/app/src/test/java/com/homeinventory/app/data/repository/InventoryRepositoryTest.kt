@@ -72,6 +72,16 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    fun uploadThumbnailOnlyReturnsKeyOnSuccess() = runTest {
+        val repository = repositoryWith(api = FakeRecognizeApi())
+
+        val result = repository.uploadThumbnailOnly(byteArrayOf(1, 2, 3))
+
+        assertTrue(result.isSuccess)
+        assertEquals("photo_1.jpg", result.getOrNull())
+    }
+
+    @Test
     fun offlineCreatedItemIsMarkedPendingCreate() {
         val item = ItemEntity.pendingCreate(
             localId = "local-item-1",

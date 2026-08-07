@@ -773,3 +773,14 @@
 - 识别 499 超时事故与修复：Nginx 放行后设备请求返回 499（客户端在响应前断开），App 提示「无法连接服务器」。根因：相机路径漏了本地压缩（`cameraFile.readBytes()` 直接传原图，约 1.6MB），服务器纯 JS（jpeg-js）解码大图 + 豆包识别耗时逼近/超过 OkHttp 默认 10s 读超时，客户端主动断开。实测 600KB 图片全链路约 5.8s。修复（0.5.2 / code 8）：相机拍照也走 `ImageCompressor.compressToJpeg`（1280px、约 200–400KB）再上传，并把 OkHttp 超时调为 connect 20s / read 60s / write 60s。APK 已上传，version.json 返回 0.5.2/code 8；Android 单测通过。教训：上传前压缩是硬要求（设计真源 `docs/superpowers/specs/2026-08-07-photo-recognition-design.md`），两条取图路径都要走压缩，不能只压缩相册。
 - 0.5.2 误传旧 APK 事故与修复：首次上传「0.5.2」时误用 `upload-apk.ps1 -SkipBuild`，而当时只跑了 `testDebugUnitTest`（不产出新 APK），上传的是 0.5.1 的构建产物，version.json 却声称 0.5.2/code 8；用户点更新下载到的实际是 0.5.1，装完仍是旧行为。修复：完整执行 `upload-apk.ps1` 重新构建并上传，用 `aapt dump badging` 确认本地 APK 为 versionCode 8 / versionName 0.5.2，并比对服务器 APK SHA-256 与本地一致；给 `scripts/upload-apk.ps1` 增加防护——`-SkipBuild` 时若 APK 最后修改时间早于 `build.gradle.kts` 则直接报错，防止再次误传旧产物。教训：上传前必须核对 APK 内版本（aapt），不能只信 version.json。
 - 未验证/待办：豆包真实识别未验证（需 App 0.5.0 真机拍照验收；若识别报模型不存在需核对 `DOUBAO_VISION_MODEL` 与已开通模型 ID）；`data/photos` 备份策略待纳入备份范围；隐私政策「照片发送至火山引擎」条款待公开推广前补齐。
+
+## 2026-08-07 0.5.3 应用图标与照片功能证据
+
+- 应用图标：用户提供豆包生成的 3D 黏土风图标（薄荷绿渐变圆角方块 + 白色立体房子/叠放收纳盒/抽屉/放大镜，无水印版本）。处理：无需裁剪（绿色方块铺满画布，仅圆角处留白），从 2048px 源图用 LANCZOS 生成 `mipmap-{mdpi..xxxhdpi}/ic_launcher.png` 与 `ic_launcher_round.png`；`AndroidManifest.xml` 配置 `android:icon`/`android:roundIcon`，应用名改为「家庭物品」。192px 图标经 Kimi 检查元素可辨、无水印。
+- 照片功能（本地清晰图 + 缩略图管理）：
+  - 存储决策：服务器只存 200px 缩略图（几 KB，不变）；1280px 压缩清晰图保存在手机本地 `filesDir/photos/<photoKey>.jpg`（`LocalPhotoStore`），放大查看本地优先、缺失时回退服务器缩略图。
+  - 服务器：识别接口新增 `mode=photo`（只生成缩略图并暂存，不调豆包，省识别费用）；物品更新接口（`PATCH /api/inventory/items/[itemId]`）支持 `photoKey`，关联后返回 `photo_key`。
+  - Android：拍照/相册压缩后本地保存清晰图；列表缩略图可点击弹出 `PhotoPreviewDialog` 放大查看（点击任意处关闭）；编辑弹窗显示当前照片并可「添加/更换照片」（无图物品可补图，换图时删除旧本地文件）；`updateItemOnline` 携带 `photoKey` 关联。
+  - 测试：服务器 `recognition-service.test.ts` 新增 photo 模式（存缩略图、不调豆包）、`recognition/route.test.ts` 新增 `mode=photo` 返回 thumbnailId、`photo-attach.test.ts` 新增 PATCH 关联；Android `InventoryRepositoryTest` 新增 `uploadThumbnailOnly` 成功用例。全量 `npm test` 1086 通过 / 8 跳过，`npx eslint src` 通过，`npm run build` 通过；Android 单测 + `assembleDebug` 通过。
+  - 版本：0.5.3 / code 9，APK 20,032,951 字节，`aapt dump badging` 确认 `application-label:'家庭物品'`；已上传服务器，version.json 返回 0.5.3/code 9，服务器 APK SHA-256 与本地一致。
+  - 待办：服务器新代码（`mode=photo` + PATCH photoKey）部署上线；真机验收（点缩略图放大、编辑看图、无图加图、换图）；换设备/重装后放大查看回退为服务器模糊缩略图（符合既定存储决策）。

@@ -9,7 +9,7 @@ import {
 } from "./doubao-vision";
 
 export type RecognitionOutcome = {
-  mode: "name" | "expiry";
+  mode: "name" | "expiry" | "photo";
   recognized: boolean;
   name?: string | null;
   expireDate?: string | null;
@@ -39,10 +39,27 @@ export function createRecognitionService(
   return {
     async recognizeForCurrentUser(input: {
       userId: string;
-      mode: "name" | "expiry";
+      mode: "name" | "expiry" | "photo";
       jpegBuffer: Buffer;
     }): Promise<RecognitionOutcome> {
       const householdId = await loadHouseholdId(input.userId);
+
+      if (input.mode === "photo") {
+        const photoKey = `photo_${randomUUID()}.jpg`;
+        const thumbnail = createThumbnail(input.jpegBuffer);
+        await deps.photoStore.save(photoKey, thumbnail);
+        await deps.photoRepository.createPendingPhoto({
+          householdId,
+          createdBy: input.userId,
+          photoKey,
+        });
+
+        return {
+          mode: "photo",
+          recognized: true,
+          thumbnailId: photoKey,
+        };
+      }
 
       if (input.mode === "expiry") {
         const result = await deps.doubaoVision.recognizeExpireDate(
