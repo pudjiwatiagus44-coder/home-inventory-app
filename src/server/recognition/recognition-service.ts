@@ -49,14 +49,18 @@ export function createRecognitionService(
           input.jpegBuffer,
         );
 
-        if (result.reason === "api_key_missing") {
-          throw new DoubaoApiKeyMissingError();
+        if (!result.ok) {
+          if (result.reason === "api_key_missing") {
+            throw new DoubaoApiKeyMissingError();
+          }
+
+          return { mode: "expiry", recognized: false, expireDate: null };
         }
 
         return {
           mode: "expiry",
-          recognized: result.ok,
-          expireDate: result.ok ? result.value : null,
+          recognized: true,
+          expireDate: result.value,
         };
       }
 
@@ -71,14 +75,23 @@ export function createRecognitionService(
 
       const result = await deps.doubaoVision.recognizeName(input.jpegBuffer);
 
-      if (result.reason === "api_key_missing") {
-        throw new DoubaoApiKeyMissingError();
+      if (!result.ok) {
+        if (result.reason === "api_key_missing") {
+          throw new DoubaoApiKeyMissingError();
+        }
+
+        return {
+          mode: "name",
+          recognized: false,
+          name: null,
+          thumbnailId: photoKey,
+        };
       }
 
       return {
         mode: "name",
-        recognized: result.ok,
-        name: result.ok ? result.value : null,
+        recognized: true,
+        name: result.value,
         thumbnailId: photoKey,
       };
     },

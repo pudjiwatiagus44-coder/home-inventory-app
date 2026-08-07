@@ -95,6 +95,7 @@ describe("buildDashboardSummary", () => {
           areaId: "area-1",
           areaName: "厨房",
           expirationStatus: "none",
+          photoKey: null,
         },
         {
           id: "item-2",
@@ -106,6 +107,7 @@ describe("buildDashboardSummary", () => {
           areaId: "area-2",
           areaName: "卧室",
           expirationStatus: "normal",
+          photoKey: null,
         },
       ],
     });
@@ -162,6 +164,7 @@ describe("buildDashboardSummary", () => {
         areaId: null,
         areaName: "未分区",
         expirationStatus: "none",
+        photoKey: null,
       },
     ]);
   });

@@ -4,7 +4,7 @@ import { createRecognitionRateLimiter } from "./rate-limiter";
 
 describe("recognition rate limiter", () => {
   it("allows up to the limit inside the window", () => {
-    let now = 0;
+    const now = 0;
     const limiter = createRecognitionRateLimiter({
       limit: 3,
       windowMs: 60_000,
@@ -18,7 +18,7 @@ describe("recognition rate limiter", () => {
   });
 
   it("tracks users independently", () => {
-    let now = 0;
+    const now = 0;
     const limiter = createRecognitionRateLimiter({
       limit: 1,
       windowMs: 60_000,
