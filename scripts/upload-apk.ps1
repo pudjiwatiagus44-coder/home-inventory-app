@@ -35,6 +35,14 @@ if (-not (Test-Path -LiteralPath $sourceApk)) {
     throw "APK not found: $sourceApk"
 }
 
+if ($SkipBuild) {
+    $apkTime = (Get-Item -LiteralPath $sourceApk).LastWriteTime
+    $gradleTime = (Get-Item -LiteralPath (Join-Path $repoRoot "android\app\build.gradle.kts")).LastWriteTime
+    if ($apkTime -lt $gradleTime) {
+        throw "APK ($sourceApk) is older than build.gradle.kts; rebuild with assembleDebug or omit -SkipBuild"
+    }
+}
+
 $buildFile = Get-Content -LiteralPath (Join-Path $repoRoot "android\app\build.gradle.kts") -Raw
 $versionCode = [regex]::Match($buildFile, "versionCode\s*=\s*(\d+)").Groups[1].Value
 $versionName = [regex]::Match($buildFile, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
