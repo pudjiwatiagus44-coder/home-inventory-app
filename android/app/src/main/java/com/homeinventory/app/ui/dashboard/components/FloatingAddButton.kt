@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
@@ -25,7 +26,8 @@ fun FloatingAddButton(
         modifier = modifier
             .size(width = 64.dp, height = 64.dp)
             .clip(RoundedCornerShape(32.dp))
-            .background(Primary),
+            .background(Primary)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
