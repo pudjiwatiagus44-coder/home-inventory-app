@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -19,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material3.AlertDialog
@@ -34,6 +34,7 @@ import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.data.repository.InventorySnapshot
+import java.io.File
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
@@ -119,37 +120,48 @@ fun DashboardHost(
         }
     }
     var pendingPhotoItem by remember { mutableStateOf<DashboardUiItem?>(null) }
-    val itemPhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
+    val itemCameraFile = remember { mutableStateOf<File?>(null) }
+    fun processItemPhoto(item: DashboardUiItem, bytes: ByteArray) {
+        scope.launch {
+            repository.uploadThumbnailOnly(bytes)
+                .onSuccess { key ->
+                    LocalPhotoStore.save(context, key, bytes)
+                    repository.updateItemOnline(
+                        item.id,
+                        item.name,
+                        item.note,
+                        item.expireDate,
+                        item.locationId,
+                        key,
+                    )
+                }
+                .onFailure { error ->
+                    Toast.makeText(
+                        context,
+                        error.message ?: "添加照片失败",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+        }
+    }
+    val itemCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
         val item = pendingPhotoItem
         pendingPhotoItem = null
-        if (uri != null && item != null) {
+        val file = itemCameraFile.value
+        itemCameraFile.value = null
+        if (success && item != null && file != null) {
             scope.launch {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file,
+                )
                 val bytes = ImageCompressor.compressToJpeg(context, uri)
-                if (bytes == null) {
-                    Toast.makeText(context, "读取照片失败", Toast.LENGTH_LONG).show()
-                } else {
-                    repository.uploadThumbnailOnly(bytes)
-                        .onSuccess { key ->
-                            LocalPhotoStore.save(context, key, bytes)
-                            repository.updateItemOnline(
-                                item.id,
-                                item.name,
-                                item.note,
-                                item.expireDate,
-                                item.locationId,
-                                key,
-                            )
-                        }
-                        .onFailure { error ->
-                            Toast.makeText(
-                                context,
-                                error.message ?: "添加照片失败",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                }
+                    ?: file.readBytes()
+                file.delete()
+                processItemPhoto(item, bytes)
             }
         }
     }
@@ -230,12 +242,16 @@ fun DashboardHost(
             previewItem = item
         },
         onAddPhoto = { item ->
-            pendingPhotoItem = item
-            itemPhotoPicker.launch(
-                PickVisualMediaRequest(
-                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                ),
+            val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+            val file = File(dir, "item_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
             )
+            pendingPhotoItem = item
+            itemCameraFile.value = file
+            itemCameraLauncher.launch(uri)
         },
         unassignedFilter = state.unassignedFilter,
         onToggleUnassigned = viewModel::toggleUnassignedFilter,

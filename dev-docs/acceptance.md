@@ -892,3 +892,11 @@
 - 测试：Android 单测全通过；`assembleDebug` 通过。
 - 版本：0.5.16 / code 22，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
 - 待办：真机验收双击放大 4 倍。
+
+## 2026-08-08 0.5.17 物品「拍照」按钮直接调起相机证据
+
+- 需求：物品列表左侧「拍照」按钮从选相册改为直接启动系统相机。
+- 实现：`DashboardHost` 用 `ActivityResultContracts.TakePicture()` + FileProvider 相机缓存文件（`cacheDir/camera/item_<ts>.jpg`）直接调起相机；拍照成功后压缩（1280px）→ 上传生成缩略图（mode=photo）→ 关联物品并保存本地清晰图；取消/失败静默处理（文件清理）。
+- 测试：Android 单测全通过；`assembleDebug` 通过（仅弃用警告）。
+- 版本：0.5.17 / code 23，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
+- 待办：真机验收（无图物品点「拍照」直接进相机，拍完自动补图）。
