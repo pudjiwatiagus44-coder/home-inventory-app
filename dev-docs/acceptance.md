@@ -906,3 +906,12 @@
 - 用户指出近期功能迭代未及时回写真源，要求补写。
 - 本次同步：`dev-docs/project-brief.md` 更新照片存储决策（服务器只存缩略图、清晰图存手机本地）并新增「2026-08-08 拍照识别后续增强决策」（草稿箱、批量导入、未分配筛选、长按管理、拍照直启相机、预览缩放、默认预选）；`dev-docs/architecture.md` 新增「2026-08-08 草稿箱与照片增强架构」；`docs/superpowers/specs/2026-08-07-photo-recognition-design.md` 追加「设计变更记录（2026-08-08）」。
 - 后续流程约束：范围/高风险变更先更新真源并经用户确认再实施；小迭代至少保留 acceptance 证据；本会话内因用户逐条即时指定而直接实施的增量，一律在本日完成真源回写。
+
+## 2026-08-08 0.5.18 列表实时刷新修复证据
+
+- 现象：新增格子/物品/照片后需杀进程重启才显示。
+- 根因：数据层已是主流方案（Room Flow → ViewModel StateFlow → Compose `collectAsState` 自动重组），新增物品/格子本应实时出现；但物品行缩略图用 `produceState` 缓存时只以 `item.id` 为 key，加/换照片后 key 不变导致缩略图不重载（照片不刷新）；且 `onRefresh` 在 `DashboardScreen` 中声明后从未被使用，手动刷新入口实际不存在。
+- 修复：① 缩略图 `produceState` 改为以 `(item.id, item.photoKey)` 为 key，照片变化立即重载；② 主界面加 Material3 下拉刷新（`PullToRefreshBox`），下拉即 `syncPendingOperations + refreshSnapshot` 并显示刷新指示；③ 物品/格子沿用 Room Flow 自动刷新。
+- 测试：Android 单测全通过；`assembleDebug` 通过。
+- 版本：0.5.18 / code 24，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
+- 待办：真机验收（新增物品/格子实时出现、加照片立即显示缩略图、下拉刷新）。

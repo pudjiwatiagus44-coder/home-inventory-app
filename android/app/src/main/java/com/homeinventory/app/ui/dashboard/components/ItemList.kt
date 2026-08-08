@@ -169,7 +169,11 @@ private fun ItemRow(
     onAddPhoto: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
 ) {
-    val thumbnail by produceState<Bitmap?>(initialValue = null, item.id) {
+    val thumbnail by produceState<Bitmap?>(
+        initialValue = null,
+        item.id,
+        item.photoKey,
+    ) {
         if (item.photoKey != null) {
             value = loadPhoto(item.id).getOrNull()
         }

@@ -85,6 +85,7 @@ fun DashboardHost(
     var importPreview by remember { mutableStateOf<ImportPreviewDto?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
     var isCommittingImport by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
     val editingDraft = editingDraftId?.let { id ->
         draftsUi.drafts.firstOrNull { it.id == id }
@@ -258,10 +259,13 @@ fun DashboardHost(
         loadPhoto = viewModel::itemPhoto,
         onRefresh = {
             scope.launch {
+                isRefreshing = true
                 repository.syncPendingOperations()
                 repository.refreshSnapshot()
+                isRefreshing = false
             }
         },
+        isRefreshing = isRefreshing,
         onBackup = {
             scope.launch {
                 val rows = state.items.mapIndexed { index, item ->

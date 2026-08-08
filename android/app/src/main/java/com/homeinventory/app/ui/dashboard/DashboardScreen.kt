@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,7 @@ import com.homeinventory.app.ui.dashboard.components.TopBar
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Background
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
@@ -39,6 +42,7 @@ fun DashboardScreen(
     unassignedFilter: Boolean,
     onToggleUnassigned: () -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
+    isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onBackup: () -> Unit,
     onImport: () -> Unit,
@@ -64,52 +68,59 @@ fun DashboardScreen(
             FloatingAddButton(onClick = onAddItem)
         },
     ) { padding ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
             modifier = modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(padding),
         ) {
-            SearchBar(
-                value = state.filters.search,
-                onChange = onSearchChange,
-            )
-            AreaStrip(
-                areas = state.areas,
-                selectedAreaId = state.filters.areaId,
-                itemCountByArea = state.items.groupBy { it.areaId }.mapValues { it.value.size },
-                onSelectArea = onSelectArea,
-                onAddArea = onAddArea,
-                onLongPressArea = onLongPressArea,
-            )
-            LocationStrip(
-                locations = if (state.filters.areaId == null) {
-                    state.locations
-                } else {
-                    state.locations.filter { it.areaId == state.filters.areaId }
-                },
-                selectedLocationId = state.filters.locationId,
-                selectedAreaId = state.filters.areaId,
-                itemCountByLocation = state.items.groupBy { it.locationId }.mapValues { it.value.size },
-                onSelectLocation = onSelectLocation,
-                onClearArea = { onSelectArea(null) },
-                onAddLocation = onAddLocation,
-                onLongPressLocation = onLongPressLocation,
-            )
-            ItemList(
-                items = state.visibleItems,
-                sortMode = state.sortMode,
-                onSortChange = onSortChange,
-                onEditItem = onEditItem,
-                onPhotoClick = onPhotoClick,
-                onAddPhoto = onAddPhoto,
-                unassignedFilter = unassignedFilter,
-                onToggleUnassigned = onToggleUnassigned,
-                loadPhoto = loadPhoto,
-                isEmpty = state.items.isEmpty(),
-                modifier = Modifier.weight(1f),
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SearchBar(
+                    value = state.filters.search,
+                    onChange = onSearchChange,
+                )
+                AreaStrip(
+                    areas = state.areas,
+                    selectedAreaId = state.filters.areaId,
+                    itemCountByArea = state.items.groupBy { it.areaId }.mapValues { it.value.size },
+                    onSelectArea = onSelectArea,
+                    onAddArea = onAddArea,
+                    onLongPressArea = onLongPressArea,
+                )
+                LocationStrip(
+                    locations = if (state.filters.areaId == null) {
+                        state.locations
+                    } else {
+                        state.locations.filter { it.areaId == state.filters.areaId }
+                    },
+                    selectedLocationId = state.filters.locationId,
+                    selectedAreaId = state.filters.areaId,
+                    itemCountByLocation = state.items.groupBy { it.locationId }.mapValues { it.value.size },
+                    onSelectLocation = onSelectLocation,
+                    onClearArea = { onSelectArea(null) },
+                    onAddLocation = onAddLocation,
+                    onLongPressLocation = onLongPressLocation,
+                )
+                ItemList(
+                    items = state.visibleItems,
+                    sortMode = state.sortMode,
+                    onSortChange = onSortChange,
+                    onEditItem = onEditItem,
+                    onPhotoClick = onPhotoClick,
+                    onAddPhoto = onAddPhoto,
+                    unassignedFilter = unassignedFilter,
+                    onToggleUnassigned = onToggleUnassigned,
+                    loadPhoto = loadPhoto,
+                    isEmpty = state.items.isEmpty(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
