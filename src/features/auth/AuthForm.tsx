@@ -1,23 +1,48 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { validateAuthCredentials } from "./auth-validation";
 import { authenticateWithSelfHostedApi } from "./self-hosted-auth-client";
+import {
+  clearSavedEmail,
+  getSavedEmail,
+  saveEmail,
+} from "./remembered-email";
 
 type AuthMode = "sign-in" | "sign-up";
 
-export function AuthForm({ redirect }: { redirect?: string }) {
+export function AuthForm({
+  redirect,
+  resetNotice,
+}: {
+  redirect?: string;
+  resetNotice?: string;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState(resetNotice);
+  const [rememberEmail, setRememberEmail] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const savedEmail = getSavedEmail();
+
+    if (savedEmail) {
+      // localStorage is only readable on the client after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail(savedEmail);
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    setNotice(undefined);
 
     const validation = validateAuthCredentials({ email, password });
     if (!validation.ok) {
@@ -32,6 +57,13 @@ export function AuthForm({ redirect }: { redirect?: string }) {
         email,
         password,
       });
+
+      if (rememberEmail) {
+        saveEmail(email.trim().toLowerCase());
+      } else {
+        clearSavedEmail();
+      }
+
       router.push(
         redirect && redirect.startsWith("/") ? redirect : "/app",
       );
@@ -81,6 +113,23 @@ export function AuthForm({ redirect }: { redirect?: string }) {
         />
       </label>
 
+      {mode === "sign-in" ? (
+        <div className="mb-4 flex justify-end">
+          <Link
+            className="text-sm text-[var(--primary)]"
+            href="/forgot-password"
+          >
+            忘记密码？
+          </Link>
+        </div>
+      ) : null}
+
+      {notice ? (
+        <p className="mb-4 rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--foreground)]">
+          {notice}
+        </p>
+      ) : null}
+
       {message ? (
         <p className="mb-4 rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--foreground)]">
           {message}
@@ -94,6 +143,15 @@ export function AuthForm({ redirect }: { redirect?: string }) {
       >
         {isSubmitting ? "处理中" : mode === "sign-in" ? "登录" : "注册"}
       </button>
+
+      <label className="mt-4 flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">
+        <input
+          checked={rememberEmail}
+          onChange={(event) => setRememberEmail(event.target.checked)}
+          type="checkbox"
+        />
+        记住邮箱
+      </label>
 
       <button
         className="mt-4 w-full text-sm text-[var(--primary)]"
