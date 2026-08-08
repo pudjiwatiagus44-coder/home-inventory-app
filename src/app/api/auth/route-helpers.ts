@@ -14,6 +14,17 @@ import {
   type PostgresEnv,
   type PostgresQueryClientFactoryOptions,
 } from "../../../server/db/postgres";
+import {
+  createPasswordResetService,
+  InvalidResetTokenError,
+  type PasswordResetServiceDependencies,
+} from "../../../server/auth/password-reset-service";
+import {
+  createSmtpMailer,
+  SmtpNotConfiguredError,
+  SmtpSendFailedError,
+} from "../../../server/mail/smtp-mailer";
+import { RateLimitExceededError } from "../../../server/auth/forgot-password-rate-limiter";
 import type { createAuthService as createAuthServiceType } from "../../../server/auth/auth-service";
 
 export const AUTH_SESSION_COOKIE = "home_inventory_session";
@@ -43,6 +54,19 @@ export async function readAuthCredentials(request: NextRequest) {
 type RouteAuthServiceOverrides = PostgresQueryClientFactoryOptions &
   Partial<Parameters<typeof createAuthServiceType>[0]>;
 
+type RoutePasswordResetServiceOverrides = PostgresQueryClientFactoryOptions &
+  Partial<
+    Pick<
+      PasswordResetServiceDependencies,
+      | "mailer"
+      | "hashToken"
+      | "createToken"
+      | "hashPassword"
+      | "now"
+      | "buildResetUrl"
+    >
+  >;
+
 type CurrentUserAuthService = Pick<
   ReturnType<typeof createAuthServiceType>,
   "getCurrentUser"
@@ -63,6 +87,26 @@ export function createRouteAuthService(
     createSessionToken: overrides.createSessionToken,
     hashSessionToken: overrides.hashSessionToken,
     createSessionExpiry: overrides.createSessionExpiry,
+  });
+}
+
+export function createRoutePasswordResetService(
+  env: PostgresEnv = process.env,
+  overrides: RoutePasswordResetServiceOverrides = {},
+) {
+  const queryClient = createPostgresQueryClientFromEnv(env, {
+    createPool: overrides.createPool,
+  });
+  const repository = createPostgresAuthRepository(queryClient);
+
+  return createPasswordResetService({
+    repository,
+    mailer: overrides.mailer ?? createSmtpMailer(),
+    hashToken: overrides.hashToken,
+    createToken: overrides.createToken,
+    hashPassword: overrides.hashPassword,
+    now: overrides.now,
+    buildResetUrl: overrides.buildResetUrl,
   });
 }
 
@@ -147,6 +191,34 @@ export function createAuthErrorResponse(error: unknown) {
     return NextResponse.json(
       { ok: false, message: "Invalid email or password" },
       { status: 401 },
+    );
+  }
+
+  if (error instanceof InvalidResetTokenError) {
+    return NextResponse.json(
+      { ok: false, message: error.message },
+      { status: 400 },
+    );
+  }
+
+  if (error instanceof RateLimitExceededError) {
+    return NextResponse.json(
+      { ok: false, message: error.message },
+      { status: 429 },
+    );
+  }
+
+  if (error instanceof SmtpNotConfiguredError) {
+    return NextResponse.json(
+      { ok: false, message: "SMTP is not configured" },
+      { status: 501 },
+    );
+  }
+
+  if (error instanceof SmtpSendFailedError) {
+    return NextResponse.json(
+      { ok: false, message: "发送重置邮件失败，请稍后再试" },
+      { status: 500 },
     );
   }
 
