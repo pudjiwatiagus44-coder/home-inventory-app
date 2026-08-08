@@ -41,13 +41,18 @@ export type FamilyRepository = {
   insertMemberIfMissing: (input: {
     householdId: string;
     userId: string;
-    role: "owner" | "member";
+    role: "owner" | "member" | "readonly";
   }) => Promise<void>;
   listJoinRequests: (householdId: string) => Promise<FamilyJoinRequestRow[]>;
   listMembers: (householdId: string) => Promise<FamilyMemberRow[]>;
   removeMember: (input: {
     householdId: string;
     userId: string;
+  }) => Promise<void>;
+  updateMemberRole: (input: {
+    householdId: string;
+    userId: string;
+    role: "member" | "readonly";
   }) => Promise<void>;
   getHouseholdName: (householdId: string) => Promise<string | null>;
 };
@@ -73,14 +78,14 @@ type JoinRequestRow = {
 type MemberRow = {
   user_id: string;
   email: string;
-  role: "owner" | "member";
+  role: "owner" | "member" | "readonly";
   created_at: Date | string;
 };
 
 type HouseholdMembershipRow = {
   household_id: string;
   name: string;
-  role: "owner" | "member";
+  role: "owner" | "member" | "readonly";
 };
 
 export function createPostgresFamilyRepository(
@@ -104,7 +109,7 @@ export function createPostgresFamilyRepository(
       return result.rows.map((row) => ({
         id: row.household_id,
         name: row.name,
-        role: row.role === "member" ? "member" : "owner",
+        role: row.role,
       }));
     },
 
@@ -362,7 +367,7 @@ export function createPostgresFamilyRepository(
       return result.rows.map((row) => ({
         user_id: row.user_id,
         email: row.email,
-        role: row.role === "member" ? "member" : "owner",
+        role: row.role,
         created_at: String(row.created_at),
       }));
     },
@@ -374,6 +379,17 @@ export function createPostgresFamilyRepository(
           where household_id = $1 and user_id = $2
         `,
         [input.householdId, input.userId],
+      );
+    },
+
+    async updateMemberRole(input) {
+      await client.query(
+        `
+          update household_members
+          set role = $3
+          where household_id = $1 and user_id = $2
+        `,
+        [input.householdId, input.userId, input.role],
       );
     },
 

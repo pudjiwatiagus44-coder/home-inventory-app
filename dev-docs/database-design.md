@@ -91,11 +91,11 @@ create table public.household_members (
   role text not null default 'owner',
   created_at timestamptz not null default now(),
   primary key (household_id, user_id),
-  constraint household_members_role_check check (role in ('owner', 'member'))
+  constraint household_members_role_check check (role in ('owner', 'member', 'readonly'))
 );
 ```
 
-`owner` 由注册初始化函数创建；`member` 只能通过批准申请的安全函数创建（见下方 `approve_household_join_request`）。不允许普通前端直接插入或修改成员关系，避免成员自提权或伪造 owner。
+`owner` 由注册初始化函数创建；`member` 只能通过批准申请的安全函数创建（见下方 `approve_household_join_request`）。2026-08-08 用户确认新增 `readonly` 档位（只读成员：只能查看家庭区域/位置/物品及照片，不能新增/编辑/删除，由服务端/RLS 强制）；不允许普通前端直接插入或修改成员关系，避免成员自提权或伪造 owner。
 
 ### household_invitations
 
@@ -514,6 +514,7 @@ using (owner_user_id = auth.uid());
 - 不允许普通前端直接插入/更新成员关系：owner 关系由注册初始化函数创建，member 关系由 `approve_household_join_request` 安全函数创建。
 - 只有 owner 能删除成员记录，且不能删除自己（owner 退出家庭不属于第一版能力）。
 - 不做成员角色变更；避免成员把自己提升为 owner。
+- `readonly` 成员对 areas/locations/items 只读：其写策略返回假（Supabase 参考路线在 areas/locations/items 的 insert/update/delete 策略增加 `role <> 'readonly'` 条件；自托管路线在服务端写操作前按角色拦截，语义等价）。
 
 策略草案：
 
@@ -777,6 +778,7 @@ using (public.is_household_member(household_id));
 - 用户 B 用用户 A 的 `household_id` insert item 失败。
 - 用户 B 用用户 A 的 `item_id` update/delete 失败。
 - 用户 A 不能把 item 的 `household_id` 更新成不属于自己的 household。
+- `readonly` 成员读取家庭区域/位置/物品及照片成功；insert/update/delete 任一失败（RLS 返回 0 行或服务端 403）。
 - 如果 location 属于另一个 household，插入/更新 item 必须失败。
 - 未提交申请或被拒绝的账号（无论是否注册）读写共享家庭 areas/locations/items 均返回 0 行或权限错误。
 - 成员申请被批准后，可以查看、新增、编辑、删除家庭内的区域、位置和物品；批准前不能。

@@ -186,6 +186,29 @@ export function createFamilyService({
         userId: input.targetUserId,
       });
     },
+
+    async setMemberRoleForCurrentUser(input: {
+      userId: string;
+      householdId: string;
+      targetUserId: string;
+      role: "member" | "readonly";
+    }): Promise<void> {
+      await assertOwner(input.userId, input.householdId);
+
+      if (input.targetUserId === input.userId) {
+        throw new AuthorizationError("房主不能修改自己的角色");
+      }
+
+      if (input.role !== "member" && input.role !== "readonly") {
+        throw new AuthorizationError("不支持的角色");
+      }
+
+      await repository.updateMemberRole({
+        householdId: input.householdId,
+        userId: input.targetUserId,
+        role: input.role,
+      });
+    },
   };
 
   return service;

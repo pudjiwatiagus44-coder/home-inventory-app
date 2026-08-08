@@ -201,6 +201,19 @@ data class JoinRequestDto(
     val createdAt: String? = null,
 )
 
+data class MemberDto(
+    @SerializedName("user_id")
+    val userId: String,
+    val email: String,
+    val role: String,
+    @SerializedName("created_at")
+    val createdAt: String? = null,
+)
+
+data class UpdateMemberRoleRequest(
+    val role: String,
+)
+
 data class ApkVersionDto(
     @SerializedName("versionName")
     val versionName: String? = null,

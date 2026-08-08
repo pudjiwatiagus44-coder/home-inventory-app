@@ -9,7 +9,7 @@ import {
 function createMemoryFamilyRepository(
   state: {
     ownerUserId?: string | null;
-    members?: { householdId: string; userId: string; role: "owner" | "member" }[];
+    members?: { householdId: string; userId: string; role: "owner" | "member" | "readonly" }[];
     validToken?: string | null;
     pendingRequests?: { id: string; householdId: string; userId: string }[];
   } = {},
@@ -81,6 +81,16 @@ function createMemoryFamilyRepository(
 
       if (index >= 0) {
         members.splice(index, 1);
+      }
+    },
+    updateMemberRole: async ({ householdId, userId, role }) => {
+      const member = members.find(
+        (item) =>
+          item.householdId === householdId && item.userId === userId,
+      );
+
+      if (member) {
+        member.role = role;
       }
     },
     getHouseholdName: async () => "我的家",
@@ -217,6 +227,63 @@ describe("createFamilyService", () => {
         userId: "user-1",
         householdId: "household-1",
         targetUserId: "user-1",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("lets the owner switch a member between member and readonly roles", async () => {
+    const members = [
+      { householdId: "household-1", userId: "user-1", role: "owner" },
+      { householdId: "household-1", userId: "user-2", role: "member" },
+    ];
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-1",
+      members,
+    });
+    const service = createFamilyService({ repository });
+
+    await service.setMemberRoleForCurrentUser({
+      userId: "user-1",
+      householdId: "household-1",
+      targetUserId: "user-2",
+      role: "readonly",
+    });
+
+    expect(members.find((member) => member.userId === "user-2")?.role).toBe(
+      "readonly",
+    );
+  });
+
+  it("rejects role changes by a non-owner member", async () => {
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-1",
+      members: [
+        { householdId: "household-1", userId: "user-1", role: "owner" },
+        { householdId: "household-1", userId: "user-2", role: "member" },
+      ],
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.setMemberRoleForCurrentUser({
+        userId: "user-2",
+        householdId: "household-1",
+        targetUserId: "user-2",
+        role: "readonly",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("rejects the owner changing their own role", async () => {
+    const repository = createMemoryFamilyRepository({ ownerUserId: "user-1" });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.setMemberRoleForCurrentUser({
+        userId: "user-1",
+        householdId: "household-1",
+        targetUserId: "user-1",
+        role: "readonly",
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });

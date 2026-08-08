@@ -5,6 +5,7 @@ import {
   createInventoryService,
   ItemOutsideCurrentHouseholdError,
   LocationOutsideCurrentHouseholdError,
+  ReadOnlyMemberError,
 } from "./inventory-service";
 import type { InventoryRepository } from "./inventory-repository";
 
@@ -1199,5 +1200,66 @@ describe("createInventoryService", () => {
         locationId: "location-1",
       },
     ]);
+  });
+
+  it("rejects writes by a readonly member", async () => {
+    const repository: InventoryRepository = {
+      getDashboardForUser: async () => ({
+        household: {
+          id: "household-1",
+          name: "Home",
+          role: "readonly",
+        },
+        areas: [],
+        locations: [],
+        items: [],
+      }),
+      createArea: async () => {
+        throw new Error("unexpected");
+      },
+      updateArea: async () => {
+        throw new Error("unexpected");
+      },
+      deleteArea: async () => {
+        throw new Error("unexpected");
+      },
+      createLocation: async () => {
+        throw new Error("unexpected");
+      },
+      updateLocation: async () => {
+        throw new Error("unexpected");
+      },
+      deleteLocation: async () => {
+        throw new Error("unexpected");
+      },
+      createItem: async () => {
+        throw new Error("unexpected");
+      },
+      updateItem: async () => {
+        throw new Error("unexpected");
+      },
+      deleteItem: async () => {
+        throw new Error("unexpected");
+      },
+    };
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.createItemForCurrentUser({
+        userId: "user-1",
+        name: "Battery",
+        note: "",
+        expireDate: null,
+        locationId: null,
+      }),
+    ).rejects.toBeInstanceOf(ReadOnlyMemberError);
+
+    await expect(
+      service.createAreaForCurrentUser({
+        userId: "user-1",
+        name: "Kitchen",
+        color: "#64748b",
+      }),
+    ).rejects.toBeInstanceOf(ReadOnlyMemberError);
   });
 });

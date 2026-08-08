@@ -13,6 +13,7 @@ import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.remote.MemberDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
@@ -22,6 +23,7 @@ import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
@@ -113,6 +115,18 @@ interface HomeInventoryApi {
 
     @GET("api/family/join-requests")
     suspend fun joinRequests(@Query("householdId") householdId: String): Response<ApiEnvelope<List<JoinRequestDto>>>
+
+    @GET("api/family/members")
+    suspend fun familyMembers(@Query("householdId") householdId: String): Response<ApiEnvelope<List<MemberDto>>>
+
+    @DELETE("api/family/members/{userId}")
+    suspend fun removeMember(@Path("userId") userId: String): Response<ApiEnvelope<Unit>>
+
+    @PATCH("api/family/members/{userId}")
+    suspend fun updateMemberRole(
+        @Path("userId") userId: String,
+        @Body request: UpdateMemberRoleRequest,
+    ): Response<ApiEnvelope<Unit>>
 
     @POST("api/family/join-requests/{requestId}/approve")
     suspend fun approveJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>

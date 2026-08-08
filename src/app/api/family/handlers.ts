@@ -257,6 +257,41 @@ export function createFamilyHandlers(
       }
     },
 
+    async updateMemberRole(
+      request: NextRequest,
+      context: { params: Promise<{ userId: string }> },
+    ) {
+      try {
+        const user = await requireUser(request);
+
+        if (!user) {
+          return unauthorizedResponse();
+        }
+
+        const { userId: targetUserId } = await context.params;
+        const body = await readJsonObject(request);
+        const role = textField(body, "role");
+
+        if (role !== "member" && role !== "readonly") {
+          return NextResponse.json(
+            { ok: false, message: "不支持的角色" },
+            { status: 400 },
+          );
+        }
+
+        await service().setMemberRoleForCurrentUser({
+          userId: user.userId,
+          householdId: textField(body, "householdId"),
+          targetUserId,
+          role,
+        });
+
+        return successResponse(null);
+      } catch (error) {
+        return familyErrorResponse(error);
+      }
+    },
+
     async getJoinInfo(
       request: NextRequest,
       context: { params: Promise<{ token: string }> },

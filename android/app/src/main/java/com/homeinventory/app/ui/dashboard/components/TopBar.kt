@@ -30,6 +30,7 @@ fun TopBar(
     onBackup: () -> Unit,
     onImport: () -> Unit,
     onInvite: () -> Unit,
+    onHelp: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,6 +90,7 @@ fun TopBar(
         TextButton(onClick = onBackup) { Text("备份") }
         TextButton(onClick = onImport) { Text("导入") }
         TextButton(onClick = onInvite) { Text("邀请") }
+        TextButton(onClick = onHelp) { Text("帮助") }
         TextButton(onClick = onSignOut) { Text("退出") }
     }
 }

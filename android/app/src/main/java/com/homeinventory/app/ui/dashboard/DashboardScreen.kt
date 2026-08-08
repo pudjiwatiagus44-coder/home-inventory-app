@@ -47,6 +47,7 @@ fun DashboardScreen(
     onBackup: () -> Unit,
     onImport: () -> Unit,
     onInvite: () -> Unit,
+    onHelp: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onSignOut: () -> Unit,
@@ -61,6 +62,7 @@ fun DashboardScreen(
                 onBackup = onBackup,
                 onImport = onImport,
                 onInvite = onInvite,
+                onHelp = onHelp,
                 onSignOut = onSignOut,
             )
         },

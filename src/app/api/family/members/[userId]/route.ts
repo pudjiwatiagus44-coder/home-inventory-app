@@ -10,3 +10,10 @@ export async function DELETE(
 ) {
   return handlers.removeMember(request, context);
 }
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ userId: string }> },
+) {
+  return handlers.updateMemberRole(request, context);
+}

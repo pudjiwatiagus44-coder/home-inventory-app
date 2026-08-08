@@ -1,6 +1,7 @@
 export type HouseholdRow = {
   id: string;
   name: string;
+  role?: "owner" | "member" | "readonly";
 };
 
 export type AreaRow = {

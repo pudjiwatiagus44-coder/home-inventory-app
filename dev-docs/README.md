@@ -17,6 +17,7 @@
 - `stages/mainland-auth-db-migration.md` - 国内正式版认证、数据库、权限和部署迁移拆分；不影响当前 Vercel/Supabase 临时版。
 - `local-postgres-test-runbook.md` - 本地/测试 PostgreSQL 配置、schema、integration test 和安全规则。
 - `acceptance.md` - 阶段验收门槛、证据记录、停止条件。
+- `user-manual.md` - 用户使用说明书（随功能迭代更新；App 内帮助入口已实现）。
 
 ## 文档职责
 

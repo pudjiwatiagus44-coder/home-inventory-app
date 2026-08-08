@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.remote.MemberDto
 import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.local.DraftStatus
 import com.homeinventory.app.data.repository.DraftGateway
@@ -71,6 +72,13 @@ data class JoinRequestsUiState(
     val pendingRequestId: String? = null,
 )
 
+data class MembersUiState(
+    val members: List<MemberDto> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val pendingUserId: String? = null,
+)
+
 data class UpdateCheckUiState(
     val isChecking: Boolean = false,
     val updateAvailable: Boolean = false,
@@ -115,6 +123,15 @@ class DashboardViewModel(
     private val rejectJoinRequest: suspend (String) -> Result<Unit> = {
         Result.failure(IllegalStateException("审批功能不可用"))
     },
+    private val listFamilyMembers: suspend () -> Result<List<MemberDto>> = {
+        Result.failure(IllegalStateException("成员功能不可用"))
+    },
+    private val removeFamilyMember: suspend (String) -> Result<Unit> = {
+        Result.failure(IllegalStateException("成员功能不可用"))
+    },
+    private val updateMemberRole: suspend (String, String) -> Result<Unit> = { _, _ ->
+        Result.failure(IllegalStateException("成员功能不可用"))
+    },
     private val checkForUpdate: suspend () -> Result<ApkVersionDto> = {
         Result.failure(IllegalStateException("更新检查不可用"))
     },
@@ -142,6 +159,7 @@ class DashboardViewModel(
     private val refreshFlag = MutableStateFlow(0)
     private val invite = MutableStateFlow(InviteUiState())
     private val joinRequests = MutableStateFlow(JoinRequestsUiState())
+    private val members = MutableStateFlow(MembersUiState())
     private val updateCheck = MutableStateFlow(UpdateCheckUiState())
     private val drafts = MutableStateFlow(DraftsUiState())
     private val batchImport = MutableStateFlow(BatchImportUiState())
@@ -358,6 +376,77 @@ class DashboardViewModel(
     }
 
     fun joinRequestsState(): StateFlow<JoinRequestsUiState> = joinRequests
+
+    fun membersState(): StateFlow<MembersUiState> = members
+
+    fun refreshMembers() {
+        if (members.value.isLoading) {
+            return
+        }
+
+        viewModelScope.launch {
+            members.value = members.value.copy(
+                isLoading = true,
+                errorMessage = null,
+            )
+            listFamilyMembers()
+                .onSuccess { list ->
+                    members.value = MembersUiState(members = list)
+                }
+                .onFailure { error ->
+                    members.value = members.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "加载成员失败",
+                    )
+                }
+        }
+    }
+
+    fun removeMember(userId: String) {
+        if (members.value.pendingUserId != null) {
+            return
+        }
+
+        viewModelScope.launch {
+            members.value = members.value.copy(
+                pendingUserId = userId,
+                errorMessage = null,
+            )
+            removeFamilyMember(userId)
+                .onSuccess {
+                    refreshMembers()
+                }
+                .onFailure { error ->
+                    members.value = members.value.copy(
+                        pendingUserId = null,
+                        errorMessage = error.message ?: "移除成员失败",
+                    )
+                }
+        }
+    }
+
+    fun setMemberRole(userId: String, role: String) {
+        if (members.value.pendingUserId != null) {
+            return
+        }
+
+        viewModelScope.launch {
+            members.value = members.value.copy(
+                pendingUserId = userId,
+                errorMessage = null,
+            )
+            updateMemberRole(userId, role)
+                .onSuccess {
+                    refreshMembers()
+                }
+                .onFailure { error ->
+                    members.value = members.value.copy(
+                        pendingUserId = null,
+                        errorMessage = error.message ?: "修改成员权限失败",
+                    )
+                }
+        }
+    }
 
     fun refreshJoinRequests() {
         if (joinRequests.value.isLoading) {

@@ -76,6 +76,13 @@ export class ItemOutsideCurrentHouseholdError extends Error {
   }
 }
 
+export class ReadOnlyMemberError extends Error {
+  constructor() {
+    super("只读成员不能修改家庭数据");
+    this.name = "ReadOnlyMemberError";
+  }
+}
+
 export function createInventoryService({
   repository,
 }: InventoryServiceDependencies) {
@@ -87,6 +94,12 @@ export function createInventoryService({
     }
 
     return dashboard;
+  }
+
+  function assertCanWrite(dashboard: DashboardData) {
+    if (dashboard.household.role === "readonly") {
+      throw new ReadOnlyMemberError();
+    }
   }
 
   const service = {
@@ -104,6 +117,7 @@ export function createInventoryService({
       conflictResolutions: Record<string, InventoryConflictResolution>;
     }) {
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       return commitInventoryImportRows({
         userId: input.userId,
@@ -119,6 +133,7 @@ export function createInventoryService({
       rows: InventoryBackupRow[];
     }) {
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       return commitInventoryImportRows({
         userId: input.userId,
@@ -137,6 +152,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       return repository.createArea({
         householdId: dashboard.household.id,
@@ -154,6 +170,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -168,6 +185,7 @@ export function createInventoryService({
 
     async deleteAreaForCurrentUser(input: { userId: string; areaId: string }) {
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -189,6 +207,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (
         validation.value.areaId &&
@@ -213,6 +232,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.locations.some((location) => location.id === input.locationId)) {
         throw new LocationOutsideCurrentHouseholdError();
@@ -237,6 +257,7 @@ export function createInventoryService({
       locationId: string;
     }) {
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.locations.some((location) => location.id === input.locationId)) {
         throw new LocationOutsideCurrentHouseholdError();
@@ -258,6 +279,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (
         validation.value.locationId &&
@@ -285,6 +307,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
         throw new ItemOutsideCurrentHouseholdError();
@@ -308,6 +331,7 @@ export function createInventoryService({
 
     async deleteItemForCurrentUser(input: { userId: string; itemId: string }) {
       const dashboard = await loadDashboard(input.userId);
+      assertCanWrite(dashboard);
 
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
         throw new ItemOutsideCurrentHouseholdError();

@@ -25,6 +25,7 @@ import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.remote.MemberDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.RemoteAreaDto
@@ -32,6 +33,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
 import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
 import com.homeinventory.app.data.sync.SyncEngine
@@ -158,6 +160,65 @@ class InventoryRepository(
         }
 
         return Result.success(body.data ?: emptyList())
+    }
+
+    suspend fun listFamilyMembers(): Result<List<MemberDto>> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        val response = try {
+            api.familyMembers(householdId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: "加载成员失败",
+                ),
+            )
+        }
+
+        return Result.success(body.data ?: emptyList())
+    }
+
+    suspend fun removeFamilyMember(userId: String): Result<Unit> =
+        runFamilyMutation(
+            request = { api.removeMember(userId) },
+            message = "移除成员失败",
+        )
+
+    suspend fun updateMemberRole(userId: String, role: String): Result<Unit> =
+        runFamilyMutation(
+            request = { api.updateMemberRole(userId, UpdateMemberRoleRequest(role)) },
+            message = "修改成员权限失败",
+        )
+
+    private suspend fun runFamilyMutation(
+        request: suspend () -> retrofit2.Response<ApiEnvelope<Unit>>,
+        message: String,
+    ): Result<Unit> {
+        val response = try {
+            request()
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: message,
+                ),
+            )
+        }
+
+        return Result.success(Unit)
     }
 
     suspend fun approveJoinRequest(requestId: String): Result<Unit> =

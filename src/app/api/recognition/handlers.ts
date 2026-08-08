@@ -18,6 +18,7 @@ import {
 import { createRecognitionRateLimiter } from "../../../server/recognition/rate-limiter";
 import { createRecognitionService } from "../../../server/recognition/recognition-service";
 import { createPostgresInventoryRepository } from "../../../features/inventory/inventory-repository";
+import { ReadOnlyMemberError } from "../../../features/inventory/inventory-service";
 import type { createAuthService } from "../../../server/auth/auth-service";
 
 type CurrentUserAuthService = Pick<
@@ -57,6 +58,9 @@ export function createRouteRecognitionService(
   return createRecognitionService({
     loadHouseholdIdForUser: async (userId) => {
       const dashboard = await inventoryRepository.getDashboardForUser(userId);
+      if (dashboard?.household.role === "readonly") {
+        throw new ReadOnlyMemberError();
+      }
       return dashboard?.household.id ?? null;
     },
     photoRepository,
@@ -153,6 +157,13 @@ function createRecognitionErrorResponse(error: unknown) {
     return NextResponse.json(
       { ok: false, message: error.message },
       { status: 501 },
+    );
+  }
+
+  if (error instanceof ReadOnlyMemberError) {
+    return NextResponse.json(
+      { ok: false, message: error.message },
+      { status: 403 },
     );
   }
 

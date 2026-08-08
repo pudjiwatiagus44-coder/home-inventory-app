@@ -144,9 +144,10 @@ export function createPostgresInventoryRepository(
       const householdResult = await client.query<{
         id: string;
         name: string;
+        role: "owner" | "member" | "readonly";
       }>(
         `
-          select households.id, households.name
+          select households.id, households.name, household_members.role
           from household_members
           join households on households.id = household_members.household_id
           where household_members.user_id = $1
@@ -193,7 +194,11 @@ export function createPostgresInventoryRepository(
       ]);
 
       return {
-        household,
+        household: {
+          id: household.id,
+          name: household.name,
+          role: household.role,
+        },
         areas: areasResult.rows.map(normalizeVersionedRow),
         locations: locationsResult.rows.map(normalizeVersionedRow),
         items: itemsResult.rows.map(normalizeVersionedRow),

@@ -20,14 +20,14 @@ export type FamilyJoinRequestRow = {
 export type FamilyMemberRow = {
   user_id: string;
   email: string;
-  role: "owner" | "member";
+  role: "owner" | "member" | "readonly";
   created_at: string;
 };
 
 export type HouseholdOption = {
   id: string;
   name: string;
-  role: "owner" | "member";
+  role: "owner" | "member" | "readonly";
 };
 
 export type InvitationLinkStatus = "active" | "expired" | "revoked";

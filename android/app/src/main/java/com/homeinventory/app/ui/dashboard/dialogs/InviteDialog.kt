@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.ui.dashboard.InviteUiState
 import com.homeinventory.app.ui.dashboard.JoinRequestsUiState
+import com.homeinventory.app.ui.dashboard.MembersUiState
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.Surface
@@ -43,6 +44,11 @@ fun InviteDialog(
     onRefreshRequests: () -> Unit,
     onApproveRequest: (String) -> Unit,
     onRejectRequest: (String) -> Unit,
+    members: MembersUiState,
+    downloadUrl: String,
+    onRefreshMembers: () -> Unit,
+    onRemoveMember: (String) -> Unit,
+    onChangeRole: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -190,6 +196,140 @@ fun InviteDialog(
                 }
             }
 
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(text = "家庭成员", fontSize = 15.sp)
+                TextButton(onClick = onRefreshMembers) {
+                    Text("刷新")
+                }
+            }
+
+            members.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    fontSize = 13.sp,
+                    color = Danger,
+                )
+            }
+
+            when {
+                members.isLoading -> {
+                    Text(
+                        text = "加载中…",
+                        fontSize = 13.sp,
+                    )
+                }
+
+                members.members.isEmpty() -> {
+                    Text(
+                        text = "暂无成员",
+                        fontSize = 13.sp,
+                    )
+                }
+
+                else -> {
+                    members.members.forEach { member ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(androidx.compose.ui.graphics.Color(0xFFF7F5EF))
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = member.email,
+                                    fontSize = 13.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = roleLabel(member.role),
+                                    fontSize = 12.sp,
+                                    color = if (member.role == "readonly") {
+                                        androidx.compose.ui.graphics.Color(0xFF6B7280)
+                                    } else {
+                                        Primary
+                                    },
+                                )
+                            }
+                            if (member.role != "owner") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { onRemoveMember(member.userId) },
+                                        enabled = members.pendingUserId == null,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text("移除")
+                                    }
+                                    if (member.role == "readonly") {
+                                        Button(
+                                            onClick = { onChangeRole(member.userId, "member") },
+                                            enabled = members.pendingUserId == null,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text("设为全部权限")
+                                        }
+                                    } else {
+                                        OutlinedButton(
+                                            onClick = { onChangeRole(member.userId, "readonly") },
+                                            enabled = members.pendingUserId == null,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            Text("设为只读")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(text = "邀请使用本 App", fontSize = 15.sp)
+            Text(
+                text = "分享下载链接给朋友，对方注册后成为独立用户（不会进入你的家庭）。",
+                fontSize = 13.sp,
+            )
+            Text(
+                text = downloadUrl,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { copyLink(context, downloadUrl) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("复制下载链接")
+                }
+                Button(
+                    onClick = { shareText(context, downloadUrl, "分享家庭物品 App") },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("分享")
+                }
+            }
+
             TextButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.End),
@@ -226,4 +366,18 @@ private fun shareLink(context: Context, link: String) {
         putExtra(Intent.EXTRA_TEXT, link)
     }
     context.startActivity(Intent.createChooser(intent, "邀请家人加入"))
+}
+
+private fun shareText(context: Context, text: String, chooserTitle: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, chooserTitle))
+}
+
+private fun roleLabel(role: String): String = when (role) {
+    "owner" -> "房主"
+    "readonly" -> "只读"
+    else -> "全部权限"
 }

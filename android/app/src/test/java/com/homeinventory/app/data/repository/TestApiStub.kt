@@ -15,6 +15,7 @@ import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.remote.MemberDto
 import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
@@ -24,6 +25,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody
@@ -111,6 +113,18 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun joinRequests(householdId: String): Response<ApiEnvelope<List<JoinRequestDto>>> =
         Response.success(ApiEnvelope(ok = true, data = emptyList()))
+
+    override suspend fun familyMembers(householdId: String): Response<ApiEnvelope<List<MemberDto>>> =
+        Response.success(ApiEnvelope(ok = true, data = emptyList()))
+
+    override suspend fun removeMember(userId: String): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun updateMemberRole(
+        userId: String,
+        request: UpdateMemberRoleRequest,
+    ): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
 
     override suspend fun approveJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))

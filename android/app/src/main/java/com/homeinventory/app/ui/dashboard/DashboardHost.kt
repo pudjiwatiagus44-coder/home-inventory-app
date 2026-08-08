@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
+import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
@@ -38,6 +39,7 @@ import java.io.File
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
+import com.homeinventory.app.ui.dashboard.dialogs.HelpDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.InviteDialog
@@ -63,6 +65,7 @@ fun DashboardHost(
     val state by viewModel.state.collectAsState()
     val inviteState by viewModel.invitations().collectAsState()
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
+    val membersUi by viewModel.membersState().collectAsState()
     val updateState by viewModel.updateCheckState().collectAsState()
     val draftsUi by viewModel.draftsState.collectAsState()
     val batchState by viewModel.batchImportState().collectAsState()
@@ -71,6 +74,7 @@ fun DashboardHost(
     var showDraftsDialog by remember { mutableStateOf(false) }
     var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
     var locationFormInitialAreaId by remember { mutableStateOf("") }
@@ -302,6 +306,10 @@ fun DashboardHost(
             showInviteDialog = true
             viewModel.generateInvitationLink()
             viewModel.refreshJoinRequests()
+            viewModel.refreshMembers()
+        },
+        onHelp = {
+            showHelpDialog = true
         },
         onDraftsClick = {
             showDraftsDialog = true
@@ -324,6 +332,11 @@ fun DashboardHost(
             onRefreshRequests = viewModel::refreshJoinRequests,
             onApproveRequest = viewModel::approveRequest,
             onRejectRequest = viewModel::rejectRequest,
+            members = membersUi,
+            downloadUrl = "${AppConfig.baseUrl}apk/home-inventory-internal-latest.apk",
+            onRefreshMembers = viewModel::refreshMembers,
+            onRemoveMember = viewModel::removeMember,
+            onChangeRole = viewModel::setMemberRole,
             onDismiss = {
                 showInviteDialog = false
                 viewModel.clearInvitation()
@@ -512,6 +525,14 @@ fun DashboardHost(
                         showItemForm = false
                     }
                 }
+            },
+        )
+    }
+
+    if (showHelpDialog) {
+        HelpDialog(
+            onDismiss = {
+                showHelpDialog = false
             },
         )
     }

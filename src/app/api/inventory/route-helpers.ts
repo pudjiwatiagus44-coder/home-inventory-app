@@ -9,6 +9,7 @@ import {
   AreaOutsideCurrentHouseholdError,
   CurrentUserHouseholdNotFoundError,
   ItemOutsideCurrentHouseholdError,
+  ReadOnlyMemberError,
   LocationOutsideCurrentHouseholdError,
 } from "../../../features/inventory/inventory-service";
 import {
@@ -144,6 +145,13 @@ function createInventoryErrorResponse(error: unknown) {
     error instanceof LocationOutsideCurrentHouseholdError ||
     error instanceof ItemOutsideCurrentHouseholdError
   ) {
+    return NextResponse.json(
+      { ok: false, message: error.message },
+      { status: 403 },
+    );
+  }
+
+  if (error instanceof ReadOnlyMemberError) {
     return NextResponse.json(
       { ok: false, message: error.message },
       { status: 403 },

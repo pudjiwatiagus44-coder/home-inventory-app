@@ -291,4 +291,7 @@ Android 拍物品正面照
 - 区域/位置管理：区域条/位置条长按打开编辑弹窗（复用 `AreaFormDialog`/`LocationFormDialog`，区域重命名/改色/删除，位置重命名/重分配区域/删除）；新增位置默认带当前选中区域；新增物品默认预选当前选中（或最近使用）的区域/位置。
 - 未分配筛选：`DashboardFilters.unassigned` 筛选 `locationId == null` 的物品；不选区域/位置可直接保存；切换未分配清空区域/位置筛选。
 - 拍照与预览：物品无图「拍照」按钮直接调起系统相机（`ActivityResultContracts.TakePicture` + FileProvider）；图片预览 `PhotoPreviewDialog` 支持双击放大 4 倍、捏合至 6 倍、单指拖动，缩略图同样可放大。
+- 成员权限分级（2026-08-08 用户确认）：`household_members.role` 新增 `readonly` 档位；`readonly` 成员对 areas/locations/items 只能读（含照片读取），新增/编辑/删除由服务端校验拒绝（自托管路线在 `inventory-service` 写操作前按角色拦截；Supabase 参考路线用 RLS）；`member` 保持全部权限；仅 `owner` 可管理成员（邀请/移除/改角色）。
+- 邀请使用 App：邀请弹窗新增「邀请使用 App」入口，分享内测版 APK 下载链接；对方注册后为独立用户，与家庭邀请无关。
+- App 内帮助：顶部「帮助」入口展示内置说明书（内容与 `dev-docs/user-manual.md` 同步，App 内以静态资源承载）。
 - 实时刷新机制：Android 数据层采用 Room Flow → ViewModel StateFlow → Compose `collectAsState` 自动重组（新增/编辑/删除区域、位置、物品即时生效）；物品行缩略图缓存以 `(item.id, item.photoKey)` 为 key，照片新增/更换立即重载；主界面支持 Material3 下拉刷新（`PullToRefreshBox`，触发 sync + snapshot）。

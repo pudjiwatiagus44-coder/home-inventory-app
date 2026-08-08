@@ -907,6 +907,12 @@
 - 本次同步：`dev-docs/project-brief.md` 更新照片存储决策（服务器只存缩略图、清晰图存手机本地）并新增「2026-08-08 拍照识别后续增强决策」（草稿箱、批量导入、未分配筛选、长按管理、拍照直启相机、预览缩放、默认预选）；`dev-docs/architecture.md` 新增「2026-08-08 草稿箱与照片增强架构」；`docs/superpowers/specs/2026-08-07-photo-recognition-design.md` 追加「设计变更记录（2026-08-08）」。
 - 后续流程约束：范围/高风险变更先更新真源并经用户确认再实施；小迭代至少保留 acceptance 证据；本会话内因用户逐条即时指定而直接实施的增量，一律在本日完成真源回写。
 
+## 2026-08-08 帮助/邀请使用/成员权限设计确认
+
+- 用户确认三项建议：① App 内新增「帮助」入口展示与 `dev-docs/user-manual.md` 同步的说明书；② 邀请弹窗新增「邀请使用 App」分享内测版下载链接，对方注册为独立用户（不做来源追踪）；③ 家庭成员权限分级 `owner` / `member` / `readonly`（只读成员仅可查看含照片，服务端强制），房主可移除成员，Android 端补成员管理界面。
+- 真源已更新：`project-brief.md`（2026-08-08 决策）、`architecture.md`（2026-08-08 架构）、`database-design.md`（`household_members.role` 增 `readonly` + 负例）、`README.md`（索引 user-manual.md）、`user-manual.md`（新增）。
+- 状态：设计确认、真源已写；代码实现待主线程按流程执行（数据库 role readonly + 服务端读写校验 + Android 帮助/邀请/成员管理界面 + 测试 + 部署）。
+
 ## 2026-08-08 0.5.18 列表实时刷新修复证据
 
 - 现象：新增格子/物品/照片后需杀进程重启才显示。
