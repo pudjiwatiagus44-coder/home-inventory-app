@@ -911,7 +911,7 @@
 
 - 用户确认三项建议：① App 内新增「帮助」入口展示与 `dev-docs/user-manual.md` 同步的说明书；② 邀请弹窗新增「邀请使用 App」分享内测版下载链接，对方注册为独立用户（不做来源追踪）；③ 家庭成员权限分级 `owner` / `member` / `readonly`（只读成员仅可查看含照片，服务端强制），房主可移除成员，Android 端补成员管理界面。
 - 真源已更新：`project-brief.md`（2026-08-08 决策）、`architecture.md`（2026-08-08 架构）、`database-design.md`（`household_members.role` 增 `readonly` + 负例）、`README.md`（索引 user-manual.md）、`user-manual.md`（新增）。
-- 状态：设计确认、真源已写；代码实现待主线程按流程执行（数据库 role readonly + 服务端读写校验 + Android 帮助/邀请/成员管理界面 + 测试 + 部署）。
+- 状态：设计确认、真源已写；代码实现已完成并通过测试与部署验证（见下方「2026-08-08 0.5.19 帮助/邀请使用/成员权限部署证据」）。
 
 ## 2026-08-08 0.5.18 列表实时刷新修复证据
 
@@ -921,3 +921,14 @@
 - 测试：Android 单测全通过；`assembleDebug` 通过。
 - 版本：0.5.18 / code 24，已上传服务器，version.json 与 APK SHA-256 验证一致。服务器无需变更。
 - 待办：真机验收（新增物品/格子实时出现、加照片立即显示缩略图、下拉刷新）。
+
+## 2026-08-08 0.5.19 帮助/邀请使用/成员权限部署证据
+
+- 服务端：`household_members.role` 新增 `readonly`（migration `dev-docs/sql/member_roles_self_hosted.sql`）；`family-service` 新增 `setMemberRoleForCurrentUser`（仅 owner、不能改自己、仅 member/readonly）；`inventory-service` 全部写操作（区域/位置/物品 CRUD、导入、识别入口）经 `assertCanWrite` 对 readonly 抛 403；dashboard 返回成员 role。
+- Android：`HelpDialog` 帮助入口（内容与 `dev-docs/user-manual.md` 同步）；`InviteDialog` 增加成员管理（移除成员、切换只读⇄全部权限）与「邀请使用 App」分享下载链接；DTO/API/Repository/ViewModel/TestApiStub 补齐。
+- 说明书真源：`dev-docs/user-manual.md` 第五、九章已同步为已实现状态（成员权限分级、邀请使用 App），README 索引同步。
+- 本地验证：`npm test` 165 文件 / 1091 测试通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过（0.5.19 / code 25，20,131,263 字节）。
+- 部署：commit ee5cf3f bundle → 服务器 `/opt/home-inventory-app-new` 全新 `npm ci` + `npm run build` → 备份切换（`.bak.20260808_133437`）→ 保留 `public/apk`（0.5.19 APK + version.json）与 `data/photos`（64 张缩略图）→ 执行 migration（`household_members_role_check` 重建为 owner/member/readonly）→ systemd 重启 active，`/login` 200。
+- 线上 smoke（真实 API + 测试环境库，测试账号已清理残留 0）：注册房主/成员 → 邀请 → 申请 → 批准 → 成员 role=member 可读；PATCH 改 readonly 后成员列表显示 readonly、只读成员仍可读；readonly 写区域返回 403；member/owner 均不能自改角色（403）；PATCH 改回 member 成功；房主移除成员后该成员访问家庭返回 404；约束定义确认包含 `readonly`。
+- 公开资源：`https://homestorag.xyz/apk/version.json` 显示 0.5.19 / code 25 / 20,131,263 字节；`/login` HTTPS 200。
+- 待办：真机验收（帮助入口、成员管理界面、邀请使用 App 分享、只读成员在 App 内被禁止编辑）。
