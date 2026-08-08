@@ -1,12 +1,18 @@
 package com.homeinventory.app.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -101,6 +107,7 @@ fun AppRoot() {
         }
     }
     val viewModel: DashboardViewModel = viewModel(factory = factory)
+    val updateState by viewModel.updateCheckState().collectAsState()
     var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -127,6 +134,8 @@ fun AppRoot() {
     }
 
     LaunchedEffect(isLoggedIn) {
+        viewModel.checkForUpdates()
+
         if (isLoggedIn) {
             scope.launch { repository.refreshSnapshot() }
             scope.launch {
@@ -230,6 +239,39 @@ fun AppRoot() {
                                 forgotPasswordNotice =
                                     error.message ?: "请求失败，请稍后再试"
                             }
+                    }
+                },
+            )
+        }
+
+        if (updateState.updateAvailable) {
+            val context = LocalContext.current
+            AlertDialog(
+                onDismissRequest = viewModel::dismissUpdatePrompt,
+                title = { Text("发现新版本") },
+                text = {
+                    Text(
+                        updateState.versionName?.let { "有新版本 v$it 可更新，是否立即下载？" }
+                            ?: "有新版本可更新，是否立即下载？",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            updateState.downloadUrl?.let { url ->
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                                )
+                            }
+                            viewModel.dismissUpdatePrompt()
+                        },
+                    ) {
+                        Text("立即更新")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismissUpdatePrompt) {
+                        Text("稍后")
                     }
                 },
             )

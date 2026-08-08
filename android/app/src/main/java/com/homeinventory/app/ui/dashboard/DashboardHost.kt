@@ -1,8 +1,6 @@
 package com.homeinventory.app.ui.dashboard
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +19,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
@@ -66,7 +63,6 @@ fun DashboardHost(
     val inviteState by viewModel.invitations().collectAsState()
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     val membersUi by viewModel.membersState().collectAsState()
-    val updateState by viewModel.updateCheckState().collectAsState()
     val draftsUi by viewModel.draftsState.collectAsState()
     val batchState by viewModel.batchImportState().collectAsState()
     var showItemForm by remember { mutableStateOf(false) }
@@ -192,10 +188,6 @@ fun DashboardHost(
                 }
             }
         }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.checkForUpdates()
     }
 
     DashboardScreen(
@@ -340,38 +332,6 @@ fun DashboardHost(
             onDismiss = {
                 showInviteDialog = false
                 viewModel.clearInvitation()
-            },
-        )
-    }
-
-    if (updateState.updateAvailable) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissUpdatePrompt,
-            title = { Text("发现新版本") },
-            text = {
-                Text(
-                    updateState.versionName?.let { "有新版本 v$it 可更新，是否立即下载？" }
-                        ?: "有新版本可更新，是否立即下载？",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        updateState.downloadUrl?.let { url ->
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                            )
-                        }
-                        viewModel.dismissUpdatePrompt()
-                    },
-                ) {
-                    Text("立即更新")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissUpdatePrompt) {
-                    Text("稍后")
-                }
             },
         )
     }
