@@ -255,7 +255,7 @@ auth.users
 
 ## 2026-08-07 拍照识别物品架构（Android 内测版先行）
 
-用户确认在 Android 内测版新增拍照识别物品能力，边界：只保存缩略图、原图即弃、豆包识别、Android 先行。详见设计文档 `docs/superpowers/specs/2026-08-07-photo-recognition-design.md`。
+用户确认在 Android 内测版新增拍照识别物品能力，边界：服务器只保存缩略图、识别用清晰图存手机本地、豆包识别、Android 先行。详见设计文档 `docs/superpowers/specs/2026-08-07-photo-recognition-design.md`。
 
 识别与保存链路（mode=name）：
 
@@ -280,3 +280,14 @@ Android 拍物品正面照
 - 未关联缩略图 24 小时后清理；识别接口按账号限频，防刷额度。
 - 第一版缩略图存服务器本地磁盘，经存储抽象层访问，后续可切换 OSS。
 - `items` 表新增 `photo_key` 列（可空、唯一）；新增 `pending_photos` 表；具体字段与 RLS 见 `dev-docs/database-design.md`。
+
+## 2026-08-08 草稿箱与照片增强架构（Android 内测版）
+
+用户确认的后续增强（2026-08-07 决策的延伸，先实施后回写真源）：
+
+- 本地清晰图存储：识别/拍照用图（1280px 压缩图）由 App 保存到手机私有目录 `filesDir/photos/<photoKey>.jpg`（`LocalPhotoStore`），放大预览本地优先、缺失回退服务器缩略图；服务器不保存该清晰图，换设备/重装后不可恢复。缩略图仍按 2026-08-07 架构存服务器。
+- 草稿箱（纯客户端）：Android Room 新增 `drafts` 表（`DraftEntity`/`DraftDao`，DB 版本 4）；草稿含本地清晰照片（`draft_<id>.jpg`）+ 识别后的 `photoKey` + 名称/备注/过期日/区域/位置；`DraftRepository` 实现 `DraftGateway`（创建/后台识别/删除/读图），识别在 ViewModel 后台协程执行（35 秒超时兜底，失败标记完成），App 前台恢复（ON_RESUME）与启动时自动补识别「识别中」或空名称草稿；确认保存时调既有 items 建档接口并删除草稿（保留 photoKey 本地大图），用户手动删除草稿才完整清理。
+- 批量导入：`PickMultipleVisualMedia` 一次选多张 → 每张压缩 → 建草稿（预填当前区域/位置）→ 后台识别；进度经 `BatchImportUiState` 显示，完成后自动关闭新增面板。
+- 区域/位置管理：区域条/位置条长按打开编辑弹窗（复用 `AreaFormDialog`/`LocationFormDialog`，区域重命名/改色/删除，位置重命名/重分配区域/删除）；新增位置默认带当前选中区域；新增物品默认预选当前选中（或最近使用）的区域/位置。
+- 未分配筛选：`DashboardFilters.unassigned` 筛选 `locationId == null` 的物品；不选区域/位置可直接保存；切换未分配清空区域/位置筛选。
+- 拍照与预览：物品无图「拍照」按钮直接调起系统相机（`ActivityResultContracts.TakePicture` + FileProvider）；图片预览 `PhotoPreviewDialog` 支持双击放大 4 倍、捏合至 6 倍、单指拖动，缩略图同样可放大。
