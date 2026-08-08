@@ -962,3 +962,11 @@
 - 本地验证：`npm test` 172 文件 / 1128 测试通过（9 跳过）；`npx eslint src` exit 0；`npm run build` exit 0（产物含 `/forgot-password`、`/reset-password`、`/api/auth/forgot-password`、`/api/auth/reset-password`）；Android `testDebugUnitTest` 65 测试全过 + `assembleDebug` 通过（APK 20,147,647 字节）；真实 PostgreSQL 集成测试：认证 register/login/logout + 密码重置令牌生命周期 2 用例通过（本机 PG + `home_inventory_test`，migration SQL 已在真实库执行验证）。
 - 环境备注：`npm run lint`（裸 eslint）与 `npm test` 会扫描 `.worktrees/` 旧分支导致噪声/失败；项目实际校验以 `npx eslint src` 与排除 `.worktrees` 的 vitest 为准。`dev-docs/sql/mainland_initial_schema.sql` 缺少 `items.photo_key` 等后续列，本地 inventory 集成测试存在既有漂移（与本次功能无关，待单独补齐）。本地 PostgreSQL 已按 runbook 启动（Scoop persist 数据目录）。
 - 待办（部署后）：服务器执行 migration、`app.env` 配置 SMTP（QQ 邮箱 + 授权码，凭据不入仓库）、重启服务；发一封真实测试邮件；用测试账号走完整「忘记密码 → 邮件链接 → 设置新密码 → 旧密码失败、新密码成功 → 其他设备 session 失效」；浏览器/真机验收。
+
+## 2026-08-08 登录页增强与密码重置部署证据（真实邮件待用户确认）
+
+- 部署：commit `ffaa641`（含服务端/Web/Android 实施与本地验证证据）推送到 origin main；服务器全新 clone → `npm ci` → `npm run build`（期间修复无 `DATABASE_URL` 环境下构建失败问题：密码重置服务由模块加载期创建改为请求期创建）→ 备份切换（`/opt/home-inventory-app.bak.20260808_164452`）→ 保留 `public/apk` 与 `data/photos` → systemd 重启 active。
+- Migration：服务器执行 `dev-docs/sql/password_reset_self_hosted.sql`，`password_reset_tokens` 表创建成功（含唯一约束、索引与授权）。
+- SMTP：`/etc/home-inventory-app/app.env` 新增 `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM`/`RESET_BASE_URL`（QQ 邮箱 + 授权码，只存服务器，不进仓库）；文件属主 `root:deploy` 640。
+- 线上 smoke：`/login`、`/forgot-password`、`/reset-password` 均 200；`POST /api/auth/register`（736259416@qq.com）返回 409（账号已存在）；`POST /api/auth/forgot-password` 返回 200 `{ok:true}`；数据库确认该邮箱存在 1 条未使用、30 分钟有效的重置令牌；journal 无 SMTP 错误。
+- 待用户确认：真实邮件已发送至 736259416@qq.com（2026-08-08 16:46 左右），需用户打开邮件链接完成设置新密码后，验证「旧密码失败、新密码成功、其他设备 session 失效」闭环与浏览器/真机验收。
