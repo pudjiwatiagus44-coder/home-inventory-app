@@ -26,6 +26,14 @@ type SessionRow = {
   revoked_at: Date | null;
 };
 
+type PasswordResetTokenRow = {
+  user_id: string;
+  email: string;
+  status: "active" | "disabled";
+  expires_at: Date;
+  used_at: Date | null;
+};
+
 type IdRow = {
   id: string;
 };
@@ -166,6 +174,88 @@ export function createPostgresAuthRepository(
         [sessionTokenHash],
       );
     },
+    createPasswordResetToken: async ({ userId, tokenHash, expiresAt }) => {
+      await client.query(
+        `
+          insert into password_reset_tokens (user_id, token_hash, expires_at)
+          values ($1, $2, $3)
+        `,
+        [userId, tokenHash, expiresAt],
+      );
+    },
+    findPasswordResetTokenByHash: async (tokenHash) => {
+      const result = await client.query<PasswordResetTokenRow>(
+        `
+          select
+            password_reset_tokens.user_id,
+            users.email,
+            users.status,
+            password_reset_tokens.expires_at,
+            password_reset_tokens.used_at
+          from password_reset_tokens
+          join users on users.id = password_reset_tokens.user_id
+          where password_reset_tokens.token_hash = $1
+          limit 1
+        `,
+        [tokenHash],
+      );
+      const row = result.rows[0];
+
+      if (!row) {
+        return null;
+      }
+
+      return {
+        userId: row.user_id,
+        email: row.email,
+        status: row.status,
+        expiresAt: row.expires_at,
+        usedAt: row.used_at,
+      };
+    },
+    markPasswordResetTokenUsed: async (tokenHash) => {
+      await client.query(
+        `
+          update password_reset_tokens
+          set used_at = now()
+          where token_hash = $1
+            and used_at is null
+        `,
+        [tokenHash],
+      );
+    },
+    revokeUnusedPasswordResetTokensByUserId: async (userId) => {
+      await client.query(
+        `
+          update password_reset_tokens
+          set used_at = now()
+          where user_id = $1
+            and used_at is null
+        `,
+        [userId],
+      );
+    },
+    revokeAllSessionsByUserId: async (userId) => {
+      await client.query(
+        `
+          update auth_sessions
+          set revoked_at = now()
+          where user_id = $1
+            and revoked_at is null
+        `,
+        [userId],
+      );
+    },
+    updateUserPassword: async ({ userId, passwordHash }) => {
+      await client.query(
+        `
+          update users
+          set password_hash = $2
+          where id = $1
+        `,
+        [userId, passwordHash],
+      );
+    },
   };
 }
 
@@ -184,6 +274,24 @@ function createNotConnectedAuthRepository(): AuthRepository {
       throw new PostgresAuthRepositoryNotConnectedError();
     },
     revokeSessionByHash: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    createPasswordResetToken: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    findPasswordResetTokenByHash: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    markPasswordResetTokenUsed: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    revokeUnusedPasswordResetTokensByUserId: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    revokeAllSessionsByUserId: async () => {
+      throw new PostgresAuthRepositoryNotConnectedError();
+    },
+    updateUserPassword: async () => {
       throw new PostgresAuthRepositoryNotConnectedError();
     },
   };

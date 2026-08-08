@@ -29,6 +29,21 @@ export type AuthRepository = {
     expiresAt: Date;
   }) => Promise<void>;
   revokeSessionByHash: (sessionTokenHash: string) => Promise<void>;
+  createPasswordResetToken: (input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }) => Promise<void>;
+  findPasswordResetTokenByHash: (
+    tokenHash: string,
+  ) => Promise<PasswordResetTokenRecord | null>;
+  markPasswordResetTokenUsed: (tokenHash: string) => Promise<void>;
+  revokeUnusedPasswordResetTokensByUserId: (userId: string) => Promise<void>;
+  revokeAllSessionsByUserId: (userId: string) => Promise<void>;
+  updateUserPassword: (input: {
+    userId: string;
+    passwordHash: string;
+  }) => Promise<void>;
 };
 
 export type AuthSessionRecord = {
@@ -37,6 +52,14 @@ export type AuthSessionRecord = {
   status: "active" | "disabled";
   expiresAt: Date;
   revokedAt: Date | null;
+};
+
+export type PasswordResetTokenRecord = {
+  userId: string;
+  email: string;
+  status: "active" | "disabled";
+  expiresAt: Date;
+  usedAt: Date | null;
 };
 
 export type AuthResult = {

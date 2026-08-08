@@ -106,6 +106,65 @@ describe("PostgreSQL auth repository integration", () => {
     },
   );
 
+  test.skipIf(!integrationConfig.enabled)(
+    "creates, consumes and revokes password reset tokens against the schema",
+    async () => {
+      if (!pool) {
+        throw new Error("PostgreSQL integration pool was not initialized");
+      }
+
+      const repository = createPostgresAuthRepository(pool);
+      const authService = createAuthService({
+        repository,
+        hashPassword: async (password) => `hash:${password}`,
+        verifyPassword: async (password, passwordHash) =>
+          passwordHash === `hash:${password}`,
+        createSessionToken: () => "reset-session-token",
+        hashSessionToken: (token) => `hashed:${token}`,
+        createSessionExpiry: () => new Date("2030-01-01T00:00:00.000Z"),
+      });
+
+      const registerResult = await authService.register({
+        email: "reset@example.com",
+        password: "old-password",
+      });
+
+      await repository.createPasswordResetToken({
+        userId: registerResult.userId,
+        tokenHash: "hashed:reset-token",
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+      });
+
+      const found = await repository.findPasswordResetTokenByHash(
+        "hashed:reset-token",
+      );
+      expect(found).toEqual({
+        userId: registerResult.userId,
+        email: "reset@example.com",
+        status: "active",
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+        usedAt: null,
+      });
+
+      await repository.updateUserPassword({
+        userId: registerResult.userId,
+        passwordHash: "hash:new-password",
+      });
+      await repository.markPasswordResetTokenUsed("hashed:reset-token");
+      await repository.revokeAllSessionsByUserId(registerResult.userId);
+
+      const used = await repository.findPasswordResetTokenByHash(
+        "hashed:reset-token",
+      );
+      expect(used?.usedAt).not.toBeNull();
+
+      const session = await repository.findSessionByHash(
+        "hashed:reset-session-token",
+      );
+      expect(session?.revokedAt).not.toBeNull();
+    },
+  );
+
   test.skipIf(integrationConfig.enabled)(
     `skips until ${integrationConfig.enabled ? "" : integrationConfig.reason}`,
     () => {
@@ -119,8 +178,13 @@ async function resetPublicSchema(pool: IntegrationPool) {
     path.join(process.cwd(), "dev-docs/sql/mainland_initial_schema.sql"),
     "utf8",
   );
+  const passwordResetTokensSql = await readFile(
+    path.join(process.cwd(), "dev-docs/sql/password_reset_self_hosted.sql"),
+    "utf8",
+  );
 
   await pool.query("drop schema public cascade");
   await pool.query("create schema public");
   await pool.query(schemaSql);
+  await pool.query(passwordResetTokensSql);
 }
