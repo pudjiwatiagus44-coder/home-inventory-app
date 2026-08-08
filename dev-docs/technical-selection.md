@@ -188,3 +188,11 @@ MVP 选择：Supabase Postgres。
 - API key 只存服务器环境变量（自托管路线），App/前端永不接触；识别请求由服务器转发，App 不得直连豆包。
 - 成本估算：图片压缩到约 1280px 后，单次识别输入约 1000–3000 token、输出数百 token，单价约 0.005–0.02 元/次（视觉模型输入约 0.8–3 元/百万 token、输出约 2–9 元/百万 token，具体以火山引擎官方定价为准）。
 - 数据合规：识别照片会瞬时发送给火山引擎，公开推广前隐私政策必须写明；识别接口限频防滥用。
+
+## 2026-08-08 邮件发送与密码重置技术决策
+
+- 密码重置使用真实 SMTP 邮件发送（nodemailer + SMTP，QQ 邮箱 `smtp.qq.com:465` + 授权码）；SMTP 凭据只存服务器环境变量（`app.env`），不进仓库，`.env.example` 只放占位。
+- 密码重置令牌选型：数据库存储令牌哈希（`password_reset_tokens` 表），不用 JWT 自包含令牌（无法强制一次性使用和及时作废）。令牌 32 字节 base64url、HMAC-SHA256 哈希入库、30 分钟过期、一次性、同用户单令牌。
+- 重置成功后作废该用户全部 `auth_sessions`（所有设备强制登出）。
+- 邮件仅用于密码重置（家庭共享邀请仍不发邮件、走微信）；不发送营销邮件。
+- 详细设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。

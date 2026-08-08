@@ -943,3 +943,12 @@
 - 部署：commit c857417 bundle → 服务器全新 `npm ci` + `npm run build` → 备份切换（`.bak.20260808_144228`）→ 保留 `public/apk` 与 `data/photos` → systemd 重启 active，`/login` 200。
 - 线上 smoke：复跑完整成员流程（邀请/加入/批准/改 readonly/readonly 写 403/改回 member/移除成员）全部通过；新增断言 PATCH 与 DELETE 缺 householdId 均返回 400；测试账号清理后残留 0。
 - 待办：真机验收设置只读权限与移除成员不再报错。
+
+## 2026-08-08 登录页增强与密码重置验收标准（待实施）
+
+- 背景：用户反馈登录页缺少「忘记密码」「记住密码」，Android 缺少注册入口；2026-08-08 对话确认接邮箱发送重置链接、邮件发链接网页重置、记住密码=记住邮箱、Android 增加注册入口。设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。
+- 服务端验收：`POST /api/auth/forgot-password` 邮箱存在/不存在均返回成功（防枚举）、SMTP 未配置返回 501、发送失败返回 500、限频超限返回 429；`POST /api/auth/reset-password` 有效令牌改密成功、无效/已用/过期令牌返回 400 统一提示、密码 < 8 位返回 400、重置后该用户全部 session 失效（旧 session 返回 401）。
+- Web 验收：`/forgot-password` 统一提示；`/reset-password` 有效令牌可改密并跳登录；AuthForm 忘记密码链接与记住邮箱（默认勾选）行为正确。
+- Android 验收：登录页注册入口（确认密码、注册成功即登录）；忘记密码弹窗统一提示；记住邮箱复选框（默认勾选，只存邮箱）。
+- 真实环境验收（需用户提供 QQ 邮箱 SMTP 授权码，配置到服务器 `app.env`）：发送一封真实测试邮件；测试账号完整走「忘记密码 → 邮件链接 → 设置新密码 → 旧密码失败、新密码成功 → 其他设备 session 失效」。
+- 状态：2026-08-08 设计已确认，开始实施；未验证项不得包装成已完成。

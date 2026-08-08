@@ -813,6 +813,35 @@ using (public.is_household_member(household_id));
 - 家庭共享 migration（`household_invitations` + `household_join_requests` + 成员管理 RLS + 提交/批准/拒绝安全函数）编写并执行后，必须补家庭共享权限负例：未申请/被拒绝不可访问、批准后可读写、member 不能管理成员、被移除立即失效、无效 token 不能申请、非 owner 不能批准。
 - 家庭切换器上线后，必须验证切换家庭不会越权读取其他家庭数据，且每个家庭的清单操作都基于当前家庭。
 
+## 2026-08-08 密码重置令牌设计（自托管路线）
+
+用户确认登录页增强与密码重置方向：忘记密码接邮箱发送重置链接（QQ SMTP）、邮件发链接网页重置、记住密码=记住邮箱、Android 增加注册入口。对应数据库新增 `password_reset_tokens` 表（migration 草案见 `dev-docs/sql/password_reset_self_hosted.sql`，尚未执行）：
+
+```sql
+create table if not exists password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  token_hash text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint password_reset_tokens_token_hash_unique unique (token_hash),
+  constraint password_reset_tokens_token_hash_not_blank check (char_length(token_hash) > 0),
+  constraint password_reset_tokens_expires_after_created check (expires_at > created_at)
+);
+
+create index if not exists password_reset_tokens_user_id_idx on password_reset_tokens(user_id);
+create index if not exists password_reset_tokens_expires_at_idx on password_reset_tokens(expires_at);
+
+grant all privileges on password_reset_tokens to home_inventory_app;
+```
+
+规则与负例：
+
+- 令牌不落明文（只存 HMAC-SHA256 哈希）；30 分钟过期；一次性（`used_at` 非空即失效）；同一用户同一时间只保留一个未使用令牌。
+- `users.password_hash` 由重置流程更新（bcrypt 重哈希）；重置成功后作废该用户全部 `auth_sessions`。
+- 负例：无效/已用/过期令牌重置失败（400 统一提示）；邮箱不存在请求忘记密码返回同样成功提示（防枚举）+ 限频 429；重置后旧 session 访问返回 401。
+
 ## 下一步
 
 1. 等待用户确认家庭共享设计与实施计划后，编写家庭共享 migration（新建 `household_invitations`、`household_join_requests`、成员管理 RLS、提交/批准/拒绝安全函数），迁移文件必须回写本设计。

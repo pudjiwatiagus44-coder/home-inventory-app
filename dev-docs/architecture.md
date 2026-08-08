@@ -295,3 +295,12 @@ Android 拍物品正面照
 - 邀请使用 App：邀请弹窗新增「邀请使用 App」入口，分享内测版 APK 下载链接；对方注册后为独立用户，与家庭邀请无关。
 - App 内帮助：顶部「帮助」入口展示内置说明书（内容与 `dev-docs/user-manual.md` 同步，App 内以静态资源承载）。
 - 实时刷新机制：Android 数据层采用 Room Flow → ViewModel StateFlow → Compose `collectAsState` 自动重组（新增/编辑/删除区域、位置、物品即时生效）；物品行缩略图缓存以 `(item.id, item.photoKey)` 为 key，照片新增/更换立即重载；主界面支持 Material3 下拉刷新（`PullToRefreshBox`，触发 sync + snapshot）。
+
+## 2026-08-08 登录页增强与密码重置架构
+
+- 密码重置请求生命周期：用户点「忘记密码」输入邮箱 → `POST /api/auth/forgot-password`（邮箱不存在也返回成功，防枚举；限频 5 次/小时/邮箱+IP）→ 生成 32 字节 base64url 令牌，HMAC-SHA256 哈希入库（`password_reset_tokens`，30 分钟过期、一次性、同用户单令牌）→ nodemailer 经 QQ SMTP 发送重置链接邮件 → 用户打开 `/reset-password?token=...` → `POST /api/auth/reset-password` 校验令牌 → bcrypt 重哈希更新 `users.password_hash` → 标记令牌已用 → 作废该用户全部 `auth_sessions` → 用户用新密码登录。
+- 新增表：`password_reset_tokens`（表结构与权限见 `dev-docs/database-design.md`）；权限边界由服务端校验（自托管路线），Supabase 参考路线语义一致。
+- 新增接口：`POST /api/auth/forgot-password`、`POST /api/auth/reset-password`；新增页面：`/forgot-password`、`/reset-password`。
+- 记住邮箱：Web 用 localStorage（key `home_inventory_remembered_email`），Android 用 `RememberedEmailStore`（EncryptedSharedPreferences）；只存邮箱，不存密码；登录态保持逻辑不变。
+- Android 注册入口：复用现有 `POST /api/auth/register` 与 session cookie 流程，注册成功即进入 App。
+- 详细设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。
