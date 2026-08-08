@@ -940,4 +940,6 @@
 - 修复：① Android `UpdateMemberRoleRequest` 增加 `householdId`，新增 `RemoveMemberRequest(householdId)`，仓库层与列表接口一致先取 `currentHouseholdId`、未加载时明确报错，再随请求发送；② 服务端家庭成员相关 5 个接口增加 `householdId` 必填校验，缺失返回 400「缺少家庭 ID」，不再把空串传给数据库。
 - 测试：Android 新增 4 个单测（改角色/移除成员携带当前 householdId、家庭未加载时报错）全通过；服务端新增 3 个 handler 测试（PATCH/DELETE/GET 缺 householdId 返回 400）全通过；`npm test` 165 文件 / 1094 测试通过，eslint、build 通过。
 - 版本：0.5.20 / code 26，APK 20,131,259 字节已上传，version.json 同步。
+- 部署：commit c857417 bundle → 服务器全新 `npm ci` + `npm run build` → 备份切换（`.bak.20260808_144228`）→ 保留 `public/apk` 与 `data/photos` → systemd 重启 active，`/login` 200。
+- 线上 smoke：复跑完整成员流程（邀请/加入/批准/改 readonly/readonly 写 403/改回 member/移除成员）全部通过；新增断言 PATCH 与 DELETE 缺 householdId 均返回 400；测试账号清理后残留 0。
 - 待办：真机验收设置只读权限与移除成员不再报错。
