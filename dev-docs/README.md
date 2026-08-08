@@ -25,6 +25,8 @@
 
 用户确认：忘记密码接邮箱发送重置链接（QQ 邮箱 SMTP + 授权码，凭据不进仓库）、邮件发链接由网页 `/reset-password?token=...` 完成重置、记住密码=记住邮箱（默认勾选）、Android 登录页新增注册入口。设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`，已同步 `project-brief.md`、`technical-selection.md`、`architecture.md`、`database-design.md` 和 `acceptance.md`。
 
+2026-08-08 本地实施已完成并通过验证（Web/Android/服务端/真实 PostgreSQL 集成测试），部署与真实邮件验证待进行；用户已提供 QQ 邮箱 SMTP 授权码用于部署配置（只写服务器 `app.env`，不进仓库）。实施证据见 `dev-docs/acceptance.md`「2026-08-08 登录页增强与密码重置实施证据」。
+
 ## 文档职责
 
 - 产品方向变更先改 `project-brief.md`。

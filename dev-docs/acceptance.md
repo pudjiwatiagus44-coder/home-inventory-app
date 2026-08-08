@@ -952,3 +952,13 @@
 - Android 验收：登录页注册入口（确认密码、注册成功即登录）；忘记密码弹窗统一提示；记住邮箱复选框（默认勾选，只存邮箱）。
 - 真实环境验收（需用户提供 QQ 邮箱 SMTP 授权码，配置到服务器 `app.env`）：发送一封真实测试邮件；测试账号完整走「忘记密码 → 邮件链接 → 设置新密码 → 旧密码失败、新密码成功 → 其他设备 session 失效」。
 - 状态：2026-08-08 设计已确认，开始实施；未验证项不得包装成已完成。
+
+## 2026-08-08 登录页增强与密码重置实施证据（本地验证完成，部署待进行）
+
+- 设计确认：用户 2026-08-08 确认技术设计（令牌哈希入库、30 分钟过期、一次性、重置后作废全部会话；QQ SMTP + 授权码；邮件发重置链接；记住密码=记住邮箱；Android 增加注册入口）。
+- 服务端实现：`dev-docs/sql/password_reset_self_hosted.sql`（`password_reset_tokens` 表）；`src/server/mail/smtp-mailer.ts`（nodemailer + SMTP，凭据只存服务器 `app.env`）；`src/server/auth/password-reset-service.ts`（requestPasswordReset/resetPassword）；`src/server/auth/forgot-password-rate-limiter.ts`（5 次/小时/邮箱+IP）；`POST /api/auth/forgot-password` 与 `POST /api/auth/reset-password` 路由；`auth-service`/`postgres-auth-repository` 扩展。
+- Web 实现：`/forgot-password`、`/reset-password` 页面；AuthForm 忘记密码链接 + 记住邮箱（localStorage，默认勾选）；登录页 `reset=1` 成功提示。
+- Android 实现（0.5.21 / code 27）：登录页注册模式（邮箱/密码/确认密码）、忘记密码弹窗、记住邮箱（EncryptedSharedPreferences）；`AuthRepository.register/forgotPassword`；HomeInventoryApi/DTO 扩展。
+- 本地验证：`npm test` 172 文件 / 1128 测试通过（9 跳过）；`npx eslint src` exit 0；`npm run build` exit 0（产物含 `/forgot-password`、`/reset-password`、`/api/auth/forgot-password`、`/api/auth/reset-password`）；Android `testDebugUnitTest` 65 测试全过 + `assembleDebug` 通过（APK 20,147,647 字节）；真实 PostgreSQL 集成测试：认证 register/login/logout + 密码重置令牌生命周期 2 用例通过（本机 PG + `home_inventory_test`，migration SQL 已在真实库执行验证）。
+- 环境备注：`npm run lint`（裸 eslint）与 `npm test` 会扫描 `.worktrees/` 旧分支导致噪声/失败；项目实际校验以 `npx eslint src` 与排除 `.worktrees` 的 vitest 为准。`dev-docs/sql/mainland_initial_schema.sql` 缺少 `items.photo_key` 等后续列，本地 inventory 集成测试存在既有漂移（与本次功能无关，待单独补齐）。本地 PostgreSQL 已按 runbook 启动（Scoop persist 数据目录）。
+- 待办（部署后）：服务器执行 migration、`app.env` 配置 SMTP（QQ 邮箱 + 授权码，凭据不入仓库）、重启服务；发一封真实测试邮件；用测试账号走完整「忘记密码 → 邮件链接 → 设置新密码 → 旧密码失败、新密码成功 → 其他设备 session 失效」；浏览器/真机验收。
