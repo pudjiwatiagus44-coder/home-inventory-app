@@ -14,10 +14,9 @@ type ResetPasswordHandlerDependencies = {
 export function createResetPasswordHandler(
   deps: ResetPasswordHandlerDependencies = {},
 ) {
-  const service = deps.service ?? createRoutePasswordResetService();
-
   return async function POST(request: NextRequest) {
     try {
+      const service = deps.service ?? createRoutePasswordResetService();
       const body = (await request.json().catch(() => ({}))) as {
         token?: unknown;
         password?: unknown;

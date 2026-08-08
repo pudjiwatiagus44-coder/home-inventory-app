@@ -22,11 +22,10 @@ type ForgotPasswordHandlerDependencies = {
 export function createForgotPasswordHandler(
   deps: ForgotPasswordHandlerDependencies = {},
 ) {
-  const service = deps.service ?? createRoutePasswordResetService();
-  const rateLimiter = deps.rateLimiter ?? defaultRateLimiter;
-
   return async function POST(request: NextRequest) {
     try {
+      const service = deps.service ?? createRoutePasswordResetService();
+      const rateLimiter = deps.rateLimiter ?? defaultRateLimiter;
       const body = (await request.json().catch(() => ({}))) as {
         email?: unknown;
       };
