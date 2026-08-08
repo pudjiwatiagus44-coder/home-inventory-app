@@ -969,4 +969,4 @@
 - Migration：服务器执行 `dev-docs/sql/password_reset_self_hosted.sql`，`password_reset_tokens` 表创建成功（含唯一约束、索引与授权）。
 - SMTP：`/etc/home-inventory-app/app.env` 新增 `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM`/`RESET_BASE_URL`（QQ 邮箱 + 授权码，只存服务器，不进仓库）；文件属主 `root:deploy` 640。
 - 线上 smoke：`/login`、`/forgot-password`、`/reset-password` 均 200；`POST /api/auth/register`（736259416@qq.com）返回 409（账号已存在）；`POST /api/auth/forgot-password` 返回 200 `{ok:true}`；数据库确认该邮箱存在 1 条未使用、30 分钟有效的重置令牌；journal 无 SMTP 错误。
-- 待用户确认：真实邮件已发送至 736259416@qq.com（2026-08-08 16:46 左右），需用户打开邮件链接完成设置新密码后，验证「旧密码失败、新密码成功、其他设备 session 失效」闭环与浏览器/真机验收。
+- 闭环验收（2026-08-08 16:49 用户完成重置）：真实邮件已发送至 736259416@qq.com → 用户打开链接设置新密码 → 数据库确认令牌 `used_at` 已写入（密码哈希已更新）、该账号 11 个旧会话全部作废（`active_sessions = 0`），重置后所有设备强制登出生效。新密码登录由用户确认；浏览器/真机点击验收待补。
