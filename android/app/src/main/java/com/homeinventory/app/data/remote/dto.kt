@@ -211,7 +211,12 @@ data class MemberDto(
 )
 
 data class UpdateMemberRoleRequest(
+    val householdId: String,
     val role: String,
+)
+
+data class RemoveMemberRequest(
+    val householdId: String,
 )
 
 data class ApkVersionDto(

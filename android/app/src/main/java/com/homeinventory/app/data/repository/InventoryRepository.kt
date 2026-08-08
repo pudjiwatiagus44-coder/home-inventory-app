@@ -33,6 +33,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
 import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
@@ -187,17 +188,31 @@ class InventoryRepository(
         return Result.success(body.data ?: emptyList())
     }
 
-    suspend fun removeFamilyMember(userId: String): Result<Unit> =
-        runFamilyMutation(
-            request = { api.removeMember(userId) },
+    suspend fun removeFamilyMember(userId: String): Result<Unit> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        return runFamilyMutation(
+            request = { api.removeMember(userId, RemoveMemberRequest(householdId)) },
             message = "移除成员失败",
         )
+    }
 
-    suspend fun updateMemberRole(userId: String, role: String): Result<Unit> =
-        runFamilyMutation(
-            request = { api.updateMemberRole(userId, UpdateMemberRoleRequest(role)) },
+    suspend fun updateMemberRole(userId: String, role: String): Result<Unit> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        return runFamilyMutation(
+            request = { api.updateMemberRole(userId, UpdateMemberRoleRequest(householdId, role)) },
             message = "修改成员权限失败",
         )
+    }
 
     private suspend fun runFamilyMutation(
         request: suspend () -> retrofit2.Response<ApiEnvelope<Unit>>,

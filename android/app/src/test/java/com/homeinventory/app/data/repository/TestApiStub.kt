@@ -25,6 +25,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -117,8 +118,10 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun familyMembers(householdId: String): Response<ApiEnvelope<List<MemberDto>>> =
         Response.success(ApiEnvelope(ok = true, data = emptyList()))
 
-    override suspend fun removeMember(userId: String): Response<ApiEnvelope<Unit>> =
-        Response.success(ApiEnvelope(ok = true))
+    override suspend fun removeMember(
+        userId: String,
+        request: RemoveMemberRequest,
+    ): Response<ApiEnvelope<Unit>> = Response.success(ApiEnvelope(ok = true))
 
     override suspend fun updateMemberRole(
         userId: String,

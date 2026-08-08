@@ -932,3 +932,12 @@
 - 线上 smoke（真实 API + 测试环境库，测试账号已清理残留 0）：注册房主/成员 → 邀请 → 申请 → 批准 → 成员 role=member 可读；PATCH 改 readonly 后成员列表显示 readonly、只读成员仍可读；readonly 写区域返回 403；member/owner 均不能自改角色（403）；PATCH 改回 member 成功；房主移除成员后该成员访问家庭返回 404；约束定义确认包含 `readonly`。
 - 公开资源：`https://homestorag.xyz/apk/version.json` 显示 0.5.19 / code 25 / 20,131,263 字节；`/login` HTTPS 200。
 - 待办：真机验收（帮助入口、成员管理界面、邀请使用 App 分享、只读成员在 App 内被禁止编辑）。
+
+## 2026-08-08 0.5.20 设置只读权限报 uuid 空串修复证据
+
+- 现象：App 内给成员设置只读权限时报错 `invalid input syntax for type uuid: ""`。
+- 根因：Android `updateMemberRole` 请求体只有 `role`、`removeMember` 无 body，而服务端 `PATCH/DELETE api/family/members/{userId}` 要求 body 携带 `householdId`；缺失时服务端把空字符串传给 PostgreSQL uuid 列直接抛 500。同类风险也存在于 `listMembers`/`listJoinRequests`/`listInvitations`（query 参数缺失）。
+- 修复：① Android `UpdateMemberRoleRequest` 增加 `householdId`，新增 `RemoveMemberRequest(householdId)`，仓库层与列表接口一致先取 `currentHouseholdId`、未加载时明确报错，再随请求发送；② 服务端家庭成员相关 5 个接口增加 `householdId` 必填校验，缺失返回 400「缺少家庭 ID」，不再把空串传给数据库。
+- 测试：Android 新增 4 个单测（改角色/移除成员携带当前 householdId、家庭未加载时报错）全通过；服务端新增 3 个 handler 测试（PATCH/DELETE/GET 缺 householdId 返回 400）全通过；`npm test` 165 文件 / 1094 测试通过，eslint、build 通过。
+- 版本：0.5.20 / code 26，APK 20,131,259 字节已上传，version.json 同步。
+- 待办：真机验收设置只读权限与移除成员不再报错。

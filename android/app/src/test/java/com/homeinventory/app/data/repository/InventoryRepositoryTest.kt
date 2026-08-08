@@ -21,6 +21,8 @@ import com.homeinventory.app.data.remote.RemoteHouseholdDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RemoveMemberRequest
+import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import java.io.IOException
@@ -295,6 +297,55 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    fun updateMemberRoleSendsCurrentHouseholdIdAndRole() = runTest {
+        val api = RecordingMemberApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot()
+
+        val result = repository.updateMemberRole("user-2", "readonly")
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-1", api.updatedRoleHouseholdId)
+        assertEquals("readonly", api.updatedRole)
+    }
+
+    @Test
+    fun updateMemberRoleFailsWhenHouseholdNotLoaded() = runTest {
+        val repository = repositoryWith(
+            api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))),
+        )
+
+        val result = repository.updateMemberRole("user-2", "readonly")
+
+        assertTrue(result.isFailure)
+        assertEquals("家庭信息未加载，请先刷新清单", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun removeFamilyMemberSendsCurrentHouseholdId() = runTest {
+        val api = RecordingMemberApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot()
+
+        val result = repository.removeFamilyMember("user-2")
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-1", api.removedHouseholdId)
+    }
+
+    @Test
+    fun removeFamilyMemberFailsWhenHouseholdNotLoaded() = runTest {
+        val repository = repositoryWith(
+            api = FakeSnapshotApi(Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))),
+        )
+
+        val result = repository.removeFamilyMember("user-2")
+
+        assertTrue(result.isFailure)
+        assertEquals("家庭信息未加载，请先刷新清单", result.exceptionOrNull()?.message)
+    }
+
+    @Test
     fun checkForUpdateReturnsServerVersion() = runTest {
         val repository = repositoryWith(
             api = VersionApi(
@@ -437,6 +488,39 @@ private class RejectingInvitationApi : TestApiStub() {
             """{"ok":false,"message":"只有房主可以管理成员和邀请"}"""
                 .toResponseBody("application/json".toMediaType()),
         )
+}
+
+private class RecordingMemberApi : TestApiStub() {
+    var updatedRole: String? = null
+    var updatedRoleHouseholdId: String? = null
+    var removedHouseholdId: String? = null
+
+    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
+                ),
+            ),
+        )
+
+    override suspend fun updateMemberRole(
+        userId: String,
+        request: UpdateMemberRoleRequest,
+    ): Response<ApiEnvelope<Unit>> {
+        updatedRole = request.role
+        updatedRoleHouseholdId = request.householdId
+        return Response.success(ApiEnvelope(ok = true))
+    }
+
+    override suspend fun removeMember(
+        userId: String,
+        request: RemoveMemberRequest,
+    ): Response<ApiEnvelope<Unit>> {
+        removedHouseholdId = request.householdId
+        return Response.success(ApiEnvelope(ok = true))
+    }
 }
 
 private class FakeAreaDao : AreaDao {

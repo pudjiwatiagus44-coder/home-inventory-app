@@ -23,6 +23,7 @@ import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -120,7 +121,10 @@ interface HomeInventoryApi {
     suspend fun familyMembers(@Query("householdId") householdId: String): Response<ApiEnvelope<List<MemberDto>>>
 
     @DELETE("api/family/members/{userId}")
-    suspend fun removeMember(@Path("userId") userId: String): Response<ApiEnvelope<Unit>>
+    suspend fun removeMember(
+        @Path("userId") userId: String,
+        @Body request: RemoveMemberRequest,
+    ): Response<ApiEnvelope<Unit>>
 
     @PATCH("api/family/members/{userId}")
     suspend fun updateMemberRole(

@@ -142,4 +142,59 @@ describe("family API handlers", () => {
       data: { requestId: "request-1" },
     });
   });
+
+  it("returns 400 when PATCH member role is missing householdId", async () => {
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub(),
+    });
+
+    const response = await handlers.updateMemberRole(
+      authedRequest("http://localhost/api/family/members/user-2", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "readonly" }),
+      }),
+      { params: Promise.resolve({ userId: "user-2" }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      message: "缺少家庭 ID",
+    });
+  });
+
+  it("returns 400 when DELETE member is missing householdId", async () => {
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub(),
+    });
+
+    const response = await handlers.removeMember(
+      authedRequest("http://localhost/api/family/members/user-2", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ userId: "user-2" }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      message: "缺少家庭 ID",
+    });
+  });
+
+  it("returns 400 when listing members is missing householdId", async () => {
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub(),
+    });
+
+    const response = await handlers.listMembers(
+      authedRequest("http://localhost/api/family/members"),
+    );
+
+    expect(response.status).toBe(400);
+  });
 });

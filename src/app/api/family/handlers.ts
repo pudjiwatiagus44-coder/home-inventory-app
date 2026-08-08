@@ -114,10 +114,16 @@ export function createFamilyHandlers(
           return unauthorizedResponse();
         }
 
-        const data = await service().listInvitationLinksForCurrentUser({
-          userId: user.userId,
-          householdId: request.nextUrl.searchParams.get("householdId") ?? "",
-        });
+          const householdId = request.nextUrl.searchParams.get("householdId") ?? "";
+          const missingHousehold = requireHouseholdId(householdId);
+          if (missingHousehold) {
+            return missingHousehold;
+          }
+
+          const data = await service().listInvitationLinksForCurrentUser({
+            userId: user.userId,
+            householdId,
+          });
 
         return successResponse(data);
       } catch (error) {
@@ -156,10 +162,16 @@ export function createFamilyHandlers(
           return unauthorizedResponse();
         }
 
-        const data = await service().listJoinRequestsForCurrentUser({
-          userId: user.userId,
-          householdId: request.nextUrl.searchParams.get("householdId") ?? "",
-        });
+          const householdId = request.nextUrl.searchParams.get("householdId") ?? "";
+          const missingHousehold = requireHouseholdId(householdId);
+          if (missingHousehold) {
+            return missingHousehold;
+          }
+
+          const data = await service().listJoinRequestsForCurrentUser({
+            userId: user.userId,
+            householdId,
+          });
 
         return successResponse(data);
       } catch (error) {
@@ -175,10 +187,16 @@ export function createFamilyHandlers(
           return unauthorizedResponse();
         }
 
-        const data = await service().listMembersForCurrentUser({
-          userId: user.userId,
-          householdId: request.nextUrl.searchParams.get("householdId") ?? "",
-        });
+          const householdId = request.nextUrl.searchParams.get("householdId") ?? "";
+          const missingHousehold = requireHouseholdId(householdId);
+          if (missingHousehold) {
+            return missingHousehold;
+          }
+
+          const data = await service().listMembersForCurrentUser({
+            userId: user.userId,
+            householdId,
+          });
 
         return successResponse(data);
       } catch (error) {
@@ -243,13 +261,19 @@ export function createFamilyHandlers(
           return unauthorizedResponse();
         }
 
-        const { userId: targetUserId } = await context.params;
-        const body = await readJsonObject(request);
-        await service().removeMemberForCurrentUser({
-          userId: user.userId,
-          householdId: textField(body, "householdId"),
-          targetUserId,
-        });
+          const { userId: targetUserId } = await context.params;
+          const body = await readJsonObject(request);
+          const householdId = textField(body, "householdId");
+          const missingHousehold = requireHouseholdId(householdId);
+          if (missingHousehold) {
+            return missingHousehold;
+          }
+
+          await service().removeMemberForCurrentUser({
+            userId: user.userId,
+            householdId,
+            targetUserId,
+          });
 
         return successResponse(null);
       } catch (error) {
@@ -268,9 +292,15 @@ export function createFamilyHandlers(
           return unauthorizedResponse();
         }
 
-        const { userId: targetUserId } = await context.params;
-        const body = await readJsonObject(request);
-        const role = textField(body, "role");
+          const { userId: targetUserId } = await context.params;
+          const body = await readJsonObject(request);
+          const householdId = textField(body, "householdId");
+          const missingHousehold = requireHouseholdId(householdId);
+          if (missingHousehold) {
+            return missingHousehold;
+          }
+
+          const role = textField(body, "role");
 
         if (role !== "member" && role !== "readonly") {
           return NextResponse.json(
@@ -281,7 +311,7 @@ export function createFamilyHandlers(
 
         await service().setMemberRoleForCurrentUser({
           userId: user.userId,
-          householdId: textField(body, "householdId"),
+          householdId,
           targetUserId,
           role,
         });
@@ -377,6 +407,17 @@ async function readJsonObject(request: NextRequest): Promise<JsonObject> {
 function textField(body: JsonObject, key: string) {
   const value = body[key];
   return typeof value === "string" ? value : "";
+}
+
+function requireHouseholdId(householdId: string) {
+  if (!householdId) {
+    return NextResponse.json(
+      { ok: false, message: "缺少家庭 ID" },
+      { status: 400 },
+    );
+  }
+
+  return null;
 }
 
 function publicOrigin(request: NextRequest) {
