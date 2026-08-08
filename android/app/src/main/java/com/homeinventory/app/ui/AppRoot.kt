@@ -15,6 +15,7 @@ import com.homeinventory.app.HomeInventoryApplication
 import com.homeinventory.app.BuildConfig
 import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.core.network.NetworkModule
+import com.homeinventory.app.core.session.EncryptedRememberedEmailStore
 import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.repository.DraftRepository
 import com.homeinventory.app.data.repository.AuthRepository
@@ -105,6 +106,25 @@ fun AppRoot() {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val rememberEmailStore = remember { EncryptedRememberedEmailStore(app) }
+    var rememberEmail by remember { mutableStateOf(true) }
+    var forgotPasswordNotice by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val savedEmail = rememberEmailStore.load()
+
+        if (!savedEmail.isNullOrBlank()) {
+            email = savedEmail
+        }
+    }
+
+    fun persistRememberedEmail() {
+        if (rememberEmail) {
+            rememberEmailStore.save(email.trim().lowercase())
+        } else {
+            rememberEmailStore.clear()
+        }
+    }
 
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
@@ -154,6 +174,10 @@ fun AppRoot() {
                 serverUrl = AppConfig.baseUrl,
                 isLoading = isLoading,
                 errorMessage = errorMessage,
+                rememberEmail = rememberEmail,
+                onRememberEmailChange = { rememberEmail = it },
+                forgotPasswordNotice = forgotPasswordNotice,
+                onClearForgotPasswordNotice = { forgotPasswordNotice = null },
                 onEmailChange = {
                     email = it
                     errorMessage = null
@@ -169,6 +193,7 @@ fun AppRoot() {
                         authRepository.login(email, password)
                             .onSuccess {
                                 password = ""
+                                persistRememberedEmail()
                                 isLoggedIn = true
                                 scope.launch { repository.refreshSnapshot() }
                             }
@@ -176,6 +201,35 @@ fun AppRoot() {
                                 errorMessage = error.message ?: "登录失败"
                             }
                         isLoading = false
+                    }
+                },
+                onRegister = {
+                    isLoading = true
+                    errorMessage = null
+                    scope.launch {
+                        authRepository.register(email, password)
+                            .onSuccess {
+                                password = ""
+                                persistRememberedEmail()
+                                isLoggedIn = true
+                                scope.launch { repository.refreshSnapshot() }
+                            }
+                            .onFailure { error ->
+                                errorMessage = error.message ?: "注册失败"
+                            }
+                        isLoading = false
+                    }
+                },
+                onForgotPassword = { forgotEmail ->
+                    scope.launch {
+                        authRepository.forgotPassword(forgotEmail)
+                            .onSuccess {
+                                forgotPasswordNotice = "若邮箱已注册，重置链接已发送"
+                            }
+                            .onFailure { error ->
+                                forgotPasswordNotice =
+                                    error.message ?: "请求失败，请稍后再试"
+                            }
                     }
                 },
             )

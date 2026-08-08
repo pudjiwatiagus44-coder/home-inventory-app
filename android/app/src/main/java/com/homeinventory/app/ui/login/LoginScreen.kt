@@ -2,6 +2,7 @@ package com.homeinventory.app.ui.login
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,15 +11,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+
+private val EMAIL_PATTERN = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
 @Composable
 fun LoginScreen(
@@ -27,11 +37,50 @@ fun LoginScreen(
     serverUrl: String,
     isLoading: Boolean,
     errorMessage: String?,
+    rememberEmail: Boolean,
+    onRememberEmailChange: (Boolean) -> Unit,
+    forgotPasswordNotice: String?,
+    onClearForgotPasswordNotice: () -> Unit,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onLogin: () -> Unit,
+    onRegister: () -> Unit,
+    onForgotPassword: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var isSignUp by remember { mutableStateOf(false) }
+    var confirmPassword by remember { mutableStateOf("") }
+    var formError by remember { mutableStateOf<String?>(null) }
+    var showForgotPassword by remember { mutableStateOf(false) }
+
+    fun switchMode() {
+        isSignUp = !isSignUp
+        confirmPassword = ""
+        formError = null
+    }
+
+    fun submit() {
+        formError = null
+
+        if (isSignUp) {
+            if (!EMAIL_PATTERN.matches(email.trim())) {
+                formError = "请输入有效邮箱"
+                return
+            }
+            if (password.length < 8) {
+                formError = "密码至少需要 8 位"
+                return
+            }
+            if (password != confirmPassword) {
+                formError = "两次输入的密码不一致"
+                return
+            }
+            onRegister()
+        } else {
+            onLogin()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -76,23 +125,96 @@ fun LoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
 
-        errorMessage?.let { message ->
+        if (isSignUp) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("确认密码") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            )
+        }
+
+        val displayError = formError ?: errorMessage
+        if (displayError != null) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = message,
+                text = displayError,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        if (!isSignUp) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = { showForgotPassword = true }) {
+                    Text("忘记密码？")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            onClick = onLogin,
-            enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
+            onClick = ::submit,
+            enabled = !isLoading &&
+                email.isNotBlank() &&
+                password.isNotBlank() &&
+                (!isSignUp || confirmPassword.isNotBlank()),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (isLoading) "登录中..." else "登录")
+            Text(
+                when {
+                    isLoading -> "处理中..."
+                    isSignUp -> "注册"
+                    else -> "登录"
+                },
+            )
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Checkbox(
+                checked = rememberEmail,
+                onCheckedChange = onRememberEmailChange,
+            )
+            Text(
+                text = "记住邮箱",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        TextButton(
+            onClick = ::switchMode,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (isSignUp) "已有账号？登录" else "没有账号？注册")
+        }
+    }
+
+    if (showForgotPassword) {
+        ForgotPasswordDialog(
+            notice = forgotPasswordNotice,
+            isLoading = isLoading,
+            onDismiss = {
+                showForgotPassword = false
+                onClearForgotPasswordNotice()
+            },
+            onSubmit = onForgotPassword,
+        )
     }
 }

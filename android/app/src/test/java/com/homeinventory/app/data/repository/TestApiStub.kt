@@ -2,6 +2,8 @@ package com.homeinventory.app.data.repository
 
 import com.homeinventory.app.core.network.HomeInventoryApi
 import com.homeinventory.app.core.network.LoginRequest
+import com.homeinventory.app.core.network.RegisterRequest
+import com.homeinventory.app.core.network.ForgotPasswordRequest
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.AreaCreateRequest
 import com.homeinventory.app.data.remote.AreaUpdateRequest
@@ -36,6 +38,12 @@ import retrofit2.Response
 abstract class TestApiStub : HomeInventoryApi {
     override suspend fun login(request: LoginRequest): Response<AuthResponse> =
         Response.success(AuthResponse(ok = true))
+
+    override suspend fun register(request: RegisterRequest): Response<AuthResponse> =
+        Response.success(AuthResponse(ok = true))
+
+    override suspend fun forgotPassword(request: ForgotPasswordRequest): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
 
     override suspend fun logout(): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
