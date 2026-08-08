@@ -61,7 +61,10 @@ $versionObject = @{
     size        = $size
     updatedAt   = (Get-Date).ToUniversalTime().ToString("o")
 }
-$versionObject | ConvertTo-Json | Set-Content -LiteralPath $versionJson -Encoding UTF8
+$json = $versionObject | ConvertTo-Json
+# UTF-8 without BOM: PowerShell 5.1 Set-Content -Encoding UTF8 writes a BOM,
+# which breaks JSON parsing (Gson on Android, Invoke-RestMethod).
+[System.IO.File]::WriteAllText($versionJson, $json, [System.Text.UTF8Encoding]::new($false))
 
 ssh -o BatchMode=yes -i $ServerKey "$ServerUser@$ServerHost" "mkdir -p $RemoteDir"
 if ($LASTEXITCODE -ne 0) {

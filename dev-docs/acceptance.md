@@ -970,3 +970,9 @@
 - SMTP：`/etc/home-inventory-app/app.env` 新增 `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM`/`RESET_BASE_URL`（QQ 邮箱 + 授权码，只存服务器，不进仓库）；文件属主 `root:deploy` 640。
 - 线上 smoke：`/login`、`/forgot-password`、`/reset-password` 均 200；`POST /api/auth/register`（736259416@qq.com）返回 409（账号已存在）；`POST /api/auth/forgot-password` 返回 200 `{ok:true}`；数据库确认该邮箱存在 1 条未使用、30 分钟有效的重置令牌；journal 无 SMTP 错误。
 - 闭环验收（2026-08-08 16:49 用户完成重置）：真实邮件已发送至 736259416@qq.com → 用户打开链接设置新密码 → 数据库确认令牌 `used_at` 已写入（密码哈希已更新）、该账号 11 个旧会话全部作废（`active_sessions = 0`），重置后所有设备强制登出生效。新密码登录由用户确认；浏览器/真机点击验收待补。
+
+## 2026-08-08 Android 0.5.21 内测版发布与工作区清理证据
+
+- 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.21 / code 27 APK（20,147,647 字节）到服务器 `/opt/home-inventory-app/public/apk/`；`https://homestorag.xyz/apk/version.json` 与 APK 均公开 200，version.json 显示 v0.5.21/code 27/size 20,147,647。
+- 修复：version.json 原由 PowerShell 5.1 `Set-Content -Encoding UTF8` 写入带 BOM，会破坏 Android Gson 解析；已改写脚本为 UTF-8 无 BOM（`[System.IO.File]::WriteAllText`）并去除线上文件 BOM。注意 `next start` 启动时扫描 `public/`，上传 APK 后需重启服务才能对外提供。
+- 工作区清理：移除 `.worktrees/`（android-native-internal-test、family-sharing 两个注册工作树 + photo-recognition 503MB 无 git 遗留目录）；family-sharing 未提交改动（desugaring 配置，已合入 main）已 stash 保留在分支 `codex/family-sharing` 上；`.worktrees/` 目录本身已删除（gitignore 条目保留）。清理后 `npm test` 恢复为 53 文件 / 340 测试通过（3 跳过）、`npm run lint` exit 0（此前 `.worktrees` 旧分支测试/文件导致 172 文件与 2103 lint 错误噪声）。
