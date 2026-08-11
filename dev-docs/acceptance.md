@@ -995,9 +995,15 @@
 - 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.23 / code 29 APK（20,164,031 字节）到服务器 `/opt/home-inventory-app/public/apk/`；systemd 重启后服务 active；`https://homestorag.xyz/apk/version.json` 显示 v0.5.23/code 29/size 20,164,031，APK URL 返回 200。
 - 待办：真机验收家庭成员切换到共享家庭后能看到房主清单；Android 写接口与离线同步跨家庭的 `householdId` 支持仍属下一轮范围，本轮不声明共享家庭写入已完整支持。
 
-## 2026-08-11 区域/位置照片验收标准（待实施）
+## 2026-08-11 区域/位置照片验收证据
 
-状态：设计已确认，尚未进入代码实施。
+状态：本地实现与自动化验证完成；数据库 migration 执行、真机/线上部署验收待进行。
+
+- 实现：`dev-docs/sql/area_location_photos_self_hosted.sql`（`areas.photo_key`、`locations.photo_key` + 唯一索引）；`src/server/photos/area-location-photo-service.ts` 与 `photo-route-helpers.ts`（上传/读取/删除/清理）；`PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `locations/[locationId]/photo`；Dashboard/快照透传 `photoKey`；Web 物品行 `A1`/区域小按钮与无照片提示；Android Room/API/Repository、物品行小按钮、照片查看、长按弹窗照片区。
+- Web 验证：`npx vitest run --exclude <2 个 PostgreSQL 集成文件>` 53 个文件 / 348 个测试通过；`npx eslint src` exit 0；`npm run build` exit 0，构建产物包含新增两个照片路由。
+- Android 验证：`gradle :app:testDebugUnitTest --no-daemon` 通过；`gradle :app:assembleDebug --no-daemon` 通过。
+- 数据库验证：migration SQL 已写入仓库；本机 PostgreSQL 连接挂起，`areas`/`locations` 新增列尚未在测试库实际执行，标记未验证。
+- 待办：数据库执行 migration；真机拍照/相册、替换/删除、readonly 只读、用户 A/B 越权、替换和删除后的文件清理；线上部署与页面验收。
 
 - 每个区域、每个位置各有一张主照片，可上传、替换、删除。
 - 长按区域/位置可拍照或从相册选择；有照片时可查看、替换、删除。

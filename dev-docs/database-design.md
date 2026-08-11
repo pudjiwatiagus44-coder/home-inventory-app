@@ -809,7 +809,7 @@ using (public.is_household_member(household_id));
 - 当前证据支持第一版“用户只能访问自己 household 数据”的 RLS 边界。
 - 2026-08-06 家庭成员共享设计已写入真源（`project-brief.md` / `architecture.md` / `database-design.md` / `acceptance.md` / `stages/family-sharing.md`）：邀请方式为分享链接 + 自主申请 + 房主批准，链接落地页含 Android 内测 APK 下载入口。migration（`202608060001_family_sharing.sql`）已编写并与本设计一致，尚未在任何数据库执行。
 - 2026-08-07 拍照识别数据设计（`items.photo_key` + `pending_photos`）已写入本文件，migration 尚未编写/执行。
-- 2026-08-11 区域/位置照片数据设计（`areas.photo_key`、`locations.photo_key`）已写入本文件，migration 尚未编写/执行。
+- 2026-08-11 区域/位置照片数据设计（`areas.photo_key`、`locations.photo_key`）已写入本文件，migration 已编写（`dev-docs/sql/area_location_photos_self_hosted.sql`），尚未执行。
 
 ## 仍需补充验证
 
@@ -866,4 +866,4 @@ grant all privileges on password_reset_tokens to home_inventory_app;
 3. 重新运行 `npm test`、`npm run lint`、`npm run build`。
 4. 做用户验收陪跑：真实浏览器验证区域/位置/物品 CRUD、搜索/筛选、移动端布局，以及家庭链接邀请/申请/批准/共同编辑/移除成员路径和链接落地页 App 下载入口。
 5. 阶段收口后创建 Git checkpoint。
-6. 用户审阅区域/位置照片设计后，编写并执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，同步接口、Android/Web 与验收证据。
+6. 用户审阅区域/位置照片设计后，执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，同步接口、Android/Web 与验收证据。
