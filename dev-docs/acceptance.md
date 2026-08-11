@@ -1042,5 +1042,13 @@
 - SQL：`dev-docs/sql/household_alias_and_scoped_authorization.sql` 与 `dev-docs/sql/family_sharing_self_hosted.sql` 增加 grants 表、邀请 token 多家庭承载与 join request 的 `invitation_id`。
 - Android：家庭下拉与顶部栏优先显示 `effectiveName`；长按家庭名设置个人显示名；邀请弹窗支持多家庭多选与 管理/新增/只读 角色；`pending_operations` 增加 `householdId`（Room v5），避免跨家庭同步。
 - Web：家庭选择器与家庭设置使用 `effectiveName`；成员角色显示 管理/新增/只读；family client 支持 `grants` 邀请载荷。
-- 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 392 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
-- 待办：APK 上传、服务器 migration 与部署、Web/Android 真机验收。
+- 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 56 文件 / 394 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
+
+## 2026-08-11 阿里云测试环境部署证据
+
+- 部署分支：`codex/feedback-and-topbar`，服务器 `/opt/home-inventory-app` 已切换至 commit `58148e7`（Android 0.5.26 / code 32）。
+- 构建：服务器执行 `npm ci` 与 `npm run build` 成功；`home-inventory-app.service` 重启后 `active`。
+- 数据库：执行 `dev-docs/sql/household_alias_and_scoped_authorization.sql`，新增 `household_user_preferences`、`household_invitation_grants`，`household_join_requests.invitation_id` 已存在；`home_inventory_test` 表结构验证通过。
+- APK：`scripts/upload-apk.ps1` 构建并上传 0.5.26 / code 32 APK（20,213,183 字节）；`https://homestorag.xyz/apk/version.json` 返回 versionCode 32 / versionName 0.5.26，APK 下载返回 HTTP 200。
+- 线上 smoke：`/login` 200；未登录 `/api/family/households` 401；临时账号注册、个人显示名 PATCH、多家庭 grants 邀请 POST 均 200；临时测试账号与数据已清理。
+- 待办：Web/Android 真机验收（长按设置显示名、多家庭邀请选择、成员角色显示等）。生产上线前仍需隐私政策、用户协议、备份恢复与账号安全评审。
