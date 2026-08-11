@@ -21,6 +21,9 @@ type InventoryRouteService = ReturnType<typeof createInventoryService>;
 
 function createAuthenticatedDependencies(
   service: Partial<InventoryRouteService>,
+  recognitionService: {
+    deleteItemPhoto?: (input: { userId: string; itemId: string }) => Promise<void>;
+  } = {},
 ) {
   return {
     authService: {
@@ -38,7 +41,7 @@ function createAuthenticatedDependencies(
       }),
       attachPhotoToItem: async () => false,
       getItemPhoto: async () => null,
-      deleteItemPhoto: async () => undefined,
+      deleteItemPhoto: recognitionService.deleteItemPhoto ?? (async () => undefined),
       cleanupExpiredPendingPhotos: async () => 0,
     },
   };
@@ -394,6 +397,32 @@ describe("inventory API route permission boundaries", () => {
     );
 
     await expectForbidden(response, "贡献者不能删除物品或位置");
+  });
+
+  it("does not delete an item photo before contributor item delete permission passes", async () => {
+    const photoDeleteCalls: unknown[] = [];
+    const handlers = createItemItemHandlers(
+      createAuthenticatedDependencies(
+        {
+          deleteItemForCurrentUser: async () => {
+            throw new ContributorDeletePermissionError();
+          },
+        },
+        {
+          deleteItemPhoto: async (input) => {
+            photoDeleteCalls.push(input);
+          },
+        },
+      ),
+    );
+
+    const response = await handlers.DELETE(
+      jsonRequest("http://localhost/api/inventory/items/item-a", "DELETE", {}),
+      { params: Promise.resolve({ itemId: "item-a" }) },
+    );
+
+    await expectForbidden(response, new ContributorDeletePermissionError().message);
+    expect(photoDeleteCalls).toEqual([]);
   });
 
   it("keeps area creation on the current-user route contract", async () => {

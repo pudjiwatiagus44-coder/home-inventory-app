@@ -76,6 +76,7 @@ create table locations (
   household_id uuid not null references households(id) on delete cascade,
   area_id uuid,
   name text not null,
+  created_by uuid references users(id) on delete set null,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -65,11 +65,11 @@ export function createItemItemHandlers(
       return runInventoryMutation(
         request,
         async ({ service, userId }) => {
+          await service.deleteItemForCurrentUser({ userId, itemId });
           const photoService =
             dependencies.recognitionService ??
             createRouteRecognitionService();
           await photoService.deleteItemPhoto({ userId, itemId });
-          await service.deleteItemForCurrentUser({ userId, itemId });
           return null;
         },
         dependencies,
