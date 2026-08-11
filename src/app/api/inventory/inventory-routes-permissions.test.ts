@@ -38,6 +38,11 @@ function createAuthenticatedDependencies(
       deleteItemPhoto: async () => undefined,
       cleanupExpiredPendingPhotos: async () => 0,
     },
+    photoService: {
+      listAreaPhotoKeys: async () => [],
+      listLocationPhotoKeys: async () => [],
+      deletePhotoFiles: async () => undefined,
+    },
   };
 }
 
