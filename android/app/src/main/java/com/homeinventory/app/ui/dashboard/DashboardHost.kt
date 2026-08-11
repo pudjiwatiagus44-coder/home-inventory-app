@@ -700,6 +700,22 @@ fun DashboardHost(
                 name = "",
                 areaId = locationFormInitialAreaId,
             ),
+            photoKey = editingLocation?.photoKey,
+            onUploadPhoto = { bytes ->
+                editingLocation?.let { location ->
+                    repository.uploadLocationPhoto(location.id, bytes)
+                } ?: Result.failure(IllegalStateException("请先保存位置"))
+            },
+            onViewPhoto = {
+                editingLocation?.let { location ->
+                    previewLocationPhoto = EntityPhotoPreview(location.id, location.photoKey)
+                }
+            },
+            onDeletePhoto = {
+                editingLocation?.let { location ->
+                    repository.deleteLocationPhoto(location.id)
+                } ?: Result.success(Unit)
+            },
             areas = state.areas,
             isSaving = isSaving,
             errorMessage = formError,
@@ -769,6 +785,22 @@ fun DashboardHost(
             initial = editingArea?.let { area ->
                 AreaFormValues(name = area.name, color = area.color)
             } ?: AreaFormValues(),
+            photoKey = editingArea?.photoKey,
+            onUploadPhoto = { bytes ->
+                editingArea?.let { area ->
+                    repository.uploadAreaPhoto(area.id, bytes)
+                } ?: Result.failure(IllegalStateException("请先保存区域"))
+            },
+            onViewPhoto = {
+                editingArea?.let { area ->
+                    previewAreaPhoto = EntityPhotoPreview(area.id, area.photoKey)
+                }
+            },
+            onDeletePhoto = {
+                editingArea?.let { area ->
+                    repository.deleteAreaPhoto(area.id)
+                } ?: Result.success(Unit)
+            },
             isSaving = isSaving,
             errorMessage = formError,
             onSave = { values ->

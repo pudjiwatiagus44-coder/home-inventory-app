@@ -36,6 +36,10 @@ import com.homeinventory.app.ui.theme.Danger
 fun LocationFormDialog(
     title: String,
     initial: LocationFormValues,
+    photoKey: String?,
+    onUploadPhoto: suspend (ByteArray) -> Result<String>,
+    onViewPhoto: () -> Unit,
+    onDeletePhoto: suspend () -> Result<Unit>,
     areas: List<InventorySnapshot.AreaView>,
     isSaving: Boolean,
     errorMessage: String?,
@@ -66,6 +70,13 @@ fun LocationFormDialog(
                 areas = areas,
                 selectedAreaId = areaId,
                 onSelect = { areaId = it },
+            )
+            AreaLocationPhotoSection(
+                photoKey = photoKey,
+                entityLabel = "位置",
+                onUpload = onUploadPhoto,
+                onView = onViewPhoto,
+                onDelete = onDeletePhoto,
             )
             errorMessage?.let {
                 Text(text = it, color = Danger, fontSize = 13.sp)
