@@ -1009,5 +1009,9 @@
 - Android：帮助弹窗新增反馈表单；顶部栏新增家庭切换下拉图标（列出全部已加入家庭）和“设置”菜单（备份、导入、邀请、退出）；草稿箱、帮助保留在顶部；长按当前家庭名称可重命名（仅房主，服务端校验 owner）。
 - Web：顶部栏新增“帮助”入口，打开帮助弹窗并提交反馈到同一 API。
 - 家庭重命名：`PATCH /api/family/households` 新增，仅房主可重命名；`family-repository`/`family-service`/`family-client`/Android API 与 UI 已接入。
-- 本地验证：Android `testDebugUnitTest` 全通过；Web 排除本机 PostgreSQL 集成测试后全量通过；`npx eslint src` 通过；`npm run build` 通过；`assembleDebug` 通过。
-- 待办：发布 0.5.24 后真机验收家庭切换、长按重命名、设置菜单和反馈邮件；Web 帮助弹窗真实发送一封反馈邮件验证到 QQ 邮箱。
+- 本地验证：`npm run lint` 通过；`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 355 测试；`npm run build` 通过；Android `testDebugUnitTest assembleDebug` 通过。
+- 版本：Android `versionName=0.5.24`、`versionCode=30`；用户手册已同步顶部家庭切换、长按重命名和意见反馈说明。
+- 部署：commit `907c451` bundle 上传服务器；服务器新目录 `npm ci` + `npm run build` 成功；备份切换后 `home-inventory-app.service` 为 `active`，服务器当前 commit 为 `907c451 chore: finalize 0.5.24 feedback release`。
+- APK 托管：`scripts/upload-apk.ps1` 构建并上传 0.5.24 / code 30 APK（20,180,415 字节）；重启服务后 `https://homestorag.xyz/apk/version.json` 返回 `versionName=0.5.24`、`versionCode=30`、`size=20180415`，APK URL 返回 HTTP 200 且 `Content-Length: 20180415`。
+- 线上 smoke：`https://homestorag.xyz/login` 返回 HTTP 200；未登录 `POST https://homestorag.xyz/api/feedback` 返回 401 `{"ok":false,"message":"Authentication required"}`；服务端未接收匿名反馈。
+- 待办：真机验收家庭切换、长按重命名、设置菜单和反馈邮件；Web/Android 登录后真实提交一封反馈邮件验证到 QQ 邮箱。
