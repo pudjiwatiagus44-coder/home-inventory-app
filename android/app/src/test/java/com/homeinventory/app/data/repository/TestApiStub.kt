@@ -23,6 +23,7 @@ import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
 import com.homeinventory.app.data.remote.MobileSyncResponse
+import com.homeinventory.app.data.remote.PhotoUploadResponseDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
@@ -107,6 +108,30 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun itemPhoto(itemId: String): Response<ResponseBody> =
         Response.success("not-a-real-jpeg".toResponseBody("image/jpeg".toMediaType()))
+
+    override suspend fun uploadAreaPhoto(
+        areaId: String,
+        file: MultipartBody.Part,
+    ): Response<ApiEnvelope<PhotoUploadResponseDto>> =
+        Response.success(ApiEnvelope(ok = true, data = PhotoUploadResponseDto(photoKey = "area_1.jpg")))
+
+    override suspend fun areaPhoto(areaId: String): Response<ResponseBody> =
+        Response.success("not-a-real-jpeg".toResponseBody("image/jpeg".toMediaType()))
+
+    override suspend fun deleteAreaPhoto(areaId: String): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun uploadLocationPhoto(
+        locationId: String,
+        file: MultipartBody.Part,
+    ): Response<ApiEnvelope<PhotoUploadResponseDto>> =
+        Response.success(ApiEnvelope(ok = true, data = PhotoUploadResponseDto(photoKey = "location_1.jpg")))
+
+    override suspend fun locationPhoto(locationId: String): Response<ResponseBody> =
+        Response.success("not-a-real-jpeg".toResponseBody("image/jpeg".toMediaType()))
+
+    override suspend fun deleteLocationPhoto(locationId: String): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
 
     override suspend fun previewImport(file: MultipartBody.Part): Response<ApiEnvelope<ImportPreviewDto>> =
         Response.success(ApiEnvelope(ok = true, data = ImportPreviewDto()))

@@ -75,10 +75,24 @@ class InventoryRepository(
             val areaIds = locations.associate { it.id to it.areaId }
             InventorySnapshot(
                 areas = areas.map {
-                    InventorySnapshot.AreaView(it.id, it.name, it.color, it.serverUpdatedAt, it.syncStatus)
+                    InventorySnapshot.AreaView(
+                        id = it.id,
+                        name = it.name,
+                        color = it.color,
+                        photoKey = it.photoKey,
+                        serverUpdatedAt = it.serverUpdatedAt,
+                        syncStatus = it.syncStatus,
+                    )
                 },
                 locations = locations.map {
-                    InventorySnapshot.LocationView(it.id, it.name, it.areaId, it.serverUpdatedAt, it.syncStatus)
+                    InventorySnapshot.LocationView(
+                        id = it.id,
+                        name = it.name,
+                        areaId = it.areaId,
+                        photoKey = it.photoKey,
+                        serverUpdatedAt = it.serverUpdatedAt,
+                        syncStatus = it.syncStatus,
+                    )
                 },
                 items = items.map {
                     InventorySnapshot.ItemView(
@@ -396,6 +410,110 @@ class InventoryRepository(
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             ?: return Result.failure(IllegalStateException("图片数据无效"))
         return Result.success(bitmap)
+    }
+
+    suspend fun uploadAreaPhoto(areaId: String, jpegBytes: ByteArray): Result<String> {
+        val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
+        val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+        val response = try {
+            api.uploadAreaPhoto(areaId, part)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+        if (!response.isSuccessful || envelope?.ok != true || envelope.data?.photoKey == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "上传区域照片失败",
+                ),
+            )
+        }
+        val photoKey = envelope.data.photoKey
+        refreshSnapshot()
+        return Result.success(photoKey)
+    }
+
+    suspend fun getAreaPhoto(areaId: String): Result<Bitmap> {
+        val response = try {
+            api.areaPhoto(areaId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val bytes = response.body()?.bytes()
+        if (!response.isSuccessful || bytes == null) {
+            return Result.failure(IllegalStateException("加载区域照片失败"))
+        }
+        return decodeBitmap(bytes)
+    }
+
+    suspend fun deleteAreaPhoto(areaId: String): Result<Unit> {
+        val response = try {
+            api.deleteAreaPhoto(areaId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+        if (!response.isSuccessful || envelope?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "删除区域照片失败",
+                ),
+            )
+        }
+        refreshSnapshot()
+        return Result.success(Unit)
+    }
+
+    suspend fun uploadLocationPhoto(locationId: String, jpegBytes: ByteArray): Result<String> {
+        val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
+        val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+        val response = try {
+            api.uploadLocationPhoto(locationId, part)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+        if (!response.isSuccessful || envelope?.ok != true || envelope.data?.photoKey == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "上传位置照片失败",
+                ),
+            )
+        }
+        val photoKey = envelope.data.photoKey
+        refreshSnapshot()
+        return Result.success(photoKey)
+    }
+
+    suspend fun getLocationPhoto(locationId: String): Result<Bitmap> {
+        val response = try {
+            api.locationPhoto(locationId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val bytes = response.body()?.bytes()
+        if (!response.isSuccessful || bytes == null) {
+            return Result.failure(IllegalStateException("加载位置照片失败"))
+        }
+        return decodeBitmap(bytes)
+    }
+
+    suspend fun deleteLocationPhoto(locationId: String): Result<Unit> {
+        val response = try {
+            api.deleteLocationPhoto(locationId)
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val envelope = response.body()
+        if (!response.isSuccessful || envelope?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: envelope?.message ?: "删除位置照片失败",
+                ),
+            )
+        }
+        refreshSnapshot()
+        return Result.success(Unit)
     }
 
     suspend fun createItemOffline(
@@ -778,6 +896,7 @@ class InventoryRepository(
                     serverId = area.id,
                     name = area.name,
                     color = area.color,
+                    photoKey = area.photoKey,
                     serverUpdatedAt = area.updatedAt,
                     localUpdatedAt = now,
                     syncStatus = SyncStatus.Synced,
@@ -791,6 +910,7 @@ class InventoryRepository(
                     serverId = location.id,
                     areaId = location.areaId,
                     name = location.name,
+                    photoKey = location.photoKey,
                     serverUpdatedAt = location.updatedAt,
                     localUpdatedAt = now,
                     syncStatus = SyncStatus.Synced,
@@ -813,6 +933,12 @@ class InventoryRepository(
                 ),
             )
         }
+    }
+
+    private fun decodeBitmap(bytes: ByteArray): Result<Bitmap> {
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: return Result.failure(IllegalStateException("图片数据无效"))
+        return Result.success(bitmap)
     }
 
     private fun parseErrorMessage(errorBody: ResponseBody?): String? {
