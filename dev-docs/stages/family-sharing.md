@@ -28,13 +28,13 @@
 - `dev-docs/architecture.md`（2026-08-06 家庭成员共享架构决策）
 - `dev-docs/database-design.md`（邀请链接表、申请表、安全函数、RLS、负例设计）
 - `dev-docs/acceptance.md`（家庭成员共享验收路径与验收门槛）
-- `supabase/migrations/202607020001_initial_schema.sql`（现有 schema 基线）
+- `dev-docs/sql/mainland_initial_schema.sql`（当前自托管 schema 基线）
 
 ## 当前状态
 
 - 2026-08-06 用户确认将家庭成员共享纳入当前范围，邀请方式为“微信链接 + 对方自主申请 + 房主批准”，链接落地页含 Android 内测 APK 下载入口。
 - 产品、架构、数据库、验收真源已更新；本实施计划已建立。
-- 2026-08-06 已进入实施：用户确认实施目标改为自托管部署（`homestorag.xyz`），Supabase 不作为实施目标。已完成 `supabase/migrations/202608060001_family_sharing.sql`（Supabase 历史参考）、自托管 SQL（`dev-docs/sql/family_sharing_self_hosted.sql`）、服务端 family repository/service、family API routes、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器。
+- 2026-08-06 已进入实施：用户确认实施目标改为自托管部署（`homestorag.xyz`），Supabase 不作为实施目标。已完成自托管 SQL（`dev-docs/sql/family_sharing_self_hosted.sql`）、服务端 family repository/service、family API routes、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器；历史 Supabase migration 已于 2026-08-11 归档，默认不再读取。
 - 2026-08-10 修复 Android 共享成员看不到主账户内容：根因是 Android snapshot 未携带所选 householdId，默认只读自己的空家庭；已实现 Android 当前家庭切换器（点顶部家庭名称切换、记住上次选择、snapshot 携带 householdId）。
 - Android 内测版提供房主邀请分享能力（App 内生成邀请链接并通过系统分享/复制发给家人），申请与审批以 Web 端为主；APK 下载地址为部署配置项。
 
@@ -109,7 +109,7 @@
 
 | 子阶段 | 目标 | 主要文件 | 完成标准 | 验证方式 |
 | --- | --- | --- | --- | --- |
-| 1. 家庭共享 migration | 新建邀请链接表、申请表、四个安全函数、成员管理 RLS | `supabase/migrations/202608060001_family_sharing.sql` | 与 `database-design.md` 一致；Supabase 执行成功 | migration diff + Supabase SQL Editor |
+| 1. 家庭共享 migration | 新建邀请链接表、申请表、成员管理服务端权限 | `dev-docs/sql/family_sharing_self_hosted.sql` | 与 `database-design.md` 一致；自托管 PostgreSQL 执行成功 | migration diff + PostgreSQL 验证 |
 | 2. 房主邀请与申请管理 | 家庭设置：生成/复制/作废链接、查看申请、批准/拒绝、移除成员 | `src/features/family/` 新增文件、`src/app/app/page.tsx` | owner 可完成全流程；member 看不到管理入口且数据库拒绝 | 浏览器 + RLS 负例 |
 | 3. 链接落地页 | `/join/<token>`：展示家庭名称、App 下载、申请加入；未登录先注册/登录 | 新增 `src/app/join/[token]/page.tsx`、登录回跳 | 有效链接可申请；无效/过期链接明确提示；App 下载入口可用 | 浏览器 A/B 验证 |
 | 4. 当前家庭切换 | 登录后列出全部 household，切换当前家庭 | `household-bootstrap.ts`、`AppDashboard.tsx`、dashboard 数据读取 | 切换家庭只影响当前操作上下文；不越权 | 浏览器 A/B 家庭切换验证 |
@@ -180,7 +180,7 @@
 
 | 类型 | 路径 | 说明 |
 | --- | --- | --- |
-| migration | `supabase/migrations/202608060001_family_sharing.sql` | 新建邀请链接表、申请表、安全函数、RLS |
+| migration | `dev-docs/sql/family_sharing_self_hosted.sql` | 新建邀请链接表、申请表和服务端权限所需字段 |
 | 链接落地页 | `src/app/join/[token]/page.tsx`（新增） | 家庭信息、申请加入、App 下载 |
 | 家庭数据 | `src/features/inventory/household-bootstrap.ts` | 返回全部 household 与当前家庭 |
 | 业务组件 | `src/features/inventory/AppDashboard.tsx` | 家庭设置入口、当前家庭切换器 |

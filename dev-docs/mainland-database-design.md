@@ -2,26 +2,17 @@
 
 ## 目标
 
-这是中国大陆正式版 PostgreSQL schema 草案。它用于后续自有邮箱密码登录、服务端权限校验和阿里云部署准备，不影响当前 Vercel + Supabase 临时测试版。
+这是当前阿里云自托管 PostgreSQL schema 草案。它用于自有邮箱密码登录、服务端权限校验和阿里云部署。
 
 对应 SQL 草案见：
 
 - `dev-docs/sql/mainland_initial_schema.sql`
 
-## 与当前 Supabase 版的差异
-
-当前临时版：
-
-- 用户身份来自 Supabase `auth.users`。
-- 数据隔离主要依赖 Supabase RLS。
-- `items.created_by` 默认通过 `auth.uid()` 写入。
-
-国内正式版草案：
+## 当前自托管草案
 
 - 新增自有 `users` 表。
 - 新增 `auth_sessions` 表。
 - `profiles`、`households`、`household_members`、`items.created_by` 改为引用自有 `users.id`。
-- 不使用 Supabase RLS。
 - 用户隔离由 Next.js 服务端权限校验 + PostgreSQL 外键/组合外键共同保证。
 
 ## 表清单
@@ -41,7 +32,7 @@
 - `locations`
 - `items`
 
-2026-08-06 已确认家庭成员共享纳入产品范围（先做 Supabase 路线）：正式版迁移时，`household_invitations`（邀请链接）、`household_join_requests`（加入申请）、member 角色和“当前家庭”模型同步承载，具体设计以 `dev-docs/database-design.md` 为准。
+2026-08-06 已确认家庭成员共享纳入产品范围：自托管版本通过 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）、member/readonly 角色和“当前家庭”模型承载，具体设计以 `dev-docs/database-design.md` 为准。
 
 ## 关键权限边界
 

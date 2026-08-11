@@ -2,24 +2,19 @@
 
 ## 结论
 
-当前 MVP 技术主线：`Next.js + TypeScript + Supabase + PWA`。
+当前唯一技术主线：`Next.js + TypeScript + 阿里云自托管 + 自有 PostgreSQL + 自有认证/服务端权限层 + PWA + Android 内测 APK`。
 
-中国大陆正式版目标主线：`Next.js + TypeScript + 国内云 PostgreSQL + 自有认证/权限层 + PWA`。
-
-MVP 路线已经由用户确认并完成基础实现。2026-07-05 用户进一步确认要直接面向中国大陆用户使用，因此正式版需要从 Supabase 托管路线迁移到中国大陆部署路线。除非用户明确批准并更新本文件，否则后续不得切换到 Firebase、原生 App 先行、纯 Vite 前端或本地 Python/JSON 后端。
+Supabase 曾作为临时测试路线使用，已于 2026-08-11 按用户指令归档，不再作为实施、测试、部署、调试、权限验证或代码定位目标。除非用户明确批准并更新本文件，否则后续不得重新启用 Supabase、切换到 Firebase、纯 Vite 前端或本地 Python/JSON 后端。
 
 ## 已审计证据
 
-- 用户确认第一版按推荐路线：Web/PWA、邮箱密码登录、单账号私有清单、不上传照片、Supabase 路线。
+- 用户确认当前路线：Web/PWA、Android 内测 APK、邮箱密码登录、家庭共享、自托管 PostgreSQL、自有认证和服务端权限校验。
 - `dev-docs/project-brief.md`：MVP 是注册登录后管理自己的家庭物品。
 - `dev-docs/architecture.md`：数据模型围绕 users、households、areas、locations、items。
 - `dev-docs/acceptance.md`：必须验证用户 A/B 数据隔离。
 - 官方资料：
-  - Supabase Auth: https://supabase.com/docs/guides/auth
-  - Supabase Row Level Security: https://supabase.com/docs/guides/database/postgres/row-level-security
-  - Supabase Next.js quickstart: https://supabase.com/docs/guides/getting-started/quickstarts/nextjs
   - Next.js docs: https://nextjs.org/docs
-  - `dev-docs/deployment-route.md`：中国大陆正式版路线已确认，Vercel + Supabase 仅保留为临时测试版。
+  - `dev-docs/deployment-route.md`：阿里云自托管路线已确认，Supabase 临时测试路线已归档。
 
 ## 推荐产品形态
 
@@ -29,9 +24,9 @@ MVP 路线已经由用户确认并完成基础实现。2026-07-05 用户进一�
 
 | 需求 | 平台分类 | Web/PWA 能拥有 | 需要其他平台的部分 | 结论 |
 | --- | --- | --- | --- | --- |
-| 注册登录 | Browser web + managed auth | 登录页、session UI、错误提示 | Supabase Auth | Web/PWA 足够 |
-| 私有物品清单 | Browser web + database | 表单、列表、搜索、状态 | Supabase Postgres + RLS | Web/PWA 足够 |
-| 用户数据隔离 | Database security | UI 隐藏非授权入口 | RLS 必须兜底 | 必须用 RLS 验证 |
+| 注册登录 | Browser web + self-hosted API | 登录页、session UI、错误提示 | 自有认证服务 | Web/PWA 足够 |
+| 私有物品清单 | Browser web + database | 表单、列表、搜索、状态 | 自有 PostgreSQL + 服务端权限校验 | Web/PWA 足够 |
+| 用户数据隔离 | Server/database security | UI 隐藏非授权入口 | 服务端权限必须兜底 | 必须做跨用户/跨家庭负例验证 |
 | PWA 安装体验 | Browser web | manifest、service worker、响应式 UI | 无 | 第一版可做 |
 | 照片、扫码、推送 | Mobile/native or browser APIs | 第一版不做 | 后续再评估 | 非 MVP |
 
@@ -43,7 +38,6 @@ MVP 路线已经由用户确认并完成基础实现。2026-07-05 用户进一�
 
 - Next.js 约定清晰，适合 AI 协助维护。
 - TypeScript 能约束数据对象，减少字段漂移。
-- Supabase 官方提供 Next.js quickstart 和 SSR/Auth 相关资料。
 - 未来如果需要登录回调、导入任务、服务端校验、支付 webhook 或通知任务，Next.js 比纯静态前端更有余量。
 
 不选 Vite React 作为主线：
@@ -73,35 +67,30 @@ MVP 路线已经由用户确认并完成基础实现。2026-07-05 用户进一�
 
 ## 后端和数据选择
 
-MVP 选择：Supabase Auth + Supabase Postgres + Row Level Security。
+当前选择：自有邮箱密码认证 + 自有 PostgreSQL + 服务端权限校验。
 
 理由：
 
-- Supabase Auth 支持邮箱密码等认证方式。
-- Supabase Auth 可以和数据库 RLS 结合，让用户 token 参与数据库行级访问控制。
+- 自有认证已适配阿里云自托管环境，避免中国大陆访问不稳定。
+- 服务端根据 session 推导用户和家庭，所有写入 API 先做权限校验。
 - 本项目数据关系清晰，Postgres 比文档数据库更自然。
-- 第一版可以不自建完整后端，降低维护成本。
+- Next.js API routes 承载认证、库存、家庭共享、反馈和识别等服务端边界。
 
-RLS 是安全硬边界：
+权限安全硬边界：
 
-- public schema 中暴露给前端访问的用户数据表必须启用 RLS。
-- 没有 RLS 策略和用户 A/B 负例验证前，不能声明 MVP 安全可用。
-- service role key 不能出现在浏览器代码、公开仓库或 `.env.example` 的真实值里。
+- 前端不得直连 PostgreSQL。
+- 没有服务端权限校验和用户 A/B / 家庭 A/B 负例验证前，不能声明 MVP 安全可用。
+- 数据库密码、session secret、SMTP 授权码、AI key 不能出现在浏览器代码、公开仓库或 `.env.example` 的真实值里。
 
-中国大陆正式版选择：国内云 PostgreSQL + 自有认证/权限层。
+Supabase 归档说明：
 
-原因：
-
-- Supabase 托管版没有中国大陆正式部署区域，不适合作为面向中国大陆用户的长期生产后端。
-- 当前应用的大部分业务数据模型可以迁移到标准 PostgreSQL。
-- 自有认证/权限层需要重新实现“邮箱 + 密码登录、session、用户只能访问自己数据”的规则。
-- Supabase RLS 的安全思想要保留，但正式版不能假设 Supabase RLS 继续存在。
+- 历史 migration 已移到 `dev-docs/archive/2026-08-11-supabase-history/`。
+- 默认搜索、规划、调试和实现不要进入 `dev-docs/archive/`。
+- 只有用户明确要求查看历史 Supabase 资料时，才允许读取归档。
 
 ## 数据库选择
 
-MVP 选择：Supabase Postgres。
-
-中国大陆正式版选择：国内云 PostgreSQL。
+当前选择：自托管 PostgreSQL。
 
 第一版核心表：
 
@@ -121,15 +110,13 @@ MVP 选择：Supabase Postgres。
 
 托管建议：
 
-- 临时测试版前端：Vercel 免费层。
-- 临时测试版数据和认证：Supabase 免费层继续承载 Auth、Postgres 和 RLS。
-- 中国大陆正式版前端/后端：国内云服务器或国内云应用托管。
-- 中国大陆正式版数据和认证：国内云 PostgreSQL + 自有认证/权限层。
+- 当前前端/后端：阿里云轻量应用服务器。
+- 当前数据和认证：自有 PostgreSQL + 自有认证/权限层。
 - 本地开发：`npm install`、`npm run dev`、`.env.local`。
 
 部署路线真源：`dev-docs/deployment-route.md`。
 
-初始在线测试目标是让用户在电脑关机、换网络、不在同一路由器下仍可登录使用。中国大陆正式版目标是让中国大陆用户稳定访问，因此需要新的部署和后端迁移阶段。
+当前在线测试目标是让用户通过 `https://homestorag.xyz` 稳定使用阿里云自托管版本。
 
 仍优先保持单一 Node.js / Next.js 运行时。中国大陆正式版需要增加服务端认证、数据库访问和权限校验，但不默认引入 Python、Go、Java 或第二套后端运行时。
 
@@ -141,11 +128,11 @@ MVP 选择：Supabase Postgres。
 
 ### Vite React + Supabase
 
-可行，但不作为主线。它更轻，但缺少 Next.js 的服务端余量。考虑未来可能出现导入、邀请、通知、支付 webhook，Next.js 更稳。
+已归档，不作为当前主线。它更轻，但缺少 Next.js 的服务端余量；Supabase 在本项目中也不再作为当前后端目标。
 
 ### 自建后端 + PostgreSQL
 
-中国大陆正式版选择该方向，但实现必须分阶段推进。原因是正式版需要国内云部署、ICP备案、数据库备份、日志监控和不依赖 Supabase 的认证权限层。不能在未完成迁移设计前直接替换当前 Supabase 路线。
+当前已选择该方向。后续新增能力必须复用现有 Next.js API、PostgreSQL repository/service 和服务端权限边界。
 
 ### 原生 App 先行
 
@@ -160,13 +147,13 @@ MVP 选择：Supabase Postgres。
 需要重新评估技术路线的情况：
 
 - 第一版必须加入原生扫码、后台推送或离线强能力。
-- Supabase 成本、区域、合规或可用性不能满足目标用户。
-- 需要复杂服务端任务、队列、定时任务或高级审计，Next.js + Supabase 无法清晰承载。
+- 阿里云服务器、PostgreSQL、备案、成本、可用性或合规不能满足目标用户。
+- 需要复杂服务端任务、队列、定时任务或高级审计，现有 Next.js 自托管架构无法清晰承载。
 - 需要团队协作开发且现有结构无法维护。
 
 ## 下一步
 
-下一步先写中国大陆正式版迁移实施计划，覆盖云平台选择、域名备案、国内数据库、自有认证、权限校验、数据迁移、部署脚本、备份恢复和发布验收。不要在该计划确认前直接改认证或数据库代码。
+下一步继续补齐阿里云自托管版本的发布、备份恢复、监控日志、隐私政策和真实验收。不要再以 Supabase 路线规划新功能。
 
 ## 2026-08-04 Android 原生内测版例外
 

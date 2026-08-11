@@ -1,5 +1,13 @@
 # Acceptance Truth
 
+## 2026-08-11 Supabase 历史路线归档证据
+
+- 用户确认：Supabase 已经不用了，现在只用阿里云服务器自托管版本。
+- 归档动作：历史 `supabase/` 目录已移动到 `dev-docs/archive/2026-08-11-supabase-history/`。
+- 搜索保护：新增 `.ignore`，默认 `rg` 不进入 `dev-docs/archive/`；`AGENTS.md` 明确要求默认搜索、阅读、计划、实现、调试不要进入归档目录。
+- 真源同步：`AGENTS.md`、`README.md`、`dev-docs/README.md`、`project-brief.md`、`technical-selection.md`、`architecture.md`、`deployment-route.md`、`acceptance.md` 已同步为“只使用阿里云自托管版本；Supabase 仅为历史归档，非当前目标”。
+- 后续规则：新增认证、权限、数据库、部署、反馈、识别、Android 能力时，默认只定位自有 PostgreSQL、Next.js API/service/repository、阿里云部署和 Android 客户端；不得把 Supabase migration、RLS、Auth 或 SDK 当作当前实现依据。
+
 ## 2026-07-27 HTTPS 与域名上线证据
 
 - 背景：用户确认已持有阿里云轻量应用服务器，SSL 证书和 Nginx 配置已在上一阶段完成；本轮继续开放 443 端口、同步最新代码、验证 HTTPS 域名访问、补齐 ICP 备案号展示，并把所有处理结果写回真源文档。
@@ -516,9 +524,9 @@
 - `/app` UI 证据：已接入 `locations` 读取、新增位置表单、新增物品表单、物品位置展示；`npm run lint` 和 `npm run build` 通过。
 - 浏览器未登录证据：Chrome headless 访问 `http://127.0.0.1:3000/app`，页面标题为 `Home Inventory`，显示“请先登录”，无 console error。
 - 历史未验证项：当时真实登录后新增位置、新增物品、刷新后仍存在、用户 A/B 权限负例尚未验证；后续已由新增物品反馈和 2026-07-04 A/B 权限负例补证。
-- RLS 报错排查：截图显示新增 `locations` 时触发 `new row violates row-level security policy for table "locations"`；已新增修复 migration `supabase/migrations/202607030001_repair_default_household_rls.sql`，用于幂等修复默认 household、owner membership、默认区域、locations RLS、items RLS 和 `items_set_created_by` trigger。后续又补充了二次 RLS 修复 migration。
+- 历史 RLS 报错排查：当时截图显示新增 `locations` 时触发 `new row violates row-level security policy for table "locations"`；对应历史修复 migration 已随 Supabase 临时路线归档，默认不再读取。
 - RLS 报错继续排查：截图显示新增 `items` 时触发 `new row violates row-level security policy for table "items"`；前端新增物品 payload 已显式传 `created_by = 当前登录用户 id`，同时 repair migration 已补齐 items insert policy 和 created_by trigger。
-- RLS 二次修复：新增 `supabase/migrations/202607030002_reset_inventory_rls_policies.sql`，用于清理真实 Supabase 项目里可能残留的 inventory 表旧策略，并重新创建 `areas`、`locations`、`items` 的 member-only RLS。后续用户反馈执行二次修复后新增物品成功。
+- 历史 RLS 二次修复：当时用于清理真实 Supabase 项目里可能残留的 inventory 表旧策略，并重新创建 `areas`、`locations`、`items` 的 member-only RLS；后续用户反馈执行二次修复后新增物品成功。该资料已归档，非当前实施目标。
 - 用户侧验收：执行 RLS 二次修复后，用户反馈“新增茶叶成功了”。说明当前登录用户新增 item 的真实 Supabase 写入路径已跑通。仍未验证用户 A/B 权限负例。
 - 2026-07-03 区域/位置/物品管理闭环代码证据：新增区域 CRUD、位置归属区域、物品编辑/删除、按区域/位置筛选、搜索和基础过期状态；`npm test` 通过 7 个测试文件 / 39 个测试，`npm run lint` 通过，`npm run build` 通过。
 - 2026-07-03 `/app` 未登录浏览器验证：本地服务 `http://127.0.0.1:3000` 可访问；打开 `http://127.0.0.1:3000/app`，页面标题为 `Home Inventory`，显示“请先登录”和“去登录”，无页面 console error。
@@ -632,7 +640,7 @@
 
 ## 2026-08-06 家庭成员共享实施证据
 
-- migration 证据：`supabase/migrations/202608060001_family_sharing.sql` 已编写，包含 `household_invitations`、`household_join_requests`、部分唯一索引、六个 security definer 安全函数（查家庭/提交申请/批准/拒绝/成员列表/申请列表）和 RLS 策略，与 `dev-docs/database-design.md` 一致；尚未在真实 Supabase 项目执行。
+- 历史 migration 证据：家庭共享的旧 Supabase/RLS migration 曾编写完成；该资料已随 Supabase 临时路线归档，当前实施目标改为 `dev-docs/sql/family_sharing_self_hosted.sql` 与服务端权限校验。
 - 数据层证据：`src/features/family/family-data.ts`（URL-safe token 生成、邀请 URL、30 天有效期、链接状态、token 校验）与 `src/features/family/family-actions.ts`（生成/作废链接、申请、批准/拒绝、移除成员、成员/申请/家庭列表）已实现。
 - 落地页证据：新增 `/join/<token>` 页面，含登录/注册（Supabase 测试路线）、申请加入、Android 内测 APK 下载入口（`NEXT_PUBLIC_APK_DOWNLOAD_URL`）。
 - UI 证据：`FamilySettings.tsx` 家庭设置面板（生成/复制/作废邀请链接、批准/拒绝申请、成员列表与移除）和当前家庭切换器已接入 `/app` 的 Supabase 测试路线；自托管路线的“设置”按钮提示该能力尚未上线。
@@ -994,3 +1002,12 @@
 - 真源同步：`dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/stages/family-sharing.md`、`dev-docs/user-manual.md` 已更新 Android 当前家庭切换/查看共享家庭清单。
 - 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.23 / code 29 APK（20,164,031 字节）到服务器 `/opt/home-inventory-app/public/apk/`；systemd 重启后服务 active；`https://homestorag.xyz/apk/version.json` 显示 v0.5.23/code 29/size 20,164,031，APK URL 返回 200。
 - 待办：真机验收家庭成员切换到共享家庭后能看到房主清单；Android 写接口与离线同步跨家庭的 `householdId` 支持仍属下一轮范围，本轮不声明共享家庭写入已完整支持。
+
+## 2026-08-11 意见反馈与 Android 顶部栏调整证据
+
+- 服务端：新增 `POST /api/feedback`（登录态、1-2000 字校验、同一账号 1 小时 3 条限频）；SMTP mailer 增加 `sendFeedbackEmail`，反馈发往 `736259416@qq.com`，正文附带登录邮箱、Web/Android 来源、App 版本和反馈时间，不落库。
+- Android：帮助弹窗新增反馈表单；顶部栏新增家庭切换下拉图标（列出全部已加入家庭）和“设置”菜单（备份、导入、邀请、退出）；草稿箱、帮助保留在顶部；长按当前家庭名称可重命名（仅房主，服务端校验 owner）。
+- Web：顶部栏新增“帮助”入口，打开帮助弹窗并提交反馈到同一 API。
+- 家庭重命名：`PATCH /api/family/households` 新增，仅房主可重命名；`family-repository`/`family-service`/`family-client`/Android API 与 UI 已接入。
+- 本地验证：Android `testDebugUnitTest` 全通过；Web 排除本机 PostgreSQL 集成测试后全量通过；`npx eslint src` 通过；`npm run build` 通过；`assembleDebug` 通过。
+- 待办：发布 0.5.24 后真机验收家庭切换、长按重命名、设置菜单和反馈邮件；Web 帮助弹窗真实发送一封反馈邮件验证到 QQ 邮箱。

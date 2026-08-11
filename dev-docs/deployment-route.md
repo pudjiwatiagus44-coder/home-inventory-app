@@ -3,7 +3,7 @@
 ## 决策状态
 
 - 决策日期：2026-07-04。
-- 初始决策：第一版先使用 Vercel 免费层 + Supabase 免费层做在线测试。
+- 初始决策：第一版曾计划使用 Vercel 免费层 + Supabase 免费层做在线测试。
 - 新决策日期：2026-07-05。
 - 用户确认：目标转为直接面向中国大陆用户正式使用。
 - 云平台决策日期：2026-07-06。
@@ -13,32 +13,15 @@
 - 用户确认：`homestorag.xyz` 域名实名认证已通过。
 - 用户已购买阿里云轻量应用服务器：中国内地地域 `华南1（深圳）`，Ubuntu 24.04，到期时间 2027-07-06。
 - 阿里云测试环境实例：实例名称 `Ubuntu-fjwh`，实例 ID `806c7092e1e2481c8a6b0ed3c7fcb0be`，公网 IP `120.24.93.226`，私有 IP `172.17.13.25`，当前运行中，DDoS 状态正常；已创建并绑定 SSH 密钥对 `serverkey`，本机私钥文件存在，SSH 登录已通过。
-- 当前结论：中国大陆正式版走阿里云个人备案路线；Vercel + Supabase 仅保留为临时测试版，不作为中国大陆正式生产方案。
+- 当前结论：只使用阿里云个人备案自托管路线；Supabase 临时测试路线已于 2026-08-11 归档，不再作为实施、测试、部署、调试或权限验证目标。
 
-## 当前临时测试路线
+## Supabase 历史路线归档
 
-```text
-GitHub repository
-  -> Vercel
-  -> Next.js Web/PWA
-  -> Supabase Auth + Supabase Postgres + RLS
-```
+- 历史 migration 与 Supabase 资料已移入 `dev-docs/archive/2026-08-11-supabase-history/`。
+- 默认搜索、计划、实现和调试不得进入 `dev-docs/archive/`。
+- 只有用户明确要求查看历史 Supabase 资料时，才允许读取归档。
 
-- 前端托管：Vercel。
-- 数据库：Supabase Postgres。
-- 登录：Supabase Auth，邮箱 + 密码。
-- 权限：Supabase RLS 继续作为用户数据隔离硬边界。
-- 域名：第一步可先使用 Vercel 自动生成域名；自定义域名后续再评估。
-
-## 临时测试路线适用边界
-
-- 当前代码已经是 Next.js + TypeScript。
-- 当前数据和认证已经围绕 Supabase 设计。
-- 免费层足够验证“电脑关机后也能在线访问”的需求。
-- 不需要用户维护 VPS、HTTPS、数据库进程、安全补丁和备份脚本。
-- 仅适合用户本人、少量熟人或功能演示，不承诺中国大陆访问速度和稳定性。
-
-## 中国大陆正式版推荐路线
+## 当前阿里云自托管路线
 
 ```text
 中国大陆域名
@@ -54,13 +37,12 @@ GitHub repository
 - 备案主体：个人。
 - 正式版域名：`homestorag.xyz`。
 - 第一阶段云资源：阿里云轻量应用服务器，地域 `华南1（深圳）`，系统 Ubuntu 24.04。
-- 推荐后续数据库：国内托管 PostgreSQL。
-- 推荐数据库：国内云 PostgreSQL，正式版不再依赖 Supabase 托管数据库。
-- 推荐登录：保留邮箱 + 密码产品形态，但实现方式需要从 Supabase Auth 迁移为自有认证或国内可用认证服务。
-- 推荐权限：继续保持“后端/数据库兜底，不能只靠前端隐藏按钮”的原则；Supabase RLS 不能直接照搬，必须重新设计等效权限层。
+- 当前数据库：自有 PostgreSQL。
+- 当前登录：自有邮箱 + 密码认证。
+- 当前权限：继续保持“后端/数据库兜底，不能只靠前端隐藏按钮”的原则；所有家庭和库存访问必须由服务端校验。
 - 推荐域名：使用中国大陆可备案域名。
 
-## 为什么中国大陆正式版不能继续用当前 Vercel + Supabase 主线
+## 为什么不再使用 Supabase
 
 - Vercel 和 Supabase 托管区域不在中国大陆，访问速度和可用性不可控。
 - 中国大陆正式网站通常需要域名备案和平台接入审核流程。
@@ -71,15 +53,15 @@ GitHub repository
 
 - 不把当前 Vercel preview URL 当成中国大陆正式生产地址。
 - 不在未备案域名或未配置生产安全边界前公开推广给陌生用户。
-- 不把 Supabase service role key、数据库密码、私钥写入仓库或前端环境变量。
-- 不在未设计新认证、权限和数据库迁移前直接切断 Supabase。
+- 不把数据库密码、私钥、session secret、SMTP 授权码或 AI key 写入仓库或前端环境变量。
+- 不重新启用 Supabase，除非用户明确要求并先更新真源。
 - 不接入支付、照片上传、短信登录或扫码识别。
 - 家庭成员共享已纳入产品范围（2026-08-06 确认）；正式版迁移自有认证/权限层时同步承载共享权限模型。
 
 ## 暂不选择的路线
 
 - 暂不购买海外 VPS 作为中国正式版：访问稳定性和合规路径不适合中国大陆用户。
-- 暂不迁移 Firebase：当前 Supabase schema、RLS 和代码路径已经成型，切换会增加无关风险。
+- 暂不迁移 Firebase：当前自托管 PostgreSQL、认证和服务端权限路径已经成型，切换会增加无关风险。
 - 暂不做原生 App 发布：第一版仍然是 Web/PWA。
 
 ## 免费层边界
@@ -87,7 +69,6 @@ GitHub repository
 - 免费层用于个人使用、MVP 验证和小规模试用。
 - 免费层不能承诺商业级 SLA、长期备份、稳定额度或大量用户访问。
 - 如果开始给真实外部用户长期使用，必须重新评估付费层、备份、监控、隐私政策和恢复方案。
-- Supabase 免费层的备份能力不能当成完整生产备份策略；重要数据上线前需要另行设计导出或升级方案。
 - 中国大陆正式版不以免费层为目标，需要按云资源、域名、备案、数据库和监控成本重新预算。
 
 ## 阿里云个人备案必备前置事项
@@ -104,21 +85,15 @@ GitHub repository
 
 ## 环境变量和密钥
 
-Vercel 只配置 public client 所需变量：
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-
 禁止配置或提交：
 
-- Supabase service role key。
 - 数据库密码。
 - 私钥。
 - 真实用户数据导出文件。
 
 `.env.local` 只用于本地开发，不能提交到 Git。
 
-中国大陆正式版需要重新定义 `.env.example`，至少包括：
+`.env.example` 至少包括：
 
 - 应用公开 URL。
 - 数据库连接配置。
@@ -128,27 +103,16 @@ Vercel 只配置 public client 所需变量：
 
 真实值只能放在云平台密钥管理或服务器环境变量中，不能提交到 Git。
 
-## Supabase Auth 配置
-
-拿到 Vercel 域名后，必须在 Supabase Auth URL 配置中更新：
-
-- Site URL：Vercel 生产域名。
-- Redirect URLs：Vercel 生产域名、必要的 preview 域名、本地开发地址。
-
-如果后续使用自定义域名，需要同步更新 Supabase Auth 回跳配置。
-
 ## 发布前检查清单
 
 - `npm test` 通过。
 - `npm run lint` 通过。
 - `npm run build` 通过。
 - Git 工作区没有误提交 `.env.local`、密钥、日志或真实用户数据。
-- Vercel 环境变量已配置。
-- Supabase Auth Site URL 和 Redirect URLs 已配置。
 - 生产域名访问 `/login` 和 `/app` 正常。
 - 未登录访问 `/app` 会被要求登录。
 - 登录后可以读取当前用户自己的数据。
-- 用户 A/B 数据隔离仍然通过真实 Supabase 负例验证。
+- 用户 A/B 和家庭 A/B 数据隔离通过自托管服务端/API 负例验证。
 
 ## 中国大陆正式版发布前检查清单
 
@@ -156,7 +120,6 @@ Vercel 只配置 public client 所需变量：
 - 已选择云平台、地域、服务器形态和数据库形态。
 - 已完成阿里云账号个人实名认证、域名购买、域名实名和 ICP 备案。
 - 已完成公安联网备案计划或上线后备案责任人确认。
-- 已完成 Supabase 到国内后端/数据库的迁移设计。
 - 已完成自有认证和权限设计。
 - 已完成数据库 migration、备份、恢复、回滚方案。
 - 已完成生产环境变量和密钥管理方案。
@@ -167,9 +130,9 @@ Vercel 只配置 public client 所需变量：
 
 - 前端：使用 Vercel 上一个成功 deployment 回滚。
 - 数据库：第一版不在部署时自动执行破坏性 migration。
-- 配置：若登录回跳错误，优先恢复 Supabase Auth URL 配置到上一个可用值。
+- 配置：若登录或 session 异常，优先恢复服务器 `/etc/home-inventory-app/app.env` 到上一个可用备份。
 
-中国大陆正式版回滚方案需要在迁移实施阶段单独设计，不能复用 Vercel/Supabase 的回滚方案。
+阿里云自托管回滚方案以 systemd 服务、部署目录备份、数据库 migration 回滚/备份恢复为准，不能复用 Vercel/Supabase 的回滚方案。
 
 ## HTTPS 与域名接入状态
 
@@ -194,7 +157,6 @@ Vercel 只配置 public client 所需变量：
 
 ## 当前未验证项
 
-- Vercel 项目已创建并接入 GitHub；当前仍存在 Vercel 访问保护和中国大陆访问稳定性问题。
 - 阿里云测试 URL `http://120.24.93.226` 已完成公网 API smoke：注册、dashboard、区域/位置/物品创建成功；完整浏览器点击验收尚未完成。
 - 中国大陆云平台已选择：阿里云。
 - 备案主体已选择：个人。
@@ -205,4 +167,4 @@ Vercel 只配置 public client 所需变量：
 - ICP 备案号已由用户提供：`粤ICP备2026094933号`；已在页面底部展示并链接到工信部备案查询站 `https://beian.miit.gov.cn/`。
 - 公安联网备案：用户已确认已完成。
 - 国内 PostgreSQL 和自有认证测试路线已在阿里云测试环境跑通；HTTPS、域名、ICP 备案号展示、公安联网备案已补齐；正式生产级备份恢复、账号安全、运维策略仍需补齐。
-- Supabase 到中国大陆正式版的数据迁移尚未设计。
+- Supabase 历史路线已归档；后续未验证项只按阿里云自托管版本统计。

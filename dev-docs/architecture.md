@@ -3,20 +3,19 @@
 ## 推荐架构
 
 - 推荐产品形态：Web/PWA first，后续再评估移动 App。
-- MVP 技术路线：Next.js + TypeScript + Supabase Auth + Supabase Postgres + RLS + PWA。
-- 中国大陆正式版目标路线：Next.js + TypeScript + 国内云 PostgreSQL + 自有认证/权限层 + PWA。
-- 推荐部署形态：Vercel + Supabase 仅作为临时测试版；中国大陆正式版部署到国内云平台，部署路线真源见 `dev-docs/deployment-route.md`。
-- 为什么路线要调整：本产品面向中国大陆用户时，访问稳定性、备案、数据存储和运维要求会成为核心约束。Supabase/Vercel 适合快速 MVP，但中国大陆正式版需要国内云资源、国内数据库、备案流程和可控的服务端权限层。
+- 当前技术路线：Next.js + TypeScript + 阿里云自托管 + 自有 PostgreSQL + 自有认证/服务端权限层 + PWA + Android 内测 APK。
+- 推荐部署形态：阿里云 `homestorag.xyz` 自托管，部署路线真源见 `dev-docs/deployment-route.md`。
+- Supabase 状态：已于 2026-08-11 归档，不再作为实施、测试、部署、调试、权限验证或代码定位目标。
 
 ## 禁止路径
 
 - 禁止把当前 Python + JSON 本地服务改造成多用户公开后端。
 - 禁止在没有用户确认和真源更新时切换到 Firebase。
-- 禁止在未完成中国大陆正式版迁移计划前直接替换 Supabase 或自建后端。
+- 禁止重新启用 Supabase 作为当前实现路线，除非用户明确要求并先更新真源。
 - 禁止原生 App 先行。
-- 禁止在没有 RLS 的情况下把用户数据表暴露给前端。
-- 禁止把 service role key 暴露给浏览器或提交到 Git。
-- 禁止 mock 数据冒充真实 Supabase 功能。
+- 禁止把用户数据表或数据库连接直接暴露给前端。
+- 禁止把数据库密码、session secret、SMTP 授权码、AI key 暴露给浏览器或提交到 Git。
+- 禁止 mock 数据冒充真实功能。
 
 ## 技术路线
 
@@ -25,20 +24,20 @@
 - PWA：manifest + service worker 或框架推荐 PWA 插件，进入实现前再定具体方式。
 - UI 基础：shadcn/ui + Tailwind CSS + 项目自己的 design tokens。
 - 设计系统 owner：前端项目内的 token、基础组件和后续 `dev-docs/frontend-design.md`。
-- 后端能力：第一阶段优先使用 Supabase Auth、Postgres、RLS 和自动 API；仅在需要复杂服务端逻辑时再加入 Next.js server actions/route handlers。
-- 数据库：Supabase Postgres。
+- 后端能力：Next.js API routes + service/repository 分层，服务端根据 session 做权限校验。
+- 数据库：自有 PostgreSQL。
 - 迁移方式：SQL migration 文件，不在控制台手改后忘记回写。
-- 第三方 SDK/API：Supabase JavaScript SDK。
+- 第三方 SDK/API：当前不使用 Supabase；已确认外部服务按功能范围接入 QQ SMTP、火山引擎豆包等。
 - 技术选择真源：`dev-docs/technical-selection.md`。
 
-中国大陆正式版目标技术路线：
+当前自托管技术路线：
 
 - 前端框架：继续使用 Next.js。
 - 运行时：继续优先使用 Node.js / Next.js，避免引入第二套后端语言。
-- 数据库：迁移到国内云 PostgreSQL。
-- 登录：从 Supabase Auth 迁移为自有邮箱密码登录或国内可用认证服务。
-- 权限：从 Supabase RLS 迁移为服务端权限校验 + 数据库约束的等效边界。
-- 部署：国内云服务器或国内云应用托管。
+- 数据库：阿里云服务器上的 PostgreSQL。
+- 登录：自有邮箱密码登录。
+- 权限：服务端权限校验 + 数据库约束。
+- 部署：阿里云轻量应用服务器 + Nginx/systemd + HTTPS。
 
 ## Owner Map
 
@@ -46,23 +45,23 @@
 | --- | --- | --- | --- |
 | 产品边界 | `dev-docs/project-brief.md` | 临时代码、聊天记忆 | 文档审阅 |
 | 技术路线 | `dev-docs/technical-selection.md` | 单个组件或随手依赖 | 文档审阅 + package 检查 |
-| 前端路由 | Next.js app route | Supabase 数据库 | 本地页面访问 |
+| 前端路由 | Next.js app route | 数据库 | 本地页面访问 |
 | 设计 token | `src/styles/globals.css` 和基础组件 | 零散页面内联样式 | 截图和 CSS 检查 |
 | 业务组件 | `src/components/inventory/` | 数据库触发器 | UI 行为验证 |
-| API 合同 | Supabase schema/RLS + 客户端调用约定 | UI 文案 | API/数据库验证 |
-| 业务逻辑 | 前端 use case + 数据库约束/RLS | 纯 UI 显示层 | 正负路径测试 |
-| 数据库 schema | `supabase/migrations/` SQL | 前端本地状态 | migration diff |
-| 登录/权限 | Supabase Auth + RLS | 前端隐藏按钮 | 用户 A/B 权限负例 |
-| 第三方接入 | Supabase SDK 初始化层 | 任意页面随手初始化 | 环境变量和调用检查 |
-| 部署/配置 | `dev-docs/deployment-route.md` + `.env.example` + Vercel/Supabase 平台配置 | 硬编码密钥、聊天记忆、个人电脑进程 | 构建、环境变量、Auth 回跳地址和生产 URL 验收 |
-| 中国大陆正式版认证 | 待新增的服务端认证层 + `dev-docs/technical-selection.md` | Supabase Auth、前端 localStorage、聊天记忆 | 登录正负例、session 过期、密码存储验证 |
-| 中国大陆正式版数据库 | 国内云 PostgreSQL + migration | Supabase 控制台手工状态、前端本地状态 | migration、备份恢复、跨用户负例 |
-| 中国大陆正式版部署 | `dev-docs/deployment-route.md` + 国内云平台配置 | Vercel preview、个人电脑进程 | ICP 备案、生产域名、HTTPS、日志和访问测试 |
+| API 合同 | Next.js API route + service contract | UI 文案 | API/数据库验证 |
+| 业务逻辑 | 前端 use case + 服务端权限 + 数据库约束 | 纯 UI 显示层 | 正负路径测试 |
+| 数据库 schema | `dev-docs/sql/` SQL + repository contract | 前端本地状态 | migration diff |
+| 登录/权限 | 自有认证 + 服务端权限校验 | 前端隐藏按钮 | 用户 A/B、家庭 A/B 权限负例 |
+| 第三方接入 | 服务端封装层 | 任意页面随手初始化 | 环境变量和调用检查 |
+| 部署/配置 | `dev-docs/deployment-route.md` + `.env.example` + 阿里云服务器配置 | 硬编码密钥、聊天记忆、个人电脑进程 | 构建、环境变量、HTTPS 和生产 URL 验收 |
+| 认证 | 服务端认证层 + `dev-docs/technical-selection.md` | 前端 localStorage、聊天记忆 | 登录正负例、session 过期、密码存储验证 |
+| 数据库 | 自有 PostgreSQL + migration | 控制台手工状态、前端本地状态 | migration、备份恢复、跨用户负例 |
+| 部署 | `dev-docs/deployment-route.md` + 阿里云配置 | 个人电脑进程 | ICP 备案、生产域名、HTTPS、日志和访问测试 |
 
 ## 初始数据模型草案
 
 ```text
-auth.users
+users
   -> profiles
   -> households
   -> household_members
@@ -78,7 +77,7 @@ auth.users
 
 ### profiles
 
-- `id` references `auth.users.id`
+- `id` references `users.id`
 - `display_name`
 - `created_at`
 
@@ -158,15 +157,15 @@ auth.users
 
 - 用户只能读取自己是成员的 household 的数据。
 - 用户只能写入自己是成员的 household 的 areas、locations、items。
-- `owner` 与 `member` 对 household 内 areas、locations、items 的读写权限相同（RLS 均按成员关系判断）。
+- `owner` 与 `member` 对 household 内 areas、locations、items 的读写权限相同，由服务端按成员关系判断。
 - 只有 `owner` 能邀请成员、移除成员、更新和删除 household。
 - 成员关系只能通过注册初始化函数（owner）或房主批准申请（member）创建；不允许普通前端直接插入/修改 `household_members`。
 - 申请必须通过有效邀请链接提交（安全函数校验 token），批准前不拥有任何家庭数据访问权；只有 owner 能批准或拒绝申请。
 - 数据属于 household：成员被移除后立即失去访问权，数据保留在 household 内。
 - 第一版没有管理员读取用户数据的功能。
-- 前端可以显示或隐藏按钮，但真正权限必须由 RLS 保证。
-- public schema 中暴露给前端的用户数据表必须启用 RLS。
-- service role key 只能在服务端或运维脚本中使用，不能暴露给浏览器。
+- 前端可以显示或隐藏按钮，但真正权限必须由服务端校验保证。
+- 用户数据表不得直接暴露给前端。
+- 数据库密码和服务端密钥只能在服务器环境变量或运维脚本中使用，不能暴露给浏览器。
 
 ## 请求生命周期
 
@@ -174,9 +173,10 @@ auth.users
 用户操作
   -> Next.js 页面/组件
   -> 前端表单校验
-  -> Supabase client 带当前用户 session 请求
-  -> Supabase Auth 识别用户
-  -> Postgres RLS 校验 household membership
+  -> Next.js API route
+  -> 服务端 session 识别用户
+  -> service 层校验 household membership
+  -> PostgreSQL repository 读写
   -> 数据写入/读取
   -> 前端展示成功、失败、空状态或权限错误
 ```
@@ -203,8 +203,8 @@ auth.users
 
 ```text
 房主在成员列表选择移除成员
-  -> 删除 household_members 中该成员的记录（RLS 仅允许 owner 且不能移除自己）
-  -> 该成员下一次请求即被 RLS 拒绝访问家庭数据
+  -> 删除 household_members 中该成员的记录（服务端仅允许 owner 且不能移除自己）
+  -> 该成员下一次请求即被服务端拒绝访问家庭数据
   -> 家庭内 areas/locations/items 数据保持不变
 ```
 
@@ -215,10 +215,10 @@ auth.users
 - 权限：`owner` / `member` 对库存数据权限相同；仅 `owner` 可管理成员和家庭；不做角色变更、不做房主转让。
 - 数据归属：数据属于 household；成员被移除后数据保留、访问立即失效。
 - 家庭形态：一个账号可属于多个家庭，UI 提供“当前家庭”切换器；所有清单请求基于当前家庭，服务端仍从 session 推导用户和家庭，不接受客户端伪造可信 `householdId`。
-- 家庭切换器的“当前家庭”选择只是前端状态；真正可访问哪些家庭由 RLS 依据 membership 决定，前端不能靠切换器越权读取其他家庭。
-- 现有 areas/locations/items 的 member-only RLS 天然支持共享，无需改动；需要新增的是 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）、成员管理 RLS 以及提交申请/批准申请的安全函数。
-- 实施路线（2026-08-06 用户确认）：直接在自托管部署（`homestorag.xyz`，自有 PostgreSQL + 自有认证 + 服务端权限校验）上实现并上线；Supabase/RLS 方案仅作为历史设计参考，不以 Supabase 为实施目标。自托管路线的权限由服务端校验兜底（等价于 RLS 设计），数据库表结构与 Supabase 版保持一致。
-- 家庭共享先做 Web/PWA；Android 内测版提供房主邀请分享与申请审批能力（App 内生成邀请链接并通过系统分享/复制发给家人，家人申请后房主在 App 内批准/拒绝），成员管理等仍以 Web 端为主；Android 0.5.23 起提供当前家庭切换：启动/登录时加载全部 household，点顶部家庭名称切换，snapshot 请求携带所选 householdId，服务端仍校验 membership。
+- 家庭切换器的“当前家庭”选择只是客户端状态；真正可访问哪些家庭由服务端依据 membership 决定，前端不能靠切换器越权读取其他家庭。
+- 现有 areas/locations/items 共享权限由服务端 membership 校验兜底；需要维护的是 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）和成员管理服务端接口。
+- 实施路线（2026-08-06 用户确认，2026-08-11 收口）：直接在自托管部署（`homestorag.xyz`，自有 PostgreSQL + 自有认证 + 服务端权限校验）上实现并上线；Supabase/RLS 方案已归档，不以 Supabase 为实施目标。
+- 家庭共享先做 Web/PWA；Android 内测版提供房主邀请分享与申请审批能力（App 内生成邀请链接并通过系统分享/复制发给家人，家人申请后房主在 App 内批准/拒绝），成员管理等仍以 Web 端为主；Android 0.5.23 起提供当前家庭切换：启动/登录时加载全部 household，点顶部家庭名称切换，snapshot 请求携带所选 householdId，服务端仍校验 membership；Android 0.5.24 计划改为家庭名旁小切换图标下拉切换，长按家庭名重命名。
 
 ## 验证方式
 
@@ -226,7 +226,7 @@ auth.users
 - 构建命令：待 scaffold 后确认，预期为 `npm run build`。
 - 测试命令：待测试框架确认后写入。
 - UI 验证：注册、登录、新增位置、新增物品、搜索、编辑、删除、退出。
-- API/数据库验证：检查 Supabase 表数据。
+- API/数据库验证：检查自托管 PostgreSQL 表数据和服务端 API 响应。
 - 权限负例：用户 B 不能读写用户 A 的 household 数据。
 - 家庭共享负例：未提交申请或被拒绝的账号不能读写家庭数据；被移除成员立即失去访问；member 不能邀请/移除成员或改角色。
 - Git checkpoint：第一阶段文档和代码分别小步提交。
@@ -279,7 +279,7 @@ Android 拍物品正面照
 - 缩略图访问走登录态接口，服务端校验物品所属家庭成员身份；不允许公开静态访问。
 - 未关联缩略图 24 小时后清理；识别接口按账号限频，防刷额度。
 - 第一版缩略图存服务器本地磁盘，经存储抽象层访问，后续可切换 OSS。
-- `items` 表新增 `photo_key` 列（可空、唯一）；新增 `pending_photos` 表；具体字段与 RLS 见 `dev-docs/database-design.md`。
+- `items` 表新增 `photo_key` 列（可空、唯一）；新增 `pending_photos` 表；具体字段与服务端权限见 `dev-docs/database-design.md`。
 
 ## 2026-08-08 草稿箱与照片增强架构（Android 内测版）
 
@@ -291,7 +291,7 @@ Android 拍物品正面照
 - 区域/位置管理：区域条/位置条长按打开编辑弹窗（复用 `AreaFormDialog`/`LocationFormDialog`，区域重命名/改色/删除，位置重命名/重分配区域/删除）；新增位置默认带当前选中区域；新增物品默认预选当前选中（或最近使用）的区域/位置。
 - 未分配筛选：`DashboardFilters.unassigned` 筛选 `locationId == null` 的物品；不选区域/位置可直接保存；切换未分配清空区域/位置筛选。
 - 拍照与预览：物品无图「拍照」按钮直接调起系统相机（`ActivityResultContracts.TakePicture` + FileProvider）；图片预览 `PhotoPreviewDialog` 支持双击放大 4 倍、捏合至 6 倍、单指拖动，缩略图同样可放大。
-- 成员权限分级（2026-08-08 用户确认）：`household_members.role` 新增 `readonly` 档位；`readonly` 成员对 areas/locations/items 只能读（含照片读取），新增/编辑/删除由服务端校验拒绝（自托管路线在 `inventory-service` 写操作前按角色拦截；Supabase 参考路线用 RLS）；`member` 保持全部权限；仅 `owner` 可管理成员（邀请/移除/改角色）。
+- 成员权限分级（2026-08-08 用户确认）：`household_members.role` 新增 `readonly` 档位；`readonly` 成员对 areas/locations/items 只能读（含照片读取），新增/编辑/删除由服务端校验拒绝（在 `inventory-service` 写操作前按角色拦截）；`member` 保持全部权限；仅 `owner` 可管理成员（邀请/移除/改角色）。
 - 邀请使用 App：邀请弹窗新增「邀请使用 App」入口，分享内测版 APK 下载链接；对方注册后为独立用户，与家庭邀请无关。
 - App 内帮助：顶部「帮助」入口展示内置说明书（内容与 `dev-docs/user-manual.md` 同步，App 内以静态资源承载）。
 - 实时刷新机制：Android 数据层采用 Room Flow → ViewModel StateFlow → Compose `collectAsState` 自动重组（新增/编辑/删除区域、位置、物品即时生效）；物品行缩略图缓存以 `(item.id, item.photoKey)` 为 key，照片新增/更换立即重载；主界面支持 Material3 下拉刷新（`PullToRefreshBox`，触发 sync + snapshot）。
@@ -299,7 +299,7 @@ Android 拍物品正面照
 ## 2026-08-08 登录页增强与密码重置架构
 
 - 密码重置请求生命周期：用户点「忘记密码」输入邮箱 → `POST /api/auth/forgot-password`（邮箱不存在也返回成功，防枚举；限频 5 次/小时/邮箱+IP）→ 生成 32 字节 base64url 令牌，HMAC-SHA256 哈希入库（`password_reset_tokens`，30 分钟过期、一次性、同用户单令牌）→ nodemailer 经 QQ SMTP 发送重置链接邮件 → 用户打开 `/reset-password?token=...` → `POST /api/auth/reset-password` 校验令牌 → bcrypt 重哈希更新 `users.password_hash` → 标记令牌已用 → 作废该用户全部 `auth_sessions` → 用户用新密码登录。
-- 新增表：`password_reset_tokens`（表结构与权限见 `dev-docs/database-design.md`）；权限边界由服务端校验（自托管路线），Supabase 参考路线语义一致。
+- 新增表：`password_reset_tokens`（表结构与权限见 `dev-docs/database-design.md`）；权限边界由服务端校验。
 - 新增接口：`POST /api/auth/forgot-password`、`POST /api/auth/reset-password`；新增页面：`/forgot-password`、`/reset-password`。
 - 记住邮箱：Web 用 localStorage（key `home_inventory_remembered_email`），Android 用 `RememberedEmailStore`（EncryptedSharedPreferences）；只存邮箱，不存密码；登录态保持逻辑不变。
 - Android 注册入口：复用现有 `POST /api/auth/register` 与 session cookie 流程，注册成功即进入 App。

@@ -6,9 +6,11 @@
 
 - Next.js
 - TypeScript
-- Supabase Auth
-- Supabase Postgres + RLS
+- 阿里云自托管
+- 自有 PostgreSQL
+- 自有邮箱密码认证与服务端权限校验
 - PWA first
+- Android 内测 APK
 
 ## 本地启动
 
@@ -17,9 +19,9 @@ npm install
 npm run dev
 ```
 
-复制 `.env.example` 为 `.env.local`，并填入 Supabase 测试项目的公开配置。
+复制 `.env.example` 为 `.env.local`，按自托管 PostgreSQL、session、SMTP 等占位配置本地环境。
 
-不要把 service role key、数据库密码或其他 secret 写入 `.env.local` 的 `NEXT_PUBLIC_*` 变量。
+不要把数据库密码、SMTP 授权码、session secret、AI key 或其他 secret 写入公开变量或提交到仓库。
 
 ## 真源文档
 
@@ -30,3 +32,5 @@ npm run dev
 - `dev-docs/architecture.md`
 - `dev-docs/database-design.md`
 - `dev-docs/acceptance.md`
+
+Supabase 历史资料已归档到 `dev-docs/archive/`，默认开发、搜索和调试都不要进入归档目录。
