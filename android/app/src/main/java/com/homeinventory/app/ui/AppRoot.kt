@@ -27,6 +27,7 @@ import com.homeinventory.app.data.repository.DraftRepository
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
+import com.homeinventory.app.data.repository.FeedbackRepository
 import com.homeinventory.app.data.sync.AndroidConnectivityObserver
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
 import com.homeinventory.app.data.sync.RetrofitRemoteSyncClient
@@ -51,6 +52,9 @@ fun AppRoot() {
     }
     val importExportRepository = remember {
         ImportExportRepository(api = api)
+    }
+    val feedbackRepository = remember {
+        FeedbackRepository(api = api, appVersion = BuildConfig.VERSION_NAME)
     }
     val repository = remember {
         InventoryRepository(
@@ -181,6 +185,7 @@ fun AppRoot() {
                 authRepository = authRepository,
                 database = app.database,
                 importExportRepository = importExportRepository,
+                feedbackRepository = feedbackRepository,
                 onSignedOut = { isLoggedIn = false },
             )
         } else {

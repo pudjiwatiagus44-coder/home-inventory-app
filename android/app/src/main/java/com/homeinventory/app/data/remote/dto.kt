@@ -15,6 +15,12 @@ data class AuthResponse(
     val message: String? = null,
 )
 
+data class FeedbackRequest(
+    val message: String,
+    val source: String,
+    val appVersion: String? = null,
+)
+
 data class RemoteDashboardDto(
     val household: RemoteHouseholdDto? = null,
     val areas: List<RemoteAreaDto> = emptyList(),

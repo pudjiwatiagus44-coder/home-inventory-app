@@ -6,6 +6,7 @@ import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.AuthResponse
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.FeedbackRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
@@ -65,6 +66,11 @@ interface HomeInventoryApi {
 
     @POST("api/auth/logout")
     suspend fun logout(): Response<ApiEnvelope<Unit>>
+
+    @POST("api/feedback")
+    suspend fun submitFeedback(
+        @Body request: FeedbackRequest,
+    ): Response<ApiEnvelope<Unit>>
 
     @GET("api/family/households")
     suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>>

@@ -8,20 +8,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.launch
+import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.MutedForeground
 import com.homeinventory.app.ui.theme.Surface
 
 @Composable
-fun HelpDialog(onDismiss: () -> Unit) {
+fun HelpDialog(
+    onSubmitFeedback: suspend (String) -> Result<Unit>,
+    onDismiss: () -> Unit,
+) {
+    var feedback by remember { mutableStateOf("") }
+    var feedbackStatus by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -65,7 +81,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
             HelpSection(
                 title = "家庭共享",
                 lines = listOf(
-                    "同一账号属于多个家庭时，点顶部当前家庭名称可切换清单，App 会记住上次选择。",
+                    "同一账号属于多个家庭时，点顶部家庭切换图标可切换清单，App 会记住上次选择。",
                     "「邀请」生成链接发给家人；家人申请后你批准即可共同管理。",
                     "「家庭成员」里可移除成员、切换只读/全部权限。",
                     "「邀请使用本 App」分享下载链接，对方注册后成为独立用户。",
@@ -85,6 +101,49 @@ fun HelpDialog(onDismiss: () -> Unit) {
                     "换设备：草稿和本地清晰图不带走。",
                 ),
             )
+            Text(
+                text = "意见反馈",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            OutlinedTextField(
+                value = feedback,
+                onValueChange = { feedback = it },
+                label = { Text("反馈内容") },
+                placeholder = { Text("说说你的建议或遇到的问题") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            feedbackStatus?.let { status ->
+                Text(
+                    text = status,
+                    fontSize = 13.sp,
+                    color = if (status == "反馈已发送") {
+                        androidx.compose.ui.graphics.Color(0xFF2F7D32)
+                    } else {
+                        Danger
+                    },
+                )
+            }
+            Button(
+                onClick = {
+                    scope.launch {
+                        feedbackStatus = null
+                        onSubmitFeedback(feedback.trim())
+                            .onSuccess {
+                                feedback = ""
+                                feedbackStatus = "反馈已发送"
+                            }
+                            .onFailure { error ->
+                                feedbackStatus = error.message ?: "反馈发送失败"
+                            }
+                    }
+                },
+                enabled = feedback.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("提交反馈")
+            }
             TextButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(androidx.compose.ui.Alignment.End),

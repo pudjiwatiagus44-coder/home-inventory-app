@@ -32,6 +32,7 @@ import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.repository.FeedbackRepository
 import java.io.File
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
@@ -56,6 +57,7 @@ fun DashboardHost(
     authRepository: AuthRepository,
     database: AppDatabase,
     importExportRepository: ImportExportRepository,
+    feedbackRepository: FeedbackRepository,
     onSignedOut: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -516,6 +518,7 @@ fun DashboardHost(
 
     if (showHelpDialog) {
         HelpDialog(
+            onSubmitFeedback = feedbackRepository::submitFeedback,
             onDismiss = {
                 showHelpDialog = false
             },
