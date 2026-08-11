@@ -5,7 +5,7 @@ import {
   createFamilyService,
   FamilyInvitationInvalidError,
 } from "./family-service";
-import type { HouseholdRole } from "./family-data";
+import type { HouseholdRole, InvitationGrant } from "./family-data";
 
 function createMemoryFamilyRepository(
   state: {
@@ -13,13 +13,22 @@ function createMemoryFamilyRepository(
     householdName?: string;
     members?: { householdId: string; userId: string; role: HouseholdRole }[];
     validToken?: string | null;
-    pendingRequests?: { id: string; householdId: string; userId: string }[];
+    pendingRequests?: {
+      id: string;
+      householdId: string;
+      userId: string;
+      invitationId?: string | null;
+    }[];
+    createdInvitationGrants?: InvitationGrant[];
+    invitationGrantsByInvitation?: Record<string, InvitationGrant[]>;
   } = {},
 ): FamilyRepository {
   const members = state.members ?? [];
   const pendingRequests = state.pendingRequests ?? [];
   const householdName = state.householdName ?? "My Home";
   const displayNames = new Map<string, string | null>();
+  const invitationGrantsByInvitation =
+    state.invitationGrantsByInvitation ?? {};
 
   return {
     listHouseholdsForUser: async (userId) =>
@@ -50,26 +59,57 @@ function createMemoryFamilyRepository(
         (member) =>
           member.userId === userId && member.householdId === householdId,
       ),
+    getHouseholdMemberRole: async (userId, householdId) => {
+      const member = members.find(
+        (member) =>
+          member.userId === userId && member.householdId === householdId,
+      );
+
+      if (member) {
+        return member.role;
+      }
+
+      return members.length === 0 && state.ownerUserId === userId
+        ? "owner"
+        : null;
+    },
     createInvitationLink: async (input) => ({
       id: "link-1",
-      household_id: input.householdId,
+      household_id: input.householdId ?? "household-1",
       token: input.token,
       created_at: "2026-08-06T00:00:00.000Z",
       expires_at: input.expiresAt,
       revoked_at: null,
     }),
+    insertInvitationGrants: async ({ invitationId, grants }) => {
+      state.createdInvitationGrants?.push(...grants);
+      invitationGrantsByInvitation[invitationId] = [
+        ...(invitationGrantsByInvitation[invitationId] ?? []),
+        ...grants,
+      ];
+    },
+    listInvitationGrants: async (invitationId) =>
+      invitationGrantsByInvitation[invitationId] ?? [],
     revokeActiveInvitationLinks: async () => undefined,
     getInvitationLinkById: async () => null,
     deleteInvitationLink: async () => undefined,
     listInvitationLinks: async () => [],
     getHouseholdForInvitation: async (token) =>
       token === state.validToken
-        ? { householdId: "household-1", householdName: "My Home" }
+        ? {
+            householdId: "household-1",
+            householdName: "My Home",
+            invitationId: "invitation-1",
+            grants: invitationGrantsByInvitation["invitation-1"] ?? [
+              { householdId: "household-1", role: "member" },
+            ],
+          }
         : null,
-    submitJoinRequest: async ({ householdId, userId }) => {
+    submitJoinRequest: async ({ householdId, invitationId, userId }) => {
       const request = {
         id: "request-1",
         householdId,
+        invitationId,
         userId,
       };
       pendingRequests.push(request);
@@ -78,7 +118,11 @@ function createMemoryFamilyRepository(
     getPendingJoinRequest: async (requestId) => {
       const request = pendingRequests.find((item) => item.id === requestId);
       return request
-        ? { householdId: request.householdId, userId: request.userId }
+        ? {
+            householdId: request.householdId,
+            userId: request.userId,
+            invitationId: request.invitationId ?? null,
+          }
         : null;
     },
     approveJoinRequest: async () => undefined,
@@ -265,6 +309,73 @@ describe("createFamilyService", () => {
     expect(link.expires_at).toBe("2026-09-05T00:00:00.000Z");
   });
 
+  it("creates an invitation with grants for the selected households", async () => {
+    const createdGrants: InvitationGrant[] = [];
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "owner",
+      members: [
+        { householdId: "household-1", userId: "owner", role: "owner" },
+      ],
+      createdInvitationGrants: createdGrants,
+    });
+    const service = createFamilyService({ repository });
+
+    await service.createInvitationLinkForCurrentUser({
+      userId: "owner",
+      householdId: "household-1",
+      grants: [{ householdId: "household-1", role: "contributor" }],
+      token: "token-1",
+      now: new Date("2026-08-11T00:00:00.000Z"),
+    });
+
+    expect(createdGrants).toEqual([
+      { householdId: "household-1", role: "contributor" },
+    ]);
+  });
+
+  it("rejects invitation grants for a household the caller cannot manage", async () => {
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "owner",
+      members: [
+        { householdId: "household-1", userId: "owner", role: "owner" },
+      ],
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.createInvitationLinkForCurrentUser({
+        userId: "owner",
+        householdId: "household-1",
+        grants: [
+          { householdId: "household-1", role: "member" },
+          { householdId: "household-2", role: "readonly" },
+        ],
+        token: "token-1",
+        now: new Date("2026-08-11T00:00:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("rejects an owner grant role in invitation grants", async () => {
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "owner",
+      members: [
+        { householdId: "household-1", userId: "owner", role: "owner" },
+      ],
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.createInvitationLinkForCurrentUser({
+        userId: "owner",
+        householdId: "household-1",
+        grants: [{ householdId: "household-1", role: "owner" }],
+        token: "token-1",
+        now: new Date("2026-08-11T00:00:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
   it("rejects a join application when the token is invalid", async () => {
     const service = createFamilyService({
       repository: createMemoryFamilyRepository({ validToken: null }),
@@ -331,7 +442,49 @@ describe("createFamilyService", () => {
     expect(members.some((member) => member.user_id === "user-2")).toBe(true);
   });
 
-  it("lets members list members but not manage invitations", async () => {
+  it("approves a join request by inserting every invitation grant", async () => {
+    const members: {
+      householdId: string;
+      userId: string;
+      role: HouseholdRole;
+    }[] = [
+      { householdId: "household-1", userId: "owner", role: "owner" },
+      { householdId: "household-2", userId: "owner", role: "owner" },
+    ];
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "owner",
+      members,
+      pendingRequests: [
+        {
+          id: "request-1",
+          householdId: "household-1",
+          userId: "invitee",
+          invitationId: "invitation-1",
+        },
+      ],
+      invitationGrantsByInvitation: {
+        "invitation-1": [
+          { householdId: "household-1", role: "member" },
+          { householdId: "household-2", role: "readonly" },
+        ],
+      },
+    });
+    const service = createFamilyService({ repository });
+
+    await service.approveJoinRequestForCurrentUser({
+      userId: "owner",
+      requestId: "request-1",
+    });
+
+    expect(members).toEqual(
+      expect.arrayContaining([
+        { householdId: "household-1", userId: "invitee", role: "member" },
+        { householdId: "household-2", userId: "invitee", role: "readonly" },
+      ]),
+    );
+  });
+
+  it("lets members list members and manage invitations", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",
       members: [
@@ -348,12 +501,14 @@ describe("createFamilyService", () => {
 
     expect(members).toHaveLength(2);
 
-    await expect(
-      service.createInvitationLinkForCurrentUser({
-        userId: "user-2",
-        householdId: "household-1",
-      }),
-    ).rejects.toBeInstanceOf(AuthorizationError);
+    const link = await service.createInvitationLinkForCurrentUser({
+      userId: "user-2",
+      householdId: "household-1",
+      token: "token_member_invite",
+      now: new Date("2026-08-11T00:00:00.000Z"),
+    });
+
+    expect(link.household_id).toBe("household-1");
   });
 
   it("does not let the owner remove themselves", async () => {
@@ -424,12 +579,37 @@ describe("createFamilyService", () => {
     );
   });
 
-  it("rejects role changes by a non-owner member", async () => {
+  it("lets members with management role change another member's role", async () => {
+    const members = [
+      { householdId: "household-1", userId: "user-1", role: "owner" },
+      { householdId: "household-1", userId: "user-2", role: "member" },
+      { householdId: "household-1", userId: "user-3", role: "readonly" },
+    ];
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-1",
+      members,
+    });
+    const service = createFamilyService({ repository });
+
+    await service.setMemberRoleForCurrentUser({
+      userId: "user-2",
+      householdId: "household-1",
+      targetUserId: "user-3",
+      role: "contributor",
+    });
+
+    expect(members.find((member) => member.userId === "user-3")?.role).toBe(
+      "contributor",
+    );
+  });
+
+  it("rejects role changes by a contributor", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",
       members: [
         { householdId: "household-1", userId: "user-1", role: "owner" },
-        { householdId: "household-1", userId: "user-2", role: "member" },
+        { householdId: "household-1", userId: "user-2", role: "contributor" },
+        { householdId: "household-1", userId: "user-3", role: "member" },
       ],
     });
     const service = createFamilyService({ repository });
@@ -438,7 +618,7 @@ describe("createFamilyService", () => {
       service.setMemberRoleForCurrentUser({
         userId: "user-2",
         householdId: "household-1",
-        targetUserId: "user-2",
+        targetUserId: "user-3",
         role: "readonly",
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);

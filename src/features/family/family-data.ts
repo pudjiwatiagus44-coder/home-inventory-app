@@ -19,6 +19,13 @@ export type FamilyJoinRequestRow = {
 
 export type HouseholdRole = "owner" | "member" | "contributor" | "readonly";
 
+export type AssignableHouseholdRole = Exclude<HouseholdRole, "owner">;
+
+export type InvitationGrant = {
+  householdId: string;
+  role: AssignableHouseholdRole;
+};
+
 export type FamilyMemberRow = {
   user_id: string;
   email: string;
@@ -38,12 +45,9 @@ export type InvitationLinkStatus = "active" | "expired" | "revoked";
 
 export type FamilySettingsClient = {
   listInvitations: (householdId: string) => Promise<InvitationLinkRow[]>;
-  createInvitationLink: (householdId: string) => Promise<{
-    id: string;
-    token: string;
-    expiresAt: string;
-    url: string;
-  }>;
+  createInvitationLink: (
+    input: string | { householdId?: string; grants?: InvitationGrant[] },
+  ) => Promise<{ id: string; token: string; expiresAt: string; url: string }>;
   revokeInvitationLink: (linkId: string) => Promise<void>;
   listJoinRequests: (householdId: string) => Promise<FamilyJoinRequestRow[]>;
   approveJoinRequest: (requestId: string) => Promise<void>;

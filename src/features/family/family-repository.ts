@@ -1,9 +1,11 @@
 import type { PostgresQueryClient } from "../../server/auth/postgres-auth-repository";
 import type {
+  AssignableHouseholdRole,
   FamilyJoinRequestRow,
   FamilyMemberRow,
   HouseholdRole,
   HouseholdOption,
+  InvitationGrant,
   InvitationLinkRow,
 } from "./family-data";
 
@@ -15,31 +17,50 @@ export type FamilyRepository = {
   }) => Promise<{ id: string; name: string }>;
   getHouseholdOwner: (householdId: string) => Promise<string | null>;
   isHouseholdMember: (userId: string, householdId: string) => Promise<boolean>;
+  getHouseholdMemberRole: (
+    userId: string,
+    householdId: string,
+  ) => Promise<HouseholdRole | null>;
   setHouseholdDisplayName: (input: {
     userId: string;
     householdId: string;
     displayName: string | null;
   }) => Promise<void>;
   createInvitationLink: (input: {
-    householdId: string;
+    householdId: string | null;
     token: string;
     expiresAt: string;
     createdBy: string;
   }) => Promise<InvitationLinkRow>;
+  insertInvitationGrants: (input: {
+    invitationId: string;
+    grants: InvitationGrant[];
+  }) => Promise<void>;
+  listInvitationGrants: (invitationId: string) => Promise<InvitationGrant[]>;
   revokeActiveInvitationLinks: (householdId: string) => Promise<void>;
   getInvitationLinkById: (linkId: string) => Promise<InvitationLinkRow | null>;
   deleteInvitationLink: (linkId: string) => Promise<void>;
   listInvitationLinks: (householdId: string) => Promise<InvitationLinkRow[]>;
   getHouseholdForInvitation: (
     token: string,
-  ) => Promise<{ householdId: string; householdName: string } | null>;
+  ) => Promise<{
+    householdId: string;
+    householdName: string;
+    invitationId: string;
+    grants: InvitationGrant[];
+  } | null>;
   submitJoinRequest: (input: {
     householdId: string;
+    invitationId: string | null;
     userId: string;
   }) => Promise<string>;
   getPendingJoinRequest: (
     requestId: string,
-  ) => Promise<{ householdId: string; userId: string } | null>;
+  ) => Promise<{
+    householdId: string;
+    userId: string;
+    invitationId: string | null;
+  } | null>;
   approveJoinRequest: (
     requestId: string,
     decidedBy: string,
@@ -187,6 +208,20 @@ export function createPostgresFamilyRepository(
       return result.rows.length > 0;
     },
 
+    async getHouseholdMemberRole(userId, householdId) {
+      const result = await client.query<{ role: HouseholdRole }>(
+        `
+          select role
+          from household_members
+          where household_id = $1 and user_id = $2
+          limit 1
+        `,
+        [householdId, userId],
+      );
+
+      return result.rows[0]?.role ?? null;
+    },
+
     async setHouseholdDisplayName(input) {
       await client.query(
         `
@@ -225,6 +260,43 @@ export function createPostgresFamilyRepository(
       }
 
       return normalizeInvitationRow(row);
+    },
+
+    async insertInvitationGrants({ invitationId, grants }) {
+      for (const grant of grants) {
+        await client.query(
+          `
+            insert into household_invitation_grants (
+              invitation_id,
+              household_id,
+              role
+            )
+            values ($1, $2, $3)
+            on conflict (invitation_id, household_id) do nothing
+          `,
+          [invitationId, grant.householdId, grant.role],
+        );
+      }
+    },
+
+    async listInvitationGrants(invitationId) {
+      const result = await client.query<{
+        household_id: string;
+        role: AssignableHouseholdRole;
+      }>(
+        `
+          select household_id, role
+          from household_invitation_grants
+          where invitation_id = $1
+          order by created_at asc
+        `,
+        [invitationId],
+      );
+
+      return result.rows.map((row) => ({
+        householdId: row.household_id,
+        role: row.role,
+      }));
     },
 
     async revokeActiveInvitationLinks(householdId) {
@@ -279,13 +351,25 @@ export function createPostgresFamilyRepository(
 
     async getHouseholdForInvitation(token) {
       const result = await client.query<{
+        invitation_id: string;
         household_id: string;
         household_name: string;
       }>(
         `
-          select hi.household_id, h.name as household_name
+          select
+            hi.id as invitation_id,
+            coalesce(hi.household_id, first_grant.household_id) as household_id,
+            h.name as household_name
           from household_invitations hi
-          join households h on h.id = hi.household_id
+          left join lateral (
+            select household_id
+            from household_invitation_grants
+            where invitation_id = hi.id
+            order by created_at asc
+            limit 1
+          ) first_grant on true
+          join households h
+            on h.id = coalesce(hi.household_id, first_grant.household_id)
           where hi.token = $1
             and hi.revoked_at is null
             and hi.expires_at > now()
@@ -299,21 +383,44 @@ export function createPostgresFamilyRepository(
         return null;
       }
 
+      const grantsResult = await client.query<{
+        household_id: string;
+        role: AssignableHouseholdRole;
+      }>(
+        `
+          select household_id, role
+          from household_invitation_grants
+          where invitation_id = $1
+          order by created_at asc
+        `,
+        [row.invitation_id],
+      );
+
       return {
         householdId: row.household_id,
         householdName: row.household_name,
+        invitationId: row.invitation_id,
+        grants: grantsResult.rows.map((grant) => ({
+          householdId: grant.household_id,
+          role: grant.role,
+        })),
       };
     },
 
     async submitJoinRequest(input) {
       const insertResult = await client.query<{ id: string }>(
         `
-          insert into household_join_requests (household_id, user_id, status)
-          values ($1, $2, 'pending')
+          insert into household_join_requests (
+            household_id,
+            invitation_id,
+            user_id,
+            status
+          )
+          values ($1, $2, $3, 'pending')
           on conflict (household_id, user_id) where status = 'pending' do nothing
           returning id
         `,
-        [input.householdId, input.userId],
+        [input.householdId, input.invitationId, input.userId],
       );
 
       if (insertResult.rows[0]) {
@@ -335,6 +442,15 @@ export function createPostgresFamilyRepository(
         throw new Error("提交加入申请后没有返回数据");
       }
 
+      await client.query(
+        `
+          update household_join_requests
+          set invitation_id = $2
+          where id = $1
+        `,
+        [existing.id, input.invitationId],
+      );
+
       return existing.id;
     },
 
@@ -342,9 +458,10 @@ export function createPostgresFamilyRepository(
       const result = await client.query<{
         household_id: string;
         user_id: string;
+        invitation_id: string | null;
       }>(
         `
-          select household_id, user_id
+          select household_id, user_id, invitation_id
           from household_join_requests
           where id = $1 and status = 'pending'
           limit 1
@@ -357,7 +474,11 @@ export function createPostgresFamilyRepository(
         return null;
       }
 
-      return { householdId: row.household_id, userId: row.user_id };
+      return {
+        householdId: row.household_id,
+        userId: row.user_id,
+        invitationId: row.invitation_id,
+      };
     },
 
     async approveJoinRequest(requestId, decidedBy) {

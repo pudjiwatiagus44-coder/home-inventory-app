@@ -3,6 +3,7 @@ import type {
   FamilyMemberRow,
   FamilySettingsClient,
   HouseholdOption,
+  InvitationGrant,
   InvitationLinkRow,
 } from "./family-data";
 
@@ -25,7 +26,12 @@ export function createFamilyHttpClient({
   listHouseholds: () => Promise<HouseholdOption[]>;
   getJoinInfo: (
     token: string,
-  ) => Promise<{ householdId: string; householdName: string } | null>;
+  ) => Promise<{
+    householdId: string;
+    householdName: string;
+    invitationId: string;
+    grants: InvitationGrant[];
+  } | null>;
   submitJoinApplication: (token: string) => Promise<string>;
   createHousehold: (name: string) => Promise<{ id: string; name: string }>;
   setHouseholdDisplayName: (
@@ -40,8 +46,11 @@ export function createFamilyHttpClient({
       });
     },
 
-    createInvitationLink(householdId: string) {
-      return request("/api/family/invitations", jsonInit("POST", { householdId }));
+    createInvitationLink(
+      input: string | { householdId?: string; grants?: InvitationGrant[] },
+    ) {
+      const body = typeof input === "string" ? { householdId: input } : input;
+      return request("/api/family/invitations", jsonInit("POST", body));
     },
 
     listInvitations(householdId: string) {
@@ -115,7 +124,12 @@ export function createFamilyHttpClient({
     },
 
     getJoinInfo(token: string) {
-      return request<{ householdId: string; householdName: string } | null>(
+      return request<{
+        householdId: string;
+        householdName: string;
+        invitationId: string;
+        grants: InvitationGrant[];
+      } | null>(
         `/api/join/${encodeURIComponent(token)}`,
         { method: "GET" },
       );

@@ -332,7 +332,9 @@ export function createSupabaseFamilySettingsClient(
   return {
     listInvitations: (householdId) =>
       listHouseholdInvitations(supabase, { householdId }),
-    createInvitationLink: async (householdId) => {
+    createInvitationLink: async (input) => {
+      const householdId =
+        typeof input === "string" ? input : (input.householdId ?? "");
       const link = await createHouseholdInvitationLink(supabase, {
         householdId,
         origin:

@@ -29,6 +29,8 @@ function familyServiceStub(overrides: Record<string, unknown> = {}) {
     getHouseholdForInvitationForCurrentUser: async () => ({
       householdId: "household-1",
       householdName: "我的家",
+      invitationId: "invitation-1",
+      grants: [{ householdId: "household-1", role: "member" }],
     }),
     submitJoinRequestForCurrentUser: async () => "request-1",
     listJoinRequestsForCurrentUser: async () => [],
@@ -197,6 +199,50 @@ describe("family API handlers", () => {
         url: "http://localhost/join/token_1234567890abcdefgh",
       },
     });
+  });
+
+  it("accepts invitation grants in POST /api/family/invitations", async () => {
+    const calls: unknown[] = [];
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub({
+        createInvitationLinkForCurrentUser: async (input: unknown) => {
+          calls.push(input);
+          return {
+            id: "link-1",
+            household_id: "household-1",
+            token: "token_1234567890abcdefgh",
+            created_at: "2026-08-06T00:00:00.000Z",
+            expires_at: "2026-09-05T00:00:00.000Z",
+            revoked_at: null,
+          };
+        },
+      }),
+    });
+
+    const response = await handlers.createInvitation(
+      authedRequest("http://localhost/api/family/invitations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          grants: [
+            { householdId: "household-1", role: "member" },
+            { householdId: "household-2", role: "readonly" },
+          ],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        userId: "user-1",
+        grants: [
+          { householdId: "household-1", role: "member" },
+          { householdId: "household-2", role: "readonly" },
+        ],
+      },
+    ]);
   });
 
   it("returns 403 when a non-owner tries to approve a request", async () => {

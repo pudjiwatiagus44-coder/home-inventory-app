@@ -103,6 +103,47 @@ describe("createFamilyHttpClient", () => {
     ]);
   });
 
+  it("creates invitation grants for multiple households", async () => {
+    const requests: unknown[] = [];
+    const client = createFamilyHttpClient({
+      fetch: async (input, init) => {
+        requests.push({ input, init });
+        return jsonResponse({
+          ok: true,
+          data: {
+            id: "link-1",
+            token: "abc",
+            expiresAt: "2026-09-05T00:00:00.000Z",
+            url: "https://homestorag.xyz/join/abc",
+          },
+        });
+      },
+    });
+
+    await client.createInvitationLink({
+      grants: [
+        { householdId: "h1", role: "member" },
+        { householdId: "h2", role: "contributor" },
+      ],
+    });
+
+    expect(requests).toEqual([
+      {
+        input: "/api/family/invitations",
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            grants: [
+              { householdId: "h1", role: "member" },
+              { householdId: "h2", role: "contributor" },
+            ],
+          }),
+        },
+      },
+    ]);
+  });
+
   it("sets a personal household display name through the API", async () => {
     const requests: unknown[] = [];
     const client = createFamilyHttpClient({

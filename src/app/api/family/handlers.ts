@@ -16,6 +16,7 @@ import {
 } from "../../../server/db/postgres";
 import { AuthorizationError } from "../../../server/auth/authorization";
 import type { createAuthService } from "../../../server/auth/auth-service";
+import type { InvitationGrant } from "../../../features/family/family-data";
 
 type CurrentUserAuthService = Pick<
   ReturnType<typeof createAuthService>,
@@ -167,9 +168,10 @@ export function createFamilyHandlers(
 
         const body = await readJsonObject(request);
         const householdId = textField(body, "householdId");
+        const grants = readInvitationGrants(body);
         const link = await service().createInvitationLinkForCurrentUser({
           userId: user.userId,
-          householdId,
+          ...(grants ? { grants } : { householdId }),
         });
 
         return successResponse({
@@ -488,6 +490,38 @@ async function readJsonObject(request: NextRequest): Promise<JsonObject> {
 function textField(body: JsonObject, key: string) {
   const value = body[key];
   return typeof value === "string" ? value : "";
+}
+
+function readInvitationGrants(body: JsonObject): InvitationGrant[] | null {
+  const raw = body.grants;
+
+  if (raw === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(raw)) {
+    throw new Error("邀请授权格式不正确");
+  }
+
+  return raw.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("邀请授权格式不正确");
+    }
+
+    const grant = item as Record<string, unknown>;
+    const householdId =
+      typeof grant.householdId === "string" ? grant.householdId : "";
+    const role = typeof grant.role === "string" ? grant.role : "";
+
+    if (
+      !householdId ||
+      (role !== "member" && role !== "contributor" && role !== "readonly")
+    ) {
+      throw new Error("邀请授权格式不正确");
+    }
+
+    return { householdId, role };
+  });
 }
 
 function requireHouseholdId(householdId: string) {
