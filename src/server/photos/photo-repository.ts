@@ -16,6 +16,36 @@ export type PhotoRepository = {
     itemId: string;
     householdId: string;
   }) => Promise<string | null>;
+  getAreaPhotoKey: (input: {
+    areaId: string;
+    householdId: string;
+  }) => Promise<string | null>;
+  updateAreaPhotoKey: (input: {
+    areaId: string;
+    householdId: string;
+    photoKey: string;
+  }) => Promise<{ photoKey: string; previousPhotoKey: string | null } | null>;
+  clearAreaPhotoKey: (input: {
+    areaId: string;
+    householdId: string;
+  }) => Promise<string | null>;
+  getLocationPhotoKey: (input: {
+    locationId: string;
+    householdId: string;
+  }) => Promise<string | null>;
+  updateLocationPhotoKey: (input: {
+    locationId: string;
+    householdId: string;
+    photoKey: string;
+  }) => Promise<{ photoKey: string; previousPhotoKey: string | null } | null>;
+  clearLocationPhotoKey: (input: {
+    locationId: string;
+    householdId: string;
+  }) => Promise<string | null>;
+  listLocationPhotoKeysForArea: (input: {
+    areaId: string;
+    householdId: string;
+  }) => Promise<string[]>;
   listExpiredPendingPhotos: (olderThanIso: string) => Promise<string[]>;
   deletePendingPhotos: (photoKeys: string[]) => Promise<void>;
 };
@@ -101,6 +131,131 @@ export function createPostgresPhotoRepository(
 
       return result.rows[0]?.photo_key ?? null;
     },
+    getAreaPhotoKey: async (input) => {
+      const result = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from areas
+          where id = $1 and household_id = $2
+        `,
+        [input.areaId, input.householdId],
+      );
+      return result.rows[0]?.photo_key ?? null;
+    },
+    updateAreaPhotoKey: async (input) => {
+      const existing = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from areas
+          where id = $1 and household_id = $2
+        `,
+        [input.areaId, input.householdId],
+      );
+      if (existing.rows.length === 0) {
+        return null;
+      }
+      const previousPhotoKey = existing.rows[0]?.photo_key ?? null;
+      await client.query(
+        `
+          update areas
+          set photo_key = $3, updated_at = now()
+          where id = $1 and household_id = $2
+        `,
+        [input.areaId, input.householdId, input.photoKey],
+      );
+      return { photoKey: input.photoKey, previousPhotoKey };
+    },
+    clearAreaPhotoKey: async (input) => {
+      const existing = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from areas
+          where id = $1 and household_id = $2
+        `,
+        [input.areaId, input.householdId],
+      );
+      if (existing.rows.length === 0) {
+        return null;
+      }
+      const previousPhotoKey = existing.rows[0]?.photo_key ?? null;
+      await client.query(
+        `
+          update areas
+          set photo_key = null, updated_at = now()
+          where id = $1 and household_id = $2
+        `,
+        [input.areaId, input.householdId],
+      );
+      return previousPhotoKey;
+    },
+    getLocationPhotoKey: async (input) => {
+      const result = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from locations
+          where id = $1 and household_id = $2
+        `,
+        [input.locationId, input.householdId],
+      );
+      return result.rows[0]?.photo_key ?? null;
+    },
+    updateLocationPhotoKey: async (input) => {
+      const existing = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from locations
+          where id = $1 and household_id = $2
+        `,
+        [input.locationId, input.householdId],
+      );
+      if (existing.rows.length === 0) {
+        return null;
+      }
+      const previousPhotoKey = existing.rows[0]?.photo_key ?? null;
+      await client.query(
+        `
+          update locations
+          set photo_key = $3, updated_at = now()
+          where id = $1 and household_id = $2
+        `,
+        [input.locationId, input.householdId, input.photoKey],
+      );
+      return { photoKey: input.photoKey, previousPhotoKey };
+    },
+    clearLocationPhotoKey: async (input) => {
+      const existing = await client.query<{ photo_key: string | null }>(
+        `
+          select photo_key
+          from locations
+          where id = $1 and household_id = $2
+        `,
+        [input.locationId, input.householdId],
+      );
+      if (existing.rows.length === 0) {
+        return null;
+      }
+      const previousPhotoKey = existing.rows[0]?.photo_key ?? null;
+      await client.query(
+        `
+          update locations
+          set photo_key = null, updated_at = now()
+          where id = $1 and household_id = $2
+        `,
+        [input.locationId, input.householdId],
+      );
+      return previousPhotoKey;
+    },
+    listLocationPhotoKeysForArea: async (input) => {
+      const result = await client.query<{ photo_key: string }>(
+        `
+          select photo_key
+          from locations
+          where area_id = $1 and household_id = $2 and photo_key is not null
+        `,
+        [input.areaId, input.householdId],
+      );
+      return result.rows.map((row) => row.photo_key);
+    },
     listExpiredPendingPhotos: async (olderThanIso) => {
       const result = await client.query<{ photo_key: string }>(
         `
@@ -141,6 +296,27 @@ function createNotConnectedPhotoRepository(): PhotoRepository {
       throw new PhotoRepositoryNotConnectedError();
     },
     getItemPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    getAreaPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    updateAreaPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    clearAreaPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    getLocationPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    updateLocationPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    clearLocationPhotoKey: async () => {
+      throw new PhotoRepositoryNotConnectedError();
+    },
+    listLocationPhotoKeysForArea: async () => {
       throw new PhotoRepositoryNotConnectedError();
     },
     listExpiredPendingPhotos: async () => {

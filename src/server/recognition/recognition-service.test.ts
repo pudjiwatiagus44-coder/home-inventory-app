@@ -33,6 +33,13 @@ function createFakes(overrides: Partial<{
     createPendingPhoto: async (input) => {
       pending.push(input.photoKey);
     },
+    getAreaPhotoKey: async () => null,
+    updateAreaPhotoKey: async () => null,
+    clearAreaPhotoKey: async () => null,
+    getLocationPhotoKey: async () => null,
+    updateLocationPhotoKey: async () => null,
+    clearLocationPhotoKey: async () => null,
+    listLocationPhotoKeysForArea: async () => [],
     attachPhotoToItem: async (input) => {
       if (!pending.includes(input.photoKey) || input.userId !== "user-1") {
         return false;
