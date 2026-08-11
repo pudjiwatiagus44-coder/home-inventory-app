@@ -30,7 +30,7 @@ fun DashboardScreen(
     state: DashboardUiState,
     households: List<HouseholdDto>,
     currentHouseholdId: String?,
-    onSwitchHousehold: () -> Unit,
+    onSwitchHousehold: (String) -> Unit,
     onSearchChange: (String) -> Unit,
     onSelectArea: (String?) -> Unit,
     onSelectLocation: (String?) -> Unit,
@@ -62,6 +62,8 @@ fun DashboardScreen(
         topBar = {
             TopBar(
                 householdName = households.firstOrNull { it.id == currentHouseholdId }?.name,
+                households = households,
+                currentHouseholdId = currentHouseholdId,
                 onSwitchHousehold = onSwitchHousehold,
                 onDraftsClick = onDraftsClick,
                 draftCount = draftCount,

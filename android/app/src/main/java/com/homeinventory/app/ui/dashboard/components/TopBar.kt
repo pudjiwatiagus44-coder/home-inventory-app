@@ -1,19 +1,24 @@
 package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,13 +26,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.Surface
 
 @Composable
 fun TopBar(
     householdName: String?,
-    onSwitchHousehold: () -> Unit,
+    households: List<HouseholdDto>,
+    currentHouseholdId: String?,
+    onSwitchHousehold: (String) -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onBackup: () -> Unit,
@@ -37,6 +45,9 @@ fun TopBar(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var householdMenuExpanded by remember { mutableStateOf(false) }
+    var settingsExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -46,9 +57,7 @@ fun TopBar(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClick = onSwitchHousehold),
+            modifier = Modifier.weight(1f),
         ) {
             Box(
                 modifier = Modifier
@@ -66,17 +75,39 @@ fun TopBar(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = householdName ?: "家中清单",
+                text = householdName ?: "我的家",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "▾",
-                fontSize = 12.sp,
-            )
+            Box {
+                TextButton(onClick = { householdMenuExpanded = true }) {
+                    Text("⌄")
+                }
+                DropdownMenu(
+                    expanded = householdMenuExpanded,
+                    onDismissRequest = { householdMenuExpanded = false },
+                ) {
+                    households.forEach { household ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (household.id == currentHouseholdId) {
+                                        "${household.name}（当前）"
+                                    } else {
+                                        household.name
+                                    },
+                                )
+                            },
+                            onClick = {
+                                householdMenuExpanded = false
+                                onSwitchHousehold(household.id)
+                            },
+                        )
+                    }
+                }
+            }
         }
         TextButton(onClick = onDraftsClick) {
             Text("草稿")
@@ -97,10 +128,44 @@ fun TopBar(
                 }
             }
         }
-        TextButton(onClick = onBackup) { Text("备份") }
-        TextButton(onClick = onImport) { Text("导入") }
-        TextButton(onClick = onInvite) { Text("邀请") }
         TextButton(onClick = onHelp) { Text("帮助") }
-        TextButton(onClick = onSignOut) { Text("退出") }
+        Box {
+            TextButton(onClick = { settingsExpanded = true }) {
+                Text("设置")
+            }
+            DropdownMenu(
+                expanded = settingsExpanded,
+                onDismissRequest = { settingsExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("备份") },
+                    onClick = {
+                        settingsExpanded = false
+                        onBackup()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("导入") },
+                    onClick = {
+                        settingsExpanded = false
+                        onImport()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("邀请") },
+                    onClick = {
+                        settingsExpanded = false
+                        onInvite()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("退出") },
+                    onClick = {
+                        settingsExpanded = false
+                        onSignOut()
+                    },
+                )
+            }
+        }
     }
 }

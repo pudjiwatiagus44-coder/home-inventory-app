@@ -38,7 +38,6 @@ import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
 import com.homeinventory.app.ui.dashboard.dialogs.HelpDialog
-import com.homeinventory.app.ui.dashboard.dialogs.HouseholdSwitcherDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.ItemFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.InviteDialog
@@ -75,7 +74,6 @@ fun DashboardHost(
     var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
-    var showHouseholdSwitcher by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
     var locationFormInitialAreaId by remember { mutableStateOf("") }
@@ -199,10 +197,7 @@ fun DashboardHost(
         state = state,
         households = householdsState.households,
         currentHouseholdId = householdsState.currentHouseholdId,
-        onSwitchHousehold = {
-            showHouseholdSwitcher = true
-            viewModel.refreshHouseholds()
-        },
+        onSwitchHousehold = viewModel::switchToHousehold,
         onSearchChange = viewModel::updateSearch,
         onSelectArea = viewModel::selectArea,
         onSelectLocation = viewModel::selectLocation,
@@ -326,22 +321,6 @@ fun DashboardHost(
             }
         },
     )
-
-    if (showHouseholdSwitcher) {
-        HouseholdSwitcherDialog(
-            households = householdsState.households,
-            currentHouseholdId = householdsState.currentHouseholdId,
-            isLoading = householdsState.isLoading,
-            errorMessage = householdsState.errorMessage,
-            onSelect = { householdId ->
-                showHouseholdSwitcher = false
-                viewModel.switchToHousehold(householdId)
-            },
-            onDismiss = {
-                showHouseholdSwitcher = false
-            },
-        )
-    }
 
     if (showInviteDialog) {
         InviteDialog(
