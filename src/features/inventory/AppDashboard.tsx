@@ -1453,6 +1453,25 @@ export function AppDashboard({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            aria-label="区域照片"
+                            className="rounded-md border border-[var(--border)] px-1.5 text-[11px] text-[var(--primary)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (area.photoKey) {
+                                setPhotoViewer({
+                                  kind: "area",
+                                  id: area.id,
+                                  title: area.name,
+                                });
+                              } else {
+                                setPhotoSource({ kind: "area", id: area.id });
+                              }
+                            }}
+                            type="button"
+                          >
+                            {area.photoKey ? "照片" : "拍照"}
+                          </button>
                           <span className="text-[13px] text-[var(--muted-foreground)]">
                             {itemCount} 件
                           </span>
@@ -1615,6 +1634,28 @@ export function AppDashboard({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            aria-label="位置照片"
+                            className="rounded-md border border-[var(--border)] px-1.5 text-[11px] text-[var(--primary)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (location.photoKey) {
+                                setPhotoViewer({
+                                  kind: "location",
+                                  id: location.id,
+                                  title: location.name,
+                                });
+                              } else {
+                                setPhotoSource({
+                                  kind: "location",
+                                  id: location.id,
+                                });
+                              }
+                            }}
+                            type="button"
+                          >
+                            {location.photoKey ? "照片" : "拍照"}
+                          </button>
                           <span className="text-[13px] text-[var(--muted-foreground)]">
                             {itemCount} 件
                           </span>
