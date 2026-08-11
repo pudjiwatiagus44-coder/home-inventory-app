@@ -46,6 +46,10 @@ export type FamilySettingsClient = {
   rejectJoinRequest: (requestId: string) => Promise<void>;
   listMembers: (householdId: string) => Promise<FamilyMemberRow[]>;
   removeMember: (householdId: string, userId: string) => Promise<void>;
+  renameHousehold: (
+    householdId: string,
+    name: string,
+  ) => Promise<{ id: string; name: string }>;
 };
 
 const TOKEN_CHARSET = /^[A-Za-z0-9_-]+$/;

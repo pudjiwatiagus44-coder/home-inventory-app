@@ -36,6 +36,10 @@ function familyServiceStub(overrides: Record<string, unknown> = {}) {
     approveJoinRequestForCurrentUser: async () => undefined,
     rejectJoinRequestForCurrentUser: async () => undefined,
     removeMemberForCurrentUser: async () => undefined,
+    renameHouseholdForCurrentUser: async () => ({
+      id: "household-1",
+      name: "我的家",
+    }),
     ...overrides,
   };
 }
@@ -51,6 +55,48 @@ function authedRequest(url: string, init?: RequestInit) {
 }
 
 describe("family API handlers", () => {
+  it("renames a household for the owner", async () => {
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub(),
+    });
+
+    const response = await handlers.renameHousehold(
+      authedRequest("http://localhost/api/family/households", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ householdId: "household-1", name: "新家名" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      data: { id: "household-1", name: "我的家" },
+    });
+  });
+
+  it("returns 403 when a non-owner tries to rename", async () => {
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub({
+        renameHouseholdForCurrentUser: async () => {
+          throw new AuthorizationError("只有房主可以管理成员和邀请");
+        },
+      }),
+    });
+
+    const response = await handlers.renameHousehold(
+      authedRequest("http://localhost/api/family/households", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ householdId: "household-1", name: "新家名" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   it("returns 401 without a self-hosted session", async () => {
     const handlers = createFamilyHandlers();
 

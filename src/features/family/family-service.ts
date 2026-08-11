@@ -209,6 +209,21 @@ export function createFamilyService({
         role: input.role,
       });
     },
+
+    async renameHouseholdForCurrentUser(input: {
+      userId: string;
+      householdId: string;
+      name: string;
+    }) {
+      const normalizedName = input.name.trim();
+
+      if (!normalizedName || normalizedName.length > 50) {
+        throw new Error("家庭名称需为 1-50 个字符");
+      }
+
+      await assertOwner(input.userId, input.householdId);
+      return repository.renameHousehold(input.householdId, normalizedName);
+    },
   };
 
   return service;

@@ -54,6 +54,10 @@ export type FamilyRepository = {
     userId: string;
     role: "member" | "readonly";
   }) => Promise<void>;
+  renameHousehold: (
+    householdId: string,
+    name: string,
+  ) => Promise<{ id: string; name: string }>;
   getHouseholdName: (householdId: string) => Promise<string | null>;
 };
 
@@ -391,6 +395,20 @@ export function createPostgresFamilyRepository(
         `,
         [input.householdId, input.userId, input.role],
       );
+    },
+
+    async renameHousehold(householdId, name) {
+      const result = await client.query<{ id: string; name: string }>(
+        `
+          update households
+          set name = $2
+          where id = $1
+          returning id, name
+        `,
+        [householdId, name],
+      );
+
+      return result.rows[0];
     },
 
     async getHouseholdName(householdId) {

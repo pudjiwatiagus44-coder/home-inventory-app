@@ -93,11 +93,45 @@ function createMemoryFamilyRepository(
         member.role = role;
       }
     },
+    renameHousehold: async (householdId, name) => ({
+      id: householdId,
+      name,
+    }),
     getHouseholdName: async () => "我的家",
   };
 }
 
 describe("createFamilyService", () => {
+  it("renames a household when the caller is owner", async () => {
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-1",
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.renameHouseholdForCurrentUser({
+        userId: "user-1",
+        householdId: "household-1",
+        name: "新家名",
+      }),
+    ).resolves.toEqual({ id: "household-1", name: "新家名" });
+  });
+
+  it("rejects renaming when the caller is not owner", async () => {
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-owner",
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.renameHouseholdForCurrentUser({
+        userId: "user-1",
+        householdId: "household-1",
+        name: "新家名",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
   it("only lets the owner create an invitation link", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",

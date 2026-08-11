@@ -349,5 +349,23 @@ export function createSupabaseFamilySettingsClient(
       listHouseholdMembers(supabase, { householdId }),
     removeMember: (householdId, userId) =>
       removeHouseholdMember(supabase, { householdId, userId }),
+    renameHousehold: async (householdId, name) => {
+      const { data, error } = await supabase
+        .from("households")
+        .update({ name })
+        .eq("id", householdId)
+        .select("id,name")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data) {
+        throw new Error("家庭不存在或无权重命名");
+      }
+
+      return { id: String(data.id), name: String(data.name) };
+    },
   };
 }

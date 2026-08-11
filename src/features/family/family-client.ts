@@ -88,6 +88,13 @@ export function createFamilyHttpClient({
       );
     },
 
+    renameHousehold(householdId: string, name: string) {
+      return request<{ id: string; name: string }>(
+        "/api/family/households",
+        jsonInit("PATCH", { householdId, name }),
+      );
+    },
+
     getJoinInfo(token: string) {
       return request<{ householdId: string; householdName: string } | null>(
         `/api/join/${encodeURIComponent(token)}`,

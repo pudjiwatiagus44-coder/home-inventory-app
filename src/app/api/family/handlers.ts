@@ -80,6 +80,34 @@ export function createFamilyHandlers(
       }
     },
 
+    async renameHousehold(request: NextRequest) {
+      try {
+        const user = await requireUser(request);
+
+        if (!user) {
+          return unauthorizedResponse();
+        }
+
+        const body = await readJsonObject(request);
+        const householdId = textField(body, "householdId");
+        const name = textField(body, "name");
+        const missingHousehold = requireHouseholdId(householdId);
+
+        if (missingHousehold) {
+          return missingHousehold;
+        }
+
+        const data = await service().renameHouseholdForCurrentUser({
+          userId: user.userId,
+          householdId,
+          name,
+        });
+        return successResponse(data);
+      } catch (error) {
+        return familyErrorResponse(error);
+      }
+    },
+
     async createInvitation(request: NextRequest) {
       try {
         const user = await requireUser(request);
