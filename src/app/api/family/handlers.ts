@@ -80,6 +80,27 @@ export function createFamilyHandlers(
       }
     },
 
+    async createHousehold(request: NextRequest) {
+      try {
+        const user = await requireUser(request);
+
+        if (!user) {
+          return unauthorizedResponse();
+        }
+
+        const body = await readJsonObject(request);
+        const name = textField(body, "name");
+        const data = await service().createHouseholdForCurrentUser({
+          userId: user.userId,
+          name,
+        });
+
+        return successResponse(data);
+      } catch (error) {
+        return familyErrorResponse(error);
+      }
+    },
+
     async renameHousehold(request: NextRequest) {
       try {
         const user = await requireUser(request);

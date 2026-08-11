@@ -304,3 +304,12 @@ Android 拍物品正面照
 - 记住邮箱：Web 用 localStorage（key `home_inventory_remembered_email`），Android 用 `RememberedEmailStore`（EncryptedSharedPreferences）；只存邮箱，不存密码；登录态保持逻辑不变。
 - Android 注册入口：复用现有 `POST /api/auth/register` 与 session cookie 流程，注册成功即进入 App。
 - 详细设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。
+
+## 2026-08-11 Android 家庭下拉与创建家庭架构
+
+- `GET /api/family/households` 是家庭下拉的唯一列表来源，返回当前账号 membership 可访问的全部 household；这天然覆盖“其他账户共享后已加入的家庭”。
+- `POST /api/family/households` 用于从 Android 下拉栏底部“添加新地点”创建新的 household。服务端从当前 session 推导 ownerUserId，创建 `households` 记录并写入 `household_members(role=owner)`，客户端不能伪造 owner。
+- `PATCH /api/family/households` 继续用于重命名指定 household；`family-service` 必须先校验当前用户是该 household owner。
+- Android `InventoryRepository.createHousehold(name)` 创建成功后写入 `sync_state.current_household_id` 并刷新新 household 的 snapshot，因此下次启动默认进入新建或上次切换的家庭。
+- Android 顶部栏只负责展示和触发选择；真正可访问哪些家庭、能否重命名，全部由自托管服务端 membership/owner 权限决定。
+- Supabase 历史代码不参与该链路；当前定位只允许进入 Next.js API/service/repository、自有 PostgreSQL、阿里云部署和 Android 客户端。

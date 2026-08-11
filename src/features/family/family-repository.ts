@@ -8,6 +8,10 @@ import type {
 
 export type FamilyRepository = {
   listHouseholdsForUser: (userId: string) => Promise<HouseholdOption[]>;
+  createHousehold: (input: {
+    ownerUserId: string;
+    name: string;
+  }) => Promise<{ id: string; name: string }>;
   getHouseholdOwner: (householdId: string) => Promise<string | null>;
   isHouseholdMember: (userId: string, householdId: string) => Promise<boolean>;
   createInvitationLink: (input: {
@@ -115,6 +119,33 @@ export function createPostgresFamilyRepository(
         name: row.name,
         role: row.role,
       }));
+    },
+
+    async createHousehold(input) {
+      const result = await client.query<{ id: string; name: string }>(
+        `
+          insert into households (owner_user_id, name)
+          values ($1, $2)
+          returning id, name
+        `,
+        [input.ownerUserId, input.name],
+      );
+      const row = result.rows[0];
+
+      if (!row) {
+        throw new Error("创建家庭后没有返回数据");
+      }
+
+      await client.query(
+        `
+          insert into household_members (household_id, user_id, role)
+          values ($1, $2, 'owner')
+          on conflict (household_id, user_id) do nothing
+        `,
+        [row.id, input.ownerUserId],
+      );
+
+      return row;
     },
 
     async getHouseholdOwner(householdId) {

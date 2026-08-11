@@ -46,6 +46,7 @@ export type FamilySettingsClient = {
   rejectJoinRequest: (requestId: string) => Promise<void>;
   listMembers: (householdId: string) => Promise<FamilyMemberRow[]>;
   removeMember: (householdId: string, userId: string) => Promise<void>;
+  createHousehold: (name: string) => Promise<{ id: string; name: string }>;
   renameHousehold: (
     householdId: string,
     name: string,

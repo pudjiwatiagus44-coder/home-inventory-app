@@ -27,6 +27,7 @@ import com.homeinventory.app.core.config.AppConfig
 import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
 import com.homeinventory.app.data.repository.ImportExportRepository
@@ -75,7 +76,7 @@ fun DashboardHost(
     var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
-    var showRenameDialog by remember { mutableStateOf(false) }
+    var householdNameDialog by remember { mutableStateOf<HouseholdNameDialogTarget?>(null) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
     var locationFormInitialAreaId by remember { mutableStateOf("") }
@@ -200,19 +201,19 @@ fun DashboardHost(
         households = householdsState.households,
         currentHouseholdId = householdsState.currentHouseholdId,
         onSwitchHousehold = viewModel::switchToHousehold,
-        onRenameHousehold = {
-            val currentHousehold = householdsState.households.firstOrNull {
-                it.id == householdsState.currentHouseholdId
-            }
-            if (currentHousehold?.role != "owner") {
+        onRenameHousehold = { household ->
+            if (household.role != "owner") {
                 Toast.makeText(
                     context,
                     "只有房主可以重命名家庭",
                     Toast.LENGTH_SHORT,
                 ).show()
             } else {
-                showRenameDialog = true
+                householdNameDialog = HouseholdNameDialogTarget.Rename(household)
             }
+        },
+        onCreateHousehold = {
+            householdNameDialog = HouseholdNameDialogTarget.Create
         },
         onSearchChange = viewModel::updateSearch,
         onSelectArea = viewModel::selectArea,
@@ -520,21 +521,24 @@ fun DashboardHost(
         )
     }
 
-    if (showRenameDialog) {
-        val currentHousehold = householdsState.households.firstOrNull {
-            it.id == householdsState.currentHouseholdId
-        }
+    householdNameDialog?.let { target ->
         RenameHouseholdDialog(
-            initialName = currentHousehold?.name ?: "",
+            title = target.title,
+            confirmText = target.confirmText,
+            initialName = target.initialName,
             onRename = { name ->
-                val result = repository.renameCurrentHousehold(name)
+                val result = when (target) {
+                    HouseholdNameDialogTarget.Create -> repository.createHousehold(name)
+                    is HouseholdNameDialogTarget.Rename ->
+                        repository.renameHousehold(target.household.id, name)
+                }
                 if (result.isSuccess) {
                     viewModel.refreshHouseholds()
                 }
                 result
             },
             onDismiss = {
-                showRenameDialog = false
+                householdNameDialog = null
             },
         )
     }
@@ -787,3 +791,21 @@ fun DashboardHost(
 
 private fun isNetworkError(error: Throwable): Boolean =
     error.message?.startsWith("无法连接服务器") == true
+
+private sealed class HouseholdNameDialogTarget {
+    abstract val title: String
+    abstract val confirmText: String
+    abstract val initialName: String
+
+    data object Create : HouseholdNameDialogTarget() {
+        override val title = "添加新地点"
+        override val confirmText = "创建"
+        override val initialName = ""
+    }
+
+    data class Rename(val household: HouseholdDto) : HouseholdNameDialogTarget() {
+        override val title = "重命名家庭"
+        override val confirmText = "保存"
+        override val initialName = household.name
+    }
+}

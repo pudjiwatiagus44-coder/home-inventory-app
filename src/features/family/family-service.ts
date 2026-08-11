@@ -53,6 +53,22 @@ export function createFamilyService({
       return repository.listHouseholdsForUser(userId);
     },
 
+    async createHouseholdForCurrentUser(input: {
+      userId: string;
+      name: string;
+    }): Promise<{ id: string; name: string }> {
+      const normalizedName = input.name.trim();
+
+      if (!normalizedName || normalizedName.length > 50) {
+        throw new Error("家庭名称需要 1-50 个字符");
+      }
+
+      return repository.createHousehold({
+        ownerUserId: input.userId,
+        name: normalizedName,
+      });
+    },
+
     async createInvitationLinkForCurrentUser(input: {
       userId: string;
       householdId: string;

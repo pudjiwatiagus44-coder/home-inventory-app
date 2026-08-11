@@ -495,6 +495,42 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun createHouseholdRefreshesListAndSelectsCreatedHousehold() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var createdName: String? = null
+            var selectedId = "household-1"
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadHouseholds = {
+                    Result.success(
+                        listOf(
+                            HouseholdDto(id = "household-1", name = "我的家", role = "owner"),
+                            HouseholdDto(id = "household-new", name = "储藏间", role = "owner"),
+                        ),
+                    )
+                },
+                selectedHouseholdId = { selectedId },
+                createHouseholdAction = { name ->
+                    createdName = name
+                    selectedId = "household-new"
+                    Result.success(Unit)
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.createHousehold("储藏间")
+            advanceUntilIdle()
+
+            assertEquals("储藏间", createdName)
+            assertEquals("household-new", viewModel.householdsState().value.currentHouseholdId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun switchToHouseholdShowsErrorWhenSwitchFails() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

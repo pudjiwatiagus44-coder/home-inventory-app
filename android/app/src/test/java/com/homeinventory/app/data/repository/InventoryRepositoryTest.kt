@@ -12,6 +12,7 @@ import com.homeinventory.app.data.local.SyncStateDao
 import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.ApkVersionDto
+import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
@@ -263,6 +264,19 @@ class InventoryRepositoryTest {
 
         assertTrue(result.isFailure)
         assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun createHouseholdCallsApiAndSelectsCreatedHousehold() = runTest {
+        val api = RecordingHouseholdApi()
+        val repository = repositoryWith(api = api)
+
+        val result = repository.createHousehold("储藏间")
+
+        assertTrue(result.isSuccess)
+        assertEquals("储藏间", api.lastCreateHouseholdName)
+        assertEquals("household-new", api.lastSnapshotHouseholdId)
+        assertEquals("household-new", repository.selectedHouseholdId())
     }
 
     @Test
@@ -535,6 +549,7 @@ private class RecordingHouseholdApi : TestApiStub() {
     var lastCreateInvitationHouseholdId: String? = null
     var lastRenameHouseholdId: String? = null
     var lastRenameName: String? = null
+    var lastCreateHouseholdName: String? = null
 
     override suspend fun snapshot(
         householdId: String?,
@@ -576,6 +591,21 @@ private class RecordingHouseholdApi : TestApiStub() {
                 ok = true,
                 data = RemoteHouseholdDto(
                     id = request.householdId,
+                    name = request.name,
+                ),
+            ),
+        )
+    }
+
+    override suspend fun createHousehold(
+        request: CreateHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>> {
+        lastCreateHouseholdName = request.name
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteHouseholdDto(
+                    id = "household-new",
                     name = request.name,
                 ),
             ),

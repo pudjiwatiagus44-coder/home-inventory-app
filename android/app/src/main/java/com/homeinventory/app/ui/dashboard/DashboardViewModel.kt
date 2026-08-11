@@ -128,6 +128,9 @@ class DashboardViewModel(
     private val switchHousehold: suspend (String) -> Result<Unit> = {
         Result.failure(IllegalStateException("家庭功能不可用"))
     },
+    private val createHouseholdAction: suspend (String) -> Result<Unit> = {
+        Result.failure(IllegalStateException("家庭功能不可用"))
+    },
     private val selectedHouseholdId: suspend () -> String? = { null },
     private val loadJoinRequests: suspend () -> Result<List<JoinRequestDto>> = {
         Result.success(emptyList())
@@ -419,6 +422,25 @@ class DashboardViewModel(
                     households.value = households.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "切换家庭失败",
+                    )
+            }
+        }
+    }
+
+    fun createHousehold(name: String) {
+        viewModelScope.launch {
+            households.value = households.value.copy(
+                isLoading = true,
+                errorMessage = null,
+            )
+            createHouseholdAction(name)
+                .onSuccess {
+                    refreshHouseholds()
+                }
+                .onFailure { error ->
+                    households.value = households.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "创建家庭失败",
                     )
                 }
         }

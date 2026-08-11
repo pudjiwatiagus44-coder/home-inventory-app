@@ -21,6 +21,8 @@ fun RenameHouseholdDialog(
     initialName: String,
     onRename: suspend (String) -> Result<Unit>,
     onDismiss: () -> Unit,
+    title: String = "重命名家庭",
+    confirmText: String = "保存",
 ) {
     var name by remember { mutableStateOf(initialName) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -29,12 +31,12 @@ fun RenameHouseholdDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("重命名家庭") },
+        title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("家庭名称") },
+                label = { Text("名称") },
                 modifier = Modifier.fillMaxWidth(),
             )
             errorMessage?.let {
@@ -56,12 +58,12 @@ fun RenameHouseholdDialog(
                             .onSuccess { onDismiss() }
                             .onFailure { error ->
                                 isSaving = false
-                                errorMessage = error.message ?: "重命名失败"
+                                errorMessage = error.message ?: "保存失败"
                             }
                     }
                 },
             ) {
-                Text(if (isSaving) "保存中…" else "保存")
+                Text(if (isSaving) "保存中..." else confirmText)
             }
         },
         dismissButton = {

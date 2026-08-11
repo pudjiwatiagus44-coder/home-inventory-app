@@ -103,6 +103,34 @@ describe("createFamilyHttpClient", () => {
     ]);
   });
 
+  it("creates a household through the API", async () => {
+    const requests: unknown[] = [];
+    const client = createFamilyHttpClient({
+      fetch: async (input, init) => {
+        requests.push({ input, init });
+        return jsonResponse({
+          ok: true,
+          data: { id: "household-new", name: "储藏间" },
+        });
+      },
+    });
+
+    await expect(client.createHousehold("储藏间")).resolves.toEqual({
+      id: "household-new",
+      name: "储藏间",
+    });
+    expect(requests).toEqual([
+      {
+        input: "/api/family/households",
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "储藏间" }),
+        },
+      },
+    ]);
+  });
+
   it("throws the server message when the API returns an error", async () => {
     const client = createFamilyHttpClient({
       fetch: async () =>

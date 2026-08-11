@@ -27,6 +27,7 @@ export function createFamilyHttpClient({
     token: string,
   ) => Promise<{ householdId: string; householdName: string } | null>;
   submitJoinApplication: (token: string) => Promise<string>;
+  createHousehold: (name: string) => Promise<{ id: string; name: string }>;
 } {
   return {
     listHouseholds() {
@@ -85,6 +86,13 @@ export function createFamilyHttpClient({
       return request(
         `/api/family/members/${encodeURIComponent(userId)}`,
         jsonInit("DELETE", { householdId }),
+      );
+    },
+
+    createHousehold(name: string) {
+      return request<{ id: string; name: string }>(
+        "/api/family/households",
+        jsonInit("POST", { name }),
       );
     },
 

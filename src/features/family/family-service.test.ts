@@ -19,6 +19,14 @@ function createMemoryFamilyRepository(
 
   return {
     listHouseholdsForUser: async () => [],
+    createHousehold: async ({ ownerUserId, name }) => {
+      members.push({
+        householdId: "household-new",
+        userId: ownerUserId,
+        role: "owner",
+      });
+      return { id: "household-new", name };
+    },
     getHouseholdOwner: async () => state.ownerUserId ?? null,
     isHouseholdMember: async (userId, householdId) =>
       members.some(
@@ -102,6 +110,41 @@ function createMemoryFamilyRepository(
 }
 
 describe("createFamilyService", () => {
+  it("creates a new owner household with a trimmed name", async () => {
+    const members: {
+      householdId: string;
+      userId: string;
+      role: "owner" | "member" | "readonly";
+    }[] = [];
+    const repository = createMemoryFamilyRepository({ members });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.createHouseholdForCurrentUser({
+        userId: "user-1",
+        name: "  Pantry  ",
+      }),
+    ).resolves.toEqual({ id: "household-new", name: "Pantry" });
+    expect(members).toContainEqual({
+      householdId: "household-new",
+      userId: "user-1",
+      role: "owner",
+    });
+  });
+
+  it("rejects creating a household with a blank name", async () => {
+    const service = createFamilyService({
+      repository: createMemoryFamilyRepository(),
+    });
+
+    await expect(
+      service.createHouseholdForCurrentUser({
+        userId: "user-1",
+        name: "   ",
+      }),
+    ).rejects.toThrow("1-50");
+  });
+
   it("renames a household when the caller is owner", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",

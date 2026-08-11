@@ -6,6 +6,7 @@ import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.AuthResponse
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.FeedbackRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
@@ -76,6 +77,11 @@ interface HomeInventoryApi {
 
     @GET("api/family/households")
     suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>>
+
+    @POST("api/family/households")
+    suspend fun createHousehold(
+        @Body request: CreateHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>>
 
     @GET("api/mobile/inventory/snapshot")
     suspend fun snapshot(

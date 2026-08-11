@@ -356,11 +356,14 @@ export function createSupabaseFamilySettingsClient(
       approveHouseholdJoinRequest(supabase, { requestId }),
     rejectJoinRequest: (requestId) =>
       rejectHouseholdJoinRequest(supabase, { requestId }),
-    listMembers: (householdId) =>
-      listHouseholdMembers(supabase, { householdId }),
-    removeMember: (householdId, userId) =>
-      removeHouseholdMember(supabase, { householdId, userId }),
-    renameHousehold: async (householdId, name) => {
+	    listMembers: (householdId) =>
+	      listHouseholdMembers(supabase, { householdId }),
+	    removeMember: (householdId, userId) =>
+	      removeHouseholdMember(supabase, { householdId, userId }),
+	    createHousehold: async () => {
+	      throw new Error("Supabase 已归档，请使用阿里云自托管 API");
+	    },
+	    renameHousehold: async (householdId, name) => {
       const { data, error } = await supabase
         .from("households")
         .update({ name })

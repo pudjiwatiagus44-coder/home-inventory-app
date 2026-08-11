@@ -96,6 +96,7 @@ fun AppRoot() {
                     createInvitation = repository::createInvitationLink,
                     loadHouseholds = repository::loadHouseholds,
                     switchHousehold = repository::switchHousehold,
+                    createHouseholdAction = repository::createHousehold,
                     selectedHouseholdId = repository::selectedHouseholdId,
                     loadJoinRequests = repository::listJoinRequests,
                     approveJoinRequest = repository::approveJoinRequest,

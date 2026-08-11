@@ -10,6 +10,7 @@ import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.AuthResponse
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.FeedbackRequest
 import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
@@ -58,6 +59,16 @@ abstract class TestApiStub : HomeInventoryApi {
 
     override suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>> =
         Response.success(ApiEnvelope(ok = true, data = emptyList()))
+
+    override suspend fun createHousehold(
+        request: CreateHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteHouseholdDto(id = "household-new", name = request.name),
+            ),
+        )
 
     override suspend fun snapshot(
         householdId: String?,

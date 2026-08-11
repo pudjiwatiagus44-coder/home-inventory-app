@@ -22,6 +22,7 @@ import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
@@ -170,6 +171,10 @@ class InventoryRepository(
             return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
         }
 
+        return renameHousehold(householdId, name)
+    }
+
+    suspend fun renameHousehold(householdId: String, name: String): Result<Unit> {
         val response = try {
             api.renameHousehold(RenameHouseholdRequest(householdId, name))
         } catch (_: Exception) {
@@ -187,6 +192,32 @@ class InventoryRepository(
         }
 
         return Result.success(Unit)
+    }
+
+    suspend fun createHousehold(name: String): Result<Unit> {
+        val response = try {
+            api.createHousehold(CreateHouseholdRequest(name))
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+        val created = body?.data
+
+        if (!response.isSuccessful || body?.ok != true || created == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody())
+                        ?: body?.message
+                        ?: "创建家庭失败",
+                ),
+            )
+        }
+
+        households = households.filterNot { it.id == created.id } +
+            HouseholdDto(id = created.id, name = created.name, role = "owner")
+        currentHouseholdId = created.id
+        syncStateDao.put(SyncStateEntity(KEY_CURRENT_HOUSEHOLD_ID, created.id))
+        return refreshSnapshot(created.id)
     }
 
     suspend fun createInvitationLink(): Result<String> {

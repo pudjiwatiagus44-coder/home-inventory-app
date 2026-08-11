@@ -1015,3 +1015,12 @@
 - APK 托管：`scripts/upload-apk.ps1` 构建并上传 0.5.24 / code 30 APK（20,180,415 字节）；重启服务后 `https://homestorag.xyz/apk/version.json` 返回 `versionName=0.5.24`、`versionCode=30`、`size=20180415`，APK URL 返回 HTTP 200 且 `Content-Length: 20180415`。
 - 线上 smoke：`https://homestorag.xyz/login` 返回 HTTP 200；未登录 `POST https://homestorag.xyz/api/feedback` 返回 401 `{"ok":false,"message":"Authentication required"}`；服务端未接收匿名反馈。
 - 待办：真机验收家庭切换、长按重命名、设置菜单和反馈邮件；Web/Android 登录后真实提交一封反馈邮件验证到 QQ 邮箱。
+
+## 2026-08-11 Android 家庭下拉与新增地点实现证据（0.5.25 / code 31）
+
+- 用户确认：顶部设置改为三条横线；家庭名旁去掉“家”字图标，改为双向切换图标；下拉框与主题统一并与家庭名左侧对齐；下拉栏内家庭名长按可重命名；底部新增“添加新地点”；共享加入的其他家庭也在此显示；切换成功后下次默认显示；新地点可长按重命名。
+- 服务端实现：`POST /api/family/households` 创建新的 household，当前 session 用户成为 owner；`family-service` 校验名称 1-50 字符；`PATCH /api/family/households` 继续执行 owner-only 重命名。
+- Android 实现：`TopBar` 使用三横线设置图标与双向切换图标；下拉项支持点击切换和长按重命名；“添加新地点”复用名称输入弹窗创建新 household；Repository 创建成功后写入 `sync_state.current_household_id` 并刷新新 household snapshot。
+- 路线保护：当前功能只走阿里云自托管 Next.js API/service/repository + 自有 PostgreSQL + Android 客户端；Supabase 历史客户端仅保留归档/兼容占位，不作为当前链路。
+- 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 359 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
+- 版本：Android `versionName=0.5.25`、`versionCode=31`。本轮仅完成本地构建与 git checkpoint；APK 上传、服务器部署和真机验收待后续执行。

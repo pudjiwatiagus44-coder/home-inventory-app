@@ -36,6 +36,10 @@ function familyServiceStub(overrides: Record<string, unknown> = {}) {
     approveJoinRequestForCurrentUser: async () => undefined,
     rejectJoinRequestForCurrentUser: async () => undefined,
     removeMemberForCurrentUser: async () => undefined,
+    createHouseholdForCurrentUser: async () => ({
+      id: "household-new",
+      name: "储藏间",
+    }),
     renameHouseholdForCurrentUser: async () => ({
       id: "household-1",
       name: "我的家",
@@ -55,6 +59,34 @@ function authedRequest(url: string, init?: RequestInit) {
 }
 
 describe("family API handlers", () => {
+  it("creates a household for the current user", async () => {
+    const calls: unknown[] = [];
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub({
+        createHouseholdForCurrentUser: async (input: unknown) => {
+          calls.push(input);
+          return { id: "household-new", name: "储藏间" };
+        },
+      }),
+    });
+
+    const response = await handlers.createHousehold(
+      authedRequest("http://localhost/api/family/households", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "储藏间" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([{ userId: "user-1", name: "储藏间" }]);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      data: { id: "household-new", name: "储藏间" },
+    });
+  });
+
   it("renames a household for the owner", async () => {
     const handlers = createFamilyHandlers({
       authService,

@@ -2,26 +2,42 @@ package com.homeinventory.app.ui.dashboard.components
 
 import java.nio.file.Files
 import java.nio.file.Path
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopBarTest {
     @Test
     fun topBarHasHouseholdDropdownAndSettingsMenu() {
-        val source = String(
+        val source = topBarSource()
+
+        assertTrue(source.contains("DropdownMenu"))
+        assertTrue(source.contains("onDraftsClick"))
+        assertTrue(source.contains("onHelp"))
+        assertTrue(source.contains("onBackup"))
+        assertTrue(source.contains("onImport"))
+        assertTrue(source.contains("onInvite"))
+        assertTrue(source.contains("onSignOut"))
+        assertTrue(source.contains("onRenameHousehold"))
+    }
+
+    @Test
+    fun topBarUsesIconOnlyHouseholdSwitcherAndHamburgerSettings() {
+        val source = topBarSource()
+
+        assertTrue(source.contains("HamburgerMenuIcon"))
+        assertTrue(source.contains("HouseholdSwitchIcon"))
+        assertTrue(source.contains("HouseholdDropdownRow"))
+        assertTrue(source.contains("onRenameHousehold(household)"))
+        assertTrue(source.contains("onCreateHousehold"))
+        assertTrue(source.contains("添加新地点"))
+        assertFalse(source.contains("Text(\"设置\")"))
+    }
+
+    private fun topBarSource(): String =
+        String(
             Files.readAllBytes(
                 Path.of("src/main/java/com/homeinventory/app/ui/dashboard/components/TopBar.kt"),
             ),
         )
-        assertTrue(source.contains("⌄"))
-        assertTrue(source.contains("DropdownMenu"))
-        assertTrue(source.contains("设置"))
-        assertTrue(source.contains("备份"))
-        assertTrue(source.contains("导入"))
-        assertTrue(source.contains("邀请"))
-        assertTrue(source.contains("退出"))
-        assertTrue(source.contains("草稿"))
-        assertTrue(source.contains("帮助"))
-        assertTrue(source.contains("onRenameHousehold"))
-    }
 }

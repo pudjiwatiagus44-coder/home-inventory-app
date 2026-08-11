@@ -39,6 +39,10 @@ data class HouseholdDto(
     val role: String? = null,
 )
 
+data class CreateHouseholdRequest(
+    val name: String,
+)
+
 data class RenameHouseholdRequest(
     val householdId: String,
     val name: String,
