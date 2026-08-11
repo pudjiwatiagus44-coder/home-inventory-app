@@ -29,6 +29,8 @@ import {
 } from "../family/family-actions";
 import { createFamilyHttpClient } from "../family/family-client";
 import type { HouseholdOption } from "../family/family-data";
+import { createFeedbackClient } from "../feedback/feedback-client";
+import { FeedbackDialog } from "../feedback/FeedbackDialog";
 import { FamilySettings } from "../family/FamilySettings";
 import {
   validateAreaInput,
@@ -218,6 +220,7 @@ export function AppDashboard({
     null,
   );
   const [showFamilySettings, setShowFamilySettings] = useState(false);
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [importStatus, setImportStatus] = useState<
     | { status: "idle" }
     | { status: "loading" }
@@ -1028,6 +1031,13 @@ export function AppDashboard({
               type="button"
             >
               设置
+            </button>
+            <button
+              className="hidden h-9 rounded-md border border-transparent px-2 text-[13px] text-[var(--muted-foreground)] hover:border-[var(--border)] hover:bg-[var(--surface-elevated)] lg:block"
+              onClick={() => setShowHelpDialog(true)}
+              type="button"
+            >
+              帮助
             </button>
             <button
               className="h-9 rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-3 text-[13px] font-medium shadow-sm"
@@ -2523,6 +2533,13 @@ export function AppDashboard({
                 )
           }
           onClose={() => setShowFamilySettings(false)}
+        />
+      ) : null}
+
+      {showHelpDialog ? (
+        <FeedbackDialog
+          onSubmit={(message) => createFeedbackClient().submitFeedback(message)}
+          onClose={() => setShowHelpDialog(false)}
         />
       ) : null}
     </div>

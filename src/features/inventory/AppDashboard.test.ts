@@ -176,4 +176,11 @@ describe("AppDashboard location actions", () => {
     expect(source).not.toContain("h-[92px] min-w-[112px]");
     expect(source).not.toContain("h-[78px] min-w-[132px]");
   });
+
+  it("adds a help entry with feedback", () => {
+    const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
+
+    expect(source).toContain("showHelpDialog");
+    expect(source).toContain("帮助");
+  });
 });
