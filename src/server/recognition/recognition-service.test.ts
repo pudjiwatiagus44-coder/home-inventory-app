@@ -168,6 +168,48 @@ describe("recognition service", () => {
     ).rejects.toThrow("No household found for current user");
   });
 
+  it("uses the selected household for photo operations", async () => {
+    const fakes = createFakes({ householdId: "household-1" });
+    const selected: Array<{ userId: string; householdId?: string }> = [];
+    const service = createRecognitionService({
+      loadHouseholdIdForUser: async (userId, householdId) => {
+        selected.push({ userId, householdId });
+        return householdId ?? fakes.householdId;
+      },
+      ...fakes,
+    });
+
+    await service.recognizeForCurrentUser({
+      userId: "user-1",
+      mode: "name",
+      jpegBuffer: makeJpeg(),
+      householdId: "household-2",
+    });
+    await service.attachPhotoToItem({
+      userId: "user-1",
+      itemId: "item-1",
+      photoKey: "photo_1.jpg",
+      householdId: "household-2",
+    });
+    await service.getItemPhoto({
+      userId: "user-1",
+      itemId: "item-1",
+      householdId: "household-2",
+    });
+    await service.deleteItemPhoto({
+      userId: "user-1",
+      itemId: "item-1",
+      householdId: "household-2",
+    });
+
+    expect(selected).toEqual([
+      { userId: "user-1", householdId: "household-2" },
+      { userId: "user-1", householdId: "household-2" },
+      { userId: "user-1", householdId: "household-2" },
+      { userId: "user-1", householdId: "household-2" },
+    ]);
+  });
+
   it("only lets the pending photo creator attach it to their own item", async () => {
     const fakes = createFakes({ householdId: "household-1" });
     const service = createRecognitionService({

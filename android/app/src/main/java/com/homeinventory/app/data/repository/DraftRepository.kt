@@ -46,6 +46,7 @@ class DraftRepository(
     private val readPhotoFileLarge: (fileName: String) -> Bitmap?,
     private val readPhotoBytes: (fileName: String) -> ByteArray?,
     private val deletePhotoFile: (fileName: String) -> Unit,
+    private val householdIdProvider: suspend () -> String? = { null },
 ) : DraftGateway {
     override fun observe(): Flow<List<DraftEntity>> = draftDao.observeAll()
 
@@ -96,7 +97,7 @@ class DraftRepository(
             bytes.toRequestBody("image/jpeg".toMediaType()),
         )
         val response = try {
-            withTimeout(30_000) { api.recognize(part, "name") }
+            withTimeout(30_000) { api.recognize(part, "name", householdIdProvider()) }
         } catch (error: TimeoutCancellationException) {
             Log.w("DraftRecognition", "recognize timeout for $id")
             val fallback = current.copy(status = DraftStatus.Ready)

@@ -35,6 +35,7 @@ describe("item photo attach", () => {
         method: "POST",
         headers: { cookie: "home_inventory_session=session-token" },
         body: JSON.stringify({
+          householdId: "household-2",
           name: "牛奶",
           note: "",
           expireDate: null,
@@ -48,6 +49,7 @@ describe("item photo attach", () => {
     expect(attached).toEqual({
       userId: "user-1",
       itemId: "item-1",
+      householdId: "household-2",
       photoKey: "photo_1.jpg",
     });
   });
@@ -70,6 +72,75 @@ describe("item photo attach", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("forwards the selected householdId when reading an item photo", async () => {
+    let requested: { userId: string; itemId: string; householdId?: string } | null =
+      null;
+    const handlers = createItemPhotoHandlers({
+      authService: {
+        getCurrentUser: async () => ({ userId: "user-1", email: "a@b.c" }),
+      },
+      recognitionService: {
+        getItemPhoto: async (input) => {
+          requested = input;
+          return null;
+        },
+      } as never,
+    });
+
+    const response = await handlers.GET(
+      new NextRequest(
+        "http://localhost/api/inventory/items/item-1/photo?householdId=household-2",
+        {
+          headers: { cookie: "home_inventory_session=session-token" },
+        },
+      ),
+      { params: Promise.resolve({ itemId: "item-1" }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(requested).toEqual({
+      userId: "user-1",
+      itemId: "item-1",
+      householdId: "household-2",
+    });
+  });
+
+  it("deletes the item photo under the selected household", async () => {
+    let deleted: { userId: string; itemId: string; householdId?: string } | null =
+      null;
+    const handlers = createItemItemHandlers({
+      authService: {
+        getCurrentUser: async () => ({ userId: "user-1", email: "a@b.c" }),
+      },
+      inventoryService: {
+        deleteItemForCurrentUser: async () => undefined,
+      } as never,
+      recognitionService: {
+        deleteItemPhoto: async (input) => {
+          deleted = input;
+        },
+      } as never,
+    });
+
+    const response = await handlers.DELETE(
+      new NextRequest(
+        "http://localhost/api/inventory/items/item-1?householdId=household-2",
+        {
+          method: "DELETE",
+          headers: { cookie: "home_inventory_session=session-token" },
+        },
+      ),
+      { params: Promise.resolve({ itemId: "item-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleted).toEqual({
+      userId: "user-1",
+      itemId: "item-1",
+      householdId: "household-2",
+    });
   });
 
   it("returns 401 for the photo route without a session", async () => {
@@ -111,6 +182,7 @@ describe("item photo attach", () => {
         method: "PATCH",
         headers: { cookie: "home_inventory_session=session-token" },
         body: JSON.stringify({
+          householdId: "household-2",
           name: "牛奶",
           note: "",
           expireDate: null,
@@ -125,6 +197,7 @@ describe("item photo attach", () => {
     expect(attached).toEqual({
       userId: "user-1",
       itemId: "item-1",
+      householdId: "household-2",
       photoKey: "photo_1.jpg",
     });
   });

@@ -86,4 +86,5 @@ data class PendingOperationEntity(
     val state: String,
     val createdAt: Long,
     val errorMessage: String?,
+    val householdId: String? = null,
 )

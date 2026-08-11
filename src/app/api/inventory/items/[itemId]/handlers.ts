@@ -46,6 +46,7 @@ export function createItemItemHandlers(
             const attached = await photoService.attachPhotoToItem({
               userId,
               itemId,
+              householdId,
               photoKey,
             });
 
@@ -70,7 +71,7 @@ export function createItemItemHandlers(
           const photoService =
             dependencies.recognitionService ??
             createRouteRecognitionService();
-          await photoService.deleteItemPhoto({ userId, itemId });
+          await photoService.deleteItemPhoto({ userId, itemId, householdId });
           return null;
         },
         dependencies,

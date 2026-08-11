@@ -392,7 +392,7 @@ class InventoryRepository(
         val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
         val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
         val response = try {
-            api.recognize(part, mode)
+            api.recognize(part, mode, currentHouseholdId)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -422,7 +422,7 @@ class InventoryRepository(
         val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
         val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
         val response = try {
-            api.recognize(part, "photo")
+            api.recognize(part, "photo", currentHouseholdId)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -441,7 +441,7 @@ class InventoryRepository(
 
     suspend fun loadItemPhoto(itemId: String): Result<Bitmap> {
         val response = try {
-            api.itemPhoto(itemId)
+            api.itemPhoto(itemId, currentHouseholdId)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -474,6 +474,7 @@ class InventoryRepository(
         )
         val operation = PendingOperationEntity(
             clientOperationId = "op-${UUID.randomUUID()}",
+            householdId = currentHouseholdId,
             entity = "item",
             action = "create",
             localId = localId,
@@ -712,6 +713,7 @@ class InventoryRepository(
         pendingOperationDao.upsertOperation(
             PendingOperationEntity(
                 clientOperationId = "op-${UUID.randomUUID()}",
+                householdId = currentHouseholdId,
                 entity = "area",
                 action = "create",
                 localId = localId,
@@ -741,6 +743,7 @@ class InventoryRepository(
         pendingOperationDao.upsertOperation(
             PendingOperationEntity(
                 clientOperationId = "op-${UUID.randomUUID()}",
+                householdId = currentHouseholdId,
                 entity = "location",
                 action = "create",
                 localId = localId,
@@ -780,6 +783,7 @@ class InventoryRepository(
         pendingOperationDao.upsertOperation(
             PendingOperationEntity(
                 clientOperationId = "op-${UUID.randomUUID()}",
+                householdId = currentHouseholdId,
                 entity = "item",
                 action = "update",
                 localId = localId,
@@ -812,6 +816,7 @@ class InventoryRepository(
         pendingOperationDao.upsertOperation(
             PendingOperationEntity(
                 clientOperationId = "op-${UUID.randomUUID()}",
+                householdId = currentHouseholdId,
                 entity = "item",
                 action = "delete",
                 localId = localId,
@@ -827,7 +832,7 @@ class InventoryRepository(
 
     suspend fun syncPendingOperations(): Result<Unit> {
         val engine = SyncEngine(
-            queue = DaoPendingOperationQueue(pendingOperationDao),
+            queue = DaoPendingOperationQueue(pendingOperationDao, currentHouseholdId),
             remote = RetrofitRemoteSyncClient(api) { currentHouseholdId },
             onOperationApplied = { applied ->
                 when (applied.entity) {

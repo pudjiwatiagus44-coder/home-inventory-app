@@ -39,6 +39,7 @@ export function createItemHandlers(
             const attached = await photoService.attachPhotoToItem({
               userId,
               itemId: item.id,
+              householdId,
               photoKey,
             });
 

@@ -35,6 +35,8 @@ export function createItemPhotoHandlers(
         const photo = await service.getItemPhoto({
           userId: currentUser.userId,
           itemId,
+          householdId:
+            request.nextUrl.searchParams.get("householdId") ?? undefined,
         });
 
         if (!photo) {

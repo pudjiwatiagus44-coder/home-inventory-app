@@ -85,6 +85,7 @@ fun AppRoot() {
             deletePhotoFile = { fileName ->
                 LocalPhotoStore.delete(app.applicationContext, fileName)
             },
+            householdIdProvider = repository::selectedHouseholdId,
         )
     }
     val factory = remember(repository) {

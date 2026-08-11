@@ -117,6 +117,7 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun recognize(
         file: MultipartBody.Part,
         mode: String,
+        householdId: String?,
     ): Response<ApiEnvelope<RecognitionResponseDto>> =
         Response.success(
             ApiEnvelope(
@@ -132,7 +133,10 @@ abstract class TestApiStub : HomeInventoryApi {
             ),
         )
 
-    override suspend fun itemPhoto(itemId: String): Response<ResponseBody> =
+    override suspend fun itemPhoto(
+        itemId: String,
+        householdId: String?,
+    ): Response<ResponseBody> =
         Response.success("not-a-real-jpeg".toResponseBody("image/jpeg".toMediaType()))
 
     override suspend fun previewImport(file: MultipartBody.Part): Response<ApiEnvelope<ImportPreviewDto>> =

@@ -42,56 +42,78 @@ export function createSelfHostedInventoryClient({
       });
     },
 
-    createArea(input: AreaInput) {
-      return request("/api/inventory/areas", jsonInit("POST", input));
+    createArea(input: AreaInput & { householdId?: string }) {
+      return request(
+        "/api/inventory/areas",
+        jsonInit("POST", withHouseholdId(input, input.householdId)),
+      );
     },
 
-    updateArea(input: AreaInput & { areaId: string }) {
+    updateArea(input: AreaInput & { householdId?: string; areaId: string }) {
       return request(
         `/api/inventory/areas/${encodeURIComponent(input.areaId)}`,
         jsonInit("PATCH", {
+          ...(input.householdId ? { householdId: input.householdId } : {}),
           name: input.name,
           color: input.color,
         }),
       );
     },
 
-    deleteArea(input: { areaId: string }) {
+    deleteArea(input: { householdId?: string; areaId: string }) {
       return request(
-        `/api/inventory/areas/${encodeURIComponent(input.areaId)}`,
+        withHouseholdQuery(
+          `/api/inventory/areas/${encodeURIComponent(input.areaId)}`,
+          input.householdId,
+        ),
         jsonInit("DELETE"),
       );
     },
 
-    createLocation(input: LocationInput) {
-      return request("/api/inventory/locations", jsonInit("POST", input));
+    createLocation(input: LocationInput & { householdId?: string }) {
+      return request(
+        "/api/inventory/locations",
+        jsonInit("POST", withHouseholdId(input, input.householdId)),
+      );
     },
 
-    updateLocation(input: LocationInput & { locationId: string }) {
+    updateLocation(
+      input: LocationInput & { householdId?: string; locationId: string },
+    ) {
       return request(
         `/api/inventory/locations/${encodeURIComponent(input.locationId)}`,
         jsonInit("PATCH", {
+          ...(input.householdId ? { householdId: input.householdId } : {}),
           name: input.name,
           areaId: input.areaId,
         }),
       );
     },
 
-    deleteLocation(input: { locationId: string }) {
+    deleteLocation(input: { householdId?: string; locationId: string }) {
       return request(
-        `/api/inventory/locations/${encodeURIComponent(input.locationId)}`,
+        withHouseholdQuery(
+          `/api/inventory/locations/${encodeURIComponent(input.locationId)}`,
+          input.householdId,
+        ),
         jsonInit("DELETE"),
       );
     },
 
-    createItem(input: InventoryItemInput) {
-      return request("/api/inventory/items", jsonInit("POST", input));
+    createItem(input: InventoryItemInput & { householdId?: string }) {
+      return request(
+        "/api/inventory/items",
+        jsonInit("POST", withHouseholdId(input, input.householdId)),
+      );
     },
 
-    updateItem(input: InventoryItemInput & { itemId: string }) {
+    updateItem(
+      input: InventoryItemInput & { householdId?: string; itemId: string },
+    ) {
       return request(
         `/api/inventory/items/${encodeURIComponent(input.itemId)}`,
         jsonInit("PATCH", {
+          ...(input.householdId ? { householdId: input.householdId } : {}),
           name: input.name,
           note: input.note,
           expireDate: input.expireDate,
@@ -100,36 +122,44 @@ export function createSelfHostedInventoryClient({
       );
     },
 
-    deleteItem(input: { itemId: string }) {
+    deleteItem(input: { householdId?: string; itemId: string }) {
       return request(
-        `/api/inventory/items/${encodeURIComponent(input.itemId)}`,
+        withHouseholdQuery(
+          `/api/inventory/items/${encodeURIComponent(input.itemId)}`,
+          input.householdId,
+        ),
         jsonInit("DELETE"),
       );
     },
 
-    previewImport(file: File) {
+    previewImport(file: File, householdId?: string) {
       const formData = new FormData();
       formData.append("file", file);
 
-      return request<InventoryImportPlan>("/api/inventory/import?mode=preview", {
-        method: "POST",
-        body: formData,
-      });
+      return request<InventoryImportPlan>(
+        withHouseholdQuery("/api/inventory/import?mode=preview", householdId),
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
     },
 
     commitImport(input: {
+      householdId?: string;
       rows: InventoryBackupRow[];
       conflictResolutions: Record<string, InventoryConflictResolution>;
     }) {
       return request<InventoryImportSummary>(
         "/api/inventory/import?mode=commit",
-        jsonInit("POST", input),
+        jsonInit("POST", withHouseholdId(input, input.householdId)),
       );
     },
 
-    async importItems(file: File) {
-      const preview = await this.previewImport(file);
+    async importItems(file: File, householdId?: string) {
+      const preview = await this.previewImport(file, householdId);
       return this.commitImport({
+        householdId,
         rows: preview.rows,
         conflictResolutions: {},
       });
@@ -154,4 +184,20 @@ function jsonInit(method: string, body?: unknown): RequestInit {
     headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   };
+}
+
+function withHouseholdId<T extends object>(
+  input: T,
+  householdId?: string,
+): T {
+  return householdId ? { ...input, householdId } : input;
+}
+
+function withHouseholdQuery(path: string, householdId?: string) {
+  if (!householdId) {
+    return path;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}householdId=${encodeURIComponent(householdId)}`;
 }

@@ -127,6 +127,111 @@ describe("createSelfHostedInventoryClient", () => {
     );
   });
 
+  it("forwards the selected householdId on self-hosted writes", async () => {
+    const requests: unknown[] = [];
+    const client = createSelfHostedInventoryClient({
+      fetch: async (input, init) => {
+        requests.push({
+          input,
+          init: {
+            ...init,
+            body:
+              typeof init?.body === "string"
+                ? JSON.parse(init.body)
+                : init?.body instanceof FormData
+                  ? "form-data"
+                  : init?.body,
+          },
+        });
+        return jsonResponse({ ok: true, data: null });
+      },
+    });
+
+    await client.createArea({
+      householdId: "household-2",
+      name: "Kitchen",
+      color: "#256f6b",
+    });
+    await client.updateArea({
+      householdId: "household-2",
+      areaId: "area-1",
+      name: "Pantry",
+      color: "#64748b",
+    });
+    await client.deleteArea({ householdId: "household-2", areaId: "area-1" });
+    await client.createLocation({
+      householdId: "household-2",
+      name: "Shelf",
+      areaId: null,
+    });
+    await client.updateLocation({
+      householdId: "household-2",
+      locationId: "location-1",
+      name: "Drawer",
+      areaId: null,
+    });
+    await client.deleteLocation({
+      householdId: "household-2",
+      locationId: "location-1",
+    });
+    await client.createItem({
+      householdId: "household-2",
+      name: "Battery",
+      note: "",
+      expireDate: null,
+      locationId: "location-1",
+    });
+    await client.updateItem({
+      householdId: "household-2",
+      itemId: "item-1",
+      name: "Battery pack",
+      note: "fresh",
+      expireDate: null,
+      locationId: null,
+    });
+    await client.deleteItem({ householdId: "household-2", itemId: "item-1" });
+
+    expect(requests).toEqual([
+      post("/api/inventory/areas", {
+        householdId: "household-2",
+        name: "Kitchen",
+        color: "#256f6b",
+      }),
+      patch("/api/inventory/areas/area-1", {
+        householdId: "household-2",
+        name: "Pantry",
+        color: "#64748b",
+      }),
+      del("/api/inventory/areas/area-1?householdId=household-2"),
+      post("/api/inventory/locations", {
+        householdId: "household-2",
+        name: "Shelf",
+        areaId: null,
+      }),
+      patch("/api/inventory/locations/location-1", {
+        householdId: "household-2",
+        name: "Drawer",
+        areaId: null,
+      }),
+      del("/api/inventory/locations/location-1?householdId=household-2"),
+      post("/api/inventory/items", {
+        householdId: "household-2",
+        name: "Battery",
+        note: "",
+        expireDate: null,
+        locationId: "location-1",
+      }),
+      patch("/api/inventory/items/item-1", {
+        householdId: "household-2",
+        name: "Battery pack",
+        note: "fresh",
+        expireDate: null,
+        locationId: null,
+      }),
+      del("/api/inventory/items/item-1?householdId=household-2"),
+    ]);
+  });
+
   it("previews and commits Excel imports through self-hosted API routes", async () => {
     const requests: unknown[] = [];
     const client = createSelfHostedInventoryClient({
@@ -213,6 +318,82 @@ describe("createSelfHostedInventoryClient", () => {
               },
             ],
             conflictResolutions: { "2:item-1": "overwrite" },
+          },
+        },
+      },
+    ]);
+  });
+
+  it("previews and commits Excel imports for the selected household", async () => {
+    const requests: unknown[] = [];
+    const client = createSelfHostedInventoryClient({
+      fetch: async (input, init) => {
+        requests.push({
+          input,
+          init: {
+            ...init,
+            body:
+              typeof init?.body === "string"
+                ? JSON.parse(init.body)
+                : init?.body instanceof FormData
+                  ? "form-data"
+                  : init?.body,
+          },
+        });
+
+        if (String(input).includes("mode=preview")) {
+          return jsonResponse({
+            ok: true,
+            data: {
+              rows: [],
+              creates: [],
+              skipped: [],
+              conflicts: [],
+              errors: [],
+            },
+          });
+        }
+
+        return jsonResponse({
+          ok: true,
+          data: {
+            createdAreas: 0,
+            createdLocations: 0,
+            createdItems: 0,
+            keptConflictItems: 0,
+            overwrittenItems: 0,
+            skippedItems: 0,
+            errors: [],
+          },
+        });
+      },
+    });
+    const file = new File(["content"], "items.xlsx");
+
+    await client.previewImport(file, "household-2");
+    await client.commitImport({
+      householdId: "household-2",
+      rows: [],
+      conflictResolutions: {},
+    });
+
+    expect(requests).toEqual([
+      {
+        input: "/api/inventory/import?mode=preview&householdId=household-2",
+        init: {
+          method: "POST",
+          body: "form-data",
+        },
+      },
+      {
+        input: "/api/inventory/import?mode=commit",
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: {
+            householdId: "household-2",
+            rows: [],
+            conflictResolutions: {},
           },
         },
       },

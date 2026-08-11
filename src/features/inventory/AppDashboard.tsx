@@ -92,9 +92,12 @@ function createDashboardWriteClient(
       ) => inventory.updateItem(input),
       deleteItem: (input: { householdId?: string; itemId: string }) =>
         inventory.deleteItem(input),
-      importItems: (file: File) => inventory.importItems(file),
-      previewImport: (file: File) => inventory.previewImport(file),
+      importItems: (file: File, householdId?: string) =>
+        inventory.importItems(file, householdId),
+      previewImport: (file: File, householdId?: string) =>
+        inventory.previewImport(file, householdId),
       commitImport: (input: {
+        householdId?: string;
         rows: InventoryImportPlan["rows"];
         conflictResolutions: Record<string, InventoryConflictResolution>;
       }) => inventory.commitImport(input),
@@ -172,10 +175,17 @@ function createDashboardWriteClient(
     importItems: async () => {
       throw new Error("批量导入当前仅在自托管部署模式可用");
     },
-    previewImport: async () => {
+    previewImport: async (_file: File, _householdId?: string) => {
+      void _file;
+      void _householdId;
       throw new Error("批量导入当前仅在自托管部署模式可用");
     },
-    commitImport: async () => {
+    commitImport: async (_input: {
+      householdId?: string;
+      rows: InventoryImportPlan["rows"];
+      conflictResolutions: Record<string, InventoryConflictResolution>;
+    }) => {
+      void _input;
       throw new Error("批量导入当前仅在自托管部署模式可用");
     },
   };
@@ -486,6 +496,12 @@ export function AppDashboard({
       return;
     }
 
+    if (state.status !== "ready") {
+      setFormMessage("请先等待清单加载完成");
+      return;
+    }
+
+    const householdId = state.summary.householdId;
     event.target.value = "";
     setImportStatus({ status: "loading" });
     setConflictResolutions({});
@@ -493,7 +509,10 @@ export function AppDashboard({
 
     try {
       const writeClient = createDashboardWriteClient(selfHostedUser);
-      const plan = await writeClient.previewImport(file);
+      const plan = await writeClient.previewImport(
+        file,
+        householdId,
+      );
       const defaultResolutions = Object.fromEntries(
         plan.conflicts.map((conflict) => [conflict.id, "skip" as const]),
       );
@@ -508,6 +527,7 @@ export function AppDashboard({
       }
 
       const summary = await writeClient.commitImport({
+        householdId,
         rows: plan.rows,
         conflictResolutions: {},
       });
@@ -526,12 +546,19 @@ export function AppDashboard({
       return;
     }
 
+    if (state.status !== "ready") {
+      setFormMessage("请先等待清单加载完成");
+      return;
+    }
+
+    const householdId = state.summary.householdId;
     setIsSaving(true);
     setFormMessage(null);
 
     try {
       const writeClient = createDashboardWriteClient(selfHostedUser);
       const summary = await writeClient.commitImport({
+        householdId,
         rows: importStatus.plan.rows,
         conflictResolutions,
       });

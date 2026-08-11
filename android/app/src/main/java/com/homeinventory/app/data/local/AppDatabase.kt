@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncStateEntity::class,
         DraftEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -66,6 +66,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pending_operations ADD COLUMN householdId TEXT")
+                db.execSQL(
+                    """
+                    UPDATE pending_operations
+                    SET householdId = (
+                        SELECT value
+                        FROM sync_state
+                        WHERE key = 'current_household_id'
+                    )
+                    WHERE householdId IS NULL
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -78,6 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(MIGRATION_2_3)
                     .addMigrations(MIGRATION_3_4)
+                    .addMigrations(MIGRATION_4_5)
                     // v1 从未有真实数据（旧 UI 不写 Room），内测阶段允许重建
                     .fallbackToDestructiveMigration()
                     .build()

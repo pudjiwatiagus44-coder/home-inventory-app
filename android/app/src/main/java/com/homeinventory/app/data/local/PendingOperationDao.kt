@@ -10,6 +10,9 @@ interface PendingOperationDao {
     @Query("select * from pending_operations where state = 'pending' order by createdAt asc")
     suspend fun pendingOperations(): List<PendingOperationEntity>
 
+    @Query("select * from pending_operations where state = 'pending' and householdId = :householdId order by createdAt asc")
+    suspend fun pendingOperationsForHousehold(householdId: String): List<PendingOperationEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOperation(operation: PendingOperationEntity)
 

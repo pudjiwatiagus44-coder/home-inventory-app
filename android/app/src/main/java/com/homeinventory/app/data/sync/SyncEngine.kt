@@ -77,9 +77,10 @@ interface RemoteSyncClient {
 
 class DaoPendingOperationQueue(
     private val pendingOperationDao: PendingOperationDao,
+    private val householdId: String? = null,
 ) : PendingOperationQueue {
     override suspend fun pendingOperations(): List<PendingSyncOperation> =
-        pendingOperationDao.pendingOperations().map { operation ->
+        pendingOperationDao.pendingOperationsForHousehold(householdId.orEmpty()).map { operation ->
             PendingSyncOperation(
                 clientOperationId = operation.clientOperationId,
                 entity = operation.entity,

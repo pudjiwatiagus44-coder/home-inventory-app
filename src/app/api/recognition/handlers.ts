@@ -56,8 +56,11 @@ export function createRouteRecognitionService(
   });
 
   return createRecognitionService({
-    loadHouseholdIdForUser: async (userId) => {
-      const dashboard = await inventoryRepository.getDashboardForUser(userId);
+    loadHouseholdIdForUser: async (userId, householdId) => {
+      const dashboard = await inventoryRepository.getDashboardForUser(
+        userId,
+        householdId,
+      );
       if (dashboard?.household.role === "readonly") {
         throw new ReadOnlyMemberError();
       }
@@ -140,6 +143,8 @@ export function createRecognitionHandlers(
           userId: currentUser.userId,
           mode,
           jpegBuffer: buffer,
+          householdId:
+            request.nextUrl.searchParams.get("householdId") ?? undefined,
         });
 
         await service.cleanupExpiredPendingPhotos().catch(() => undefined);

@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -64,6 +65,7 @@ class InventoryRepositoryTest {
                 override suspend fun recognize(
                     file: MultipartBody.Part,
                     mode: String,
+                    householdId: String?,
                 ): Response<ApiEnvelope<RecognitionResponseDto>> =
                     Response.error(
                         429,
@@ -350,6 +352,53 @@ class InventoryRepositoryTest {
 
         assertTrue(result.isSuccess)
         assertEquals("household-2", api.lastSyncHouseholdId)
+    }
+
+    @Test
+    fun offlineOperationsRememberTheHouseholdWhereTheyWereCreated() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+        repository.createItemOffline(name = "offline-milk")
+
+        assertEquals("household-2", repository.pendingOperations().single().householdId)
+    }
+
+    @Test
+    fun syncPendingOperationsSkipsOperationsFromOtherHouseholds() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-1")
+        repository.createItemOffline(name = "offline-milk")
+        repository.refreshSnapshot("household-2")
+
+        val result = repository.syncPendingOperations()
+
+        assertTrue(result.isSuccess)
+        assertNull(api.lastSyncHouseholdId)
+        assertEquals(1, repository.pendingOperations().size)
+    }
+
+    @Test
+    fun recognizePhotoSendsCurrentHouseholdId() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+
+        repository.recognizeItemPhoto("name", byteArrayOf(1, 2, 3))
+
+        assertEquals("household-2", api.lastRecognizeHouseholdId)
+    }
+
+    @Test
+    fun itemPhotoSendsCurrentHouseholdId() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+
+        repository.loadItemPhoto("item-1")
+
+        assertEquals("household-2", api.lastItemPhotoHouseholdId)
     }
 
     @Test
@@ -704,6 +753,8 @@ private class RecordingApi : TestApiStub() {
     var createdItems = 0
     var lastCreatedItemHouseholdId: String? = null
     var lastSyncHouseholdId: String? = null
+    var lastRecognizeHouseholdId: String? = null
+    var lastItemPhotoHouseholdId: String? = null
 
     override suspend fun snapshot(
         householdId: String?,
@@ -745,6 +796,35 @@ private class RecordingApi : TestApiStub() {
                 ),
             ),
         )
+    }
+
+    override suspend fun recognize(
+        file: MultipartBody.Part,
+        mode: String,
+        householdId: String?,
+    ): Response<ApiEnvelope<RecognitionResponseDto>> {
+        lastRecognizeHouseholdId = householdId
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RecognitionResponseDto(
+                    mode = mode,
+                    recognized = true,
+                    name = "item",
+                    note = null,
+                    expireDate = null,
+                    thumbnailId = "photo_1.jpg",
+                ),
+            ),
+        )
+    }
+
+    override suspend fun itemPhoto(
+        itemId: String,
+        householdId: String?,
+    ): Response<ResponseBody> {
+        lastItemPhotoHouseholdId = householdId
+        throw IOException("photo request recorded for household scope test")
     }
 }
 
@@ -869,6 +949,9 @@ private class FakePendingOperationDao : PendingOperationDao {
 
     override suspend fun pendingOperations(): List<PendingOperationEntity> = operations.toList()
 
+    override suspend fun pendingOperationsForHousehold(householdId: String): List<PendingOperationEntity> =
+        operations.filter { it.householdId == householdId }
+
     override suspend fun upsertOperation(operation: PendingOperationEntity) {
         operations.removeAll { it.clientOperationId == operation.clientOperationId }
         operations.add(operation)
@@ -897,6 +980,7 @@ private class FakeRecognizeApi : TestApiStub() {
     override suspend fun recognize(
         file: MultipartBody.Part,
         mode: String,
+        householdId: String?,
     ): Response<ApiEnvelope<RecognitionResponseDto>> =
         Response.success(
             ApiEnvelope(

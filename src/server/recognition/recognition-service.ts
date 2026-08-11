@@ -18,7 +18,10 @@ export type RecognitionOutcome = {
 };
 
 export type RecognitionServiceDependencies = {
-  loadHouseholdIdForUser: (userId: string) => Promise<string | null>;
+  loadHouseholdIdForUser: (
+    userId: string,
+    householdId?: string,
+  ) => Promise<string | null>;
   photoRepository: PhotoRepository;
   photoStore: PhotoStore;
   doubaoVision: DoubaoVisionClient;
@@ -27,14 +30,17 @@ export type RecognitionServiceDependencies = {
 export function createRecognitionService(
   deps: RecognitionServiceDependencies,
 ) {
-  async function loadHouseholdId(userId: string) {
-    const householdId = await deps.loadHouseholdIdForUser(userId);
+  async function loadHouseholdId(userId: string, householdId?: string) {
+    const resolvedHouseholdId = await deps.loadHouseholdIdForUser(
+      userId,
+      householdId,
+    );
 
-    if (!householdId) {
+    if (!resolvedHouseholdId) {
       throw new Error("No household found for current user");
     }
 
-    return householdId;
+    return resolvedHouseholdId;
   }
 
   return {
@@ -42,8 +48,12 @@ export function createRecognitionService(
       userId: string;
       mode: "name" | "expiry" | "photo";
       jpegBuffer: Buffer;
+      householdId?: string;
     }): Promise<RecognitionOutcome> {
-      const householdId = await loadHouseholdId(input.userId);
+      const householdId = await loadHouseholdId(
+        input.userId,
+        input.householdId,
+      );
 
       if (input.mode === "photo") {
         const photoKey = `photo_${randomUUID()}.jpg`;
@@ -120,8 +130,12 @@ export function createRecognitionService(
       userId: string;
       itemId: string;
       photoKey: string;
+      householdId?: string;
     }) {
-      const householdId = await loadHouseholdId(input.userId);
+      const householdId = await loadHouseholdId(
+        input.userId,
+        input.householdId,
+      );
       return deps.photoRepository.attachPhotoToItem({
         itemId: input.itemId,
         householdId,
@@ -130,8 +144,15 @@ export function createRecognitionService(
       });
     },
 
-    async getItemPhoto(input: { userId: string; itemId: string }) {
-      const householdId = await loadHouseholdId(input.userId);
+    async getItemPhoto(input: {
+      userId: string;
+      itemId: string;
+      householdId?: string;
+    }) {
+      const householdId = await loadHouseholdId(
+        input.userId,
+        input.householdId,
+      );
       const photoKey = await deps.photoRepository.getItemPhotoKey({
         itemId: input.itemId,
         householdId,
@@ -145,8 +166,15 @@ export function createRecognitionService(
       return buffer ? { photoKey, buffer } : null;
     },
 
-    async deleteItemPhoto(input: { userId: string; itemId: string }) {
-      const householdId = await loadHouseholdId(input.userId);
+    async deleteItemPhoto(input: {
+      userId: string;
+      itemId: string;
+      householdId?: string;
+    }) {
+      const householdId = await loadHouseholdId(
+        input.userId,
+        input.householdId,
+      );
       const photoKey = await deps.photoRepository.getItemPhotoKey({
         itemId: input.itemId,
         householdId,

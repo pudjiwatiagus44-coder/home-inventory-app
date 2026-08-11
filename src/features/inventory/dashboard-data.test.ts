@@ -76,12 +76,14 @@ describe("buildDashboardSummary", () => {
           name: "上层抽屉",
           areaId: "area-1",
           areaName: "厨房",
+          createdBy: null,
         },
         {
           id: "location-2",
           name: "药箱",
           areaId: "area-2",
           areaName: "卧室",
+          createdBy: null,
         },
       ],
       items: [
@@ -96,6 +98,7 @@ describe("buildDashboardSummary", () => {
           areaName: "厨房",
           expirationStatus: "none",
           photoKey: null,
+          createdBy: null,
         },
         {
           id: "item-2",
@@ -108,6 +111,7 @@ describe("buildDashboardSummary", () => {
           areaName: "卧室",
           expirationStatus: "normal",
           photoKey: null,
+          createdBy: null,
         },
       ],
     });
@@ -165,6 +169,7 @@ describe("buildDashboardSummary", () => {
         areaName: "未分区",
         expirationStatus: "none",
         photoKey: null,
+        createdBy: null,
       },
     ]);
   });
@@ -191,6 +196,7 @@ describe("buildDashboardSummary", () => {
         name: "备用箱",
         areaId: null,
         areaName: "未分区",
+        createdBy: null,
       },
     ]);
     expect(summary.items[0]).toMatchObject({

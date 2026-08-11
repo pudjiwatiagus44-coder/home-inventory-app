@@ -141,10 +141,14 @@ interface HomeInventoryApi {
     suspend fun recognize(
         @Part file: MultipartBody.Part,
         @Query("mode") mode: String,
+        @Query("householdId") householdId: String? = null,
     ): Response<ApiEnvelope<RecognitionResponseDto>>
 
     @GET("api/inventory/items/{itemId}/photo")
-    suspend fun itemPhoto(@Path("itemId") itemId: String): Response<ResponseBody>
+    suspend fun itemPhoto(
+        @Path("itemId") itemId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ResponseBody>
 
     @Multipart
     @POST("api/inventory/import")

@@ -147,8 +147,8 @@ describe("AppDashboard location actions", () => {
   it("uses a two-step Excel import preview before committing conflicts", () => {
     const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
 
-    expect(source).toContain("previewImport(file)");
-    expect(source).toContain("commitImport({");
+    expect(source).toContain("previewImport(file,");
+    expect(source).toContain("householdId: state.summary.householdId");
     expect(source).toContain('data-testid="import-conflict-dialog"');
     expect(source).toContain("setConflictResolution");
     expect(source).toContain("都保留");
