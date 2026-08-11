@@ -17,17 +17,21 @@ export type FamilyJoinRequestRow = {
   created_at: string;
 };
 
+export type HouseholdRole = "owner" | "member" | "contributor" | "readonly";
+
 export type FamilyMemberRow = {
   user_id: string;
   email: string;
-  role: "owner" | "member" | "readonly";
+  role: HouseholdRole;
   created_at: string;
 };
 
 export type HouseholdOption = {
   id: string;
   name: string;
-  role: "owner" | "member" | "readonly";
+  displayName?: string | null;
+  effectiveName?: string;
+  role: HouseholdRole;
 };
 
 export type InvitationLinkStatus = "active" | "expired" | "revoked";

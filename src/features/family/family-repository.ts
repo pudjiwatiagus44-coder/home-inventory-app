@@ -2,6 +2,7 @@ import type { PostgresQueryClient } from "../../server/auth/postgres-auth-reposi
 import type {
   FamilyJoinRequestRow,
   FamilyMemberRow,
+  HouseholdRole,
   HouseholdOption,
   InvitationLinkRow,
 } from "./family-data";
@@ -14,6 +15,11 @@ export type FamilyRepository = {
   }) => Promise<{ id: string; name: string }>;
   getHouseholdOwner: (householdId: string) => Promise<string | null>;
   isHouseholdMember: (userId: string, householdId: string) => Promise<boolean>;
+  setHouseholdDisplayName: (input: {
+    userId: string;
+    householdId: string;
+    displayName: string | null;
+  }) => Promise<void>;
   createInvitationLink: (input: {
     householdId: string;
     token: string;
@@ -45,7 +51,7 @@ export type FamilyRepository = {
   insertMemberIfMissing: (input: {
     householdId: string;
     userId: string;
-    role: "owner" | "member" | "readonly";
+    role: HouseholdRole;
   }) => Promise<void>;
   listJoinRequests: (householdId: string) => Promise<FamilyJoinRequestRow[]>;
   listMembers: (householdId: string) => Promise<FamilyMemberRow[]>;
@@ -86,14 +92,15 @@ type JoinRequestRow = {
 type MemberRow = {
   user_id: string;
   email: string;
-  role: "owner" | "member" | "readonly";
+  role: HouseholdRole;
   created_at: Date | string;
 };
 
 type HouseholdMembershipRow = {
   household_id: string;
   name: string;
-  role: "owner" | "member" | "readonly";
+  display_name: string | null;
+  role: HouseholdRole;
 };
 
 export function createPostgresFamilyRepository(
@@ -103,9 +110,12 @@ export function createPostgresFamilyRepository(
     async listHouseholdsForUser(userId) {
       const result = await client.query<HouseholdMembershipRow>(
         `
-          select hm.household_id, h.name, hm.role
+          select hm.household_id, h.name, hup.display_name, hm.role
           from household_members hm
           join households h on h.id = hm.household_id
+          left join household_user_preferences hup
+            on hup.household_id = hm.household_id
+            and hup.user_id = hm.user_id
           where hm.user_id = $1
           order by
             case when hm.role = 'owner' then 0 else 1 end,
@@ -117,6 +127,8 @@ export function createPostgresFamilyRepository(
       return result.rows.map((row) => ({
         id: row.household_id,
         name: row.name,
+        displayName: row.display_name,
+        effectiveName: row.display_name ?? row.name,
         role: row.role,
       }));
     },
@@ -173,6 +185,23 @@ export function createPostgresFamilyRepository(
       );
 
       return result.rows.length > 0;
+    },
+
+    async setHouseholdDisplayName(input) {
+      await client.query(
+        `
+          insert into household_user_preferences (
+            user_id,
+            household_id,
+            display_name
+          )
+          values ($1, $2, $3)
+          on conflict (user_id, household_id) do update
+          set display_name = excluded.display_name,
+              updated_at = now()
+        `,
+        [input.userId, input.householdId, input.displayName],
+      );
     },
 
     async createInvitationLink(input) {

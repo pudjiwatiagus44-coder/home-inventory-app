@@ -9,6 +9,7 @@ import {
 function createMemoryFamilyRepository(
   state: {
     ownerUserId?: string | null;
+    householdName?: string;
     members?: { householdId: string; userId: string; role: "owner" | "member" | "readonly" }[];
     validToken?: string | null;
     pendingRequests?: { id: string; householdId: string; userId: string }[];
@@ -16,9 +17,24 @@ function createMemoryFamilyRepository(
 ): FamilyRepository {
   const members = state.members ?? [];
   const pendingRequests = state.pendingRequests ?? [];
+  const householdName = state.householdName ?? "My Home";
+  const displayNames = new Map<string, string | null>();
 
   return {
-    listHouseholdsForUser: async () => [],
+    listHouseholdsForUser: async (userId) =>
+      members
+        .filter((member) => member.userId === userId)
+        .map((member) => {
+          const displayName =
+            displayNames.get(`${member.userId}:${member.householdId}`) ?? null;
+          return {
+            id: member.householdId,
+            name: householdName,
+            displayName,
+            effectiveName: displayName ?? householdName,
+            role: member.role,
+          };
+        }),
     createHousehold: async ({ ownerUserId, name }) => {
       members.push({
         householdId: "household-new",
@@ -47,7 +63,7 @@ function createMemoryFamilyRepository(
     listInvitationLinks: async () => [],
     getHouseholdForInvitation: async (token) =>
       token === state.validToken
-        ? { householdId: "household-1", householdName: "我的家" }
+        ? { householdId: "household-1", householdName: "My Home" }
         : null,
     submitJoinRequest: async ({ householdId, userId }) => {
       const request = {
@@ -105,7 +121,10 @@ function createMemoryFamilyRepository(
       id: householdId,
       name,
     }),
-    getHouseholdName: async () => "我的家",
+    setHouseholdDisplayName: async ({ userId, householdId, displayName }) => {
+      displayNames.set(`${userId}:${householdId}`, displayName);
+    },
+    getHouseholdName: async () => householdName,
   };
 }
 
@@ -155,9 +174,9 @@ describe("createFamilyService", () => {
       service.renameHouseholdForCurrentUser({
         userId: "user-1",
         householdId: "household-1",
-        name: "新家名",
+        name: "New Home",
       }),
-    ).resolves.toEqual({ id: "household-1", name: "新家名" });
+    ).resolves.toEqual({ id: "household-1", name: "New Home" });
   });
 
   it("rejects renaming when the caller is not owner", async () => {
@@ -170,7 +189,53 @@ describe("createFamilyService", () => {
       service.renameHouseholdForCurrentUser({
         userId: "user-1",
         householdId: "household-1",
-        name: "新家名",
+        name: "New Home",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("lets any household member set a personal display name without renaming the household", async () => {
+    const repository = createMemoryFamilyRepository({
+      householdName: "My Home",
+      members: [
+        { householdId: "household-1", userId: "owner", role: "owner" },
+        { householdId: "household-1", userId: "member-1", role: "readonly" },
+      ],
+    });
+    const service = createFamilyService({ repository });
+
+    await service.setHouseholdDisplayNameForCurrentUser({
+      userId: "member-1",
+      householdId: "household-1",
+      displayName: " Parents Home ",
+    });
+
+    const households = await service.listHouseholdsForCurrentUser("member-1");
+    expect(households[0]).toMatchObject({
+      id: "household-1",
+      name: "My Home",
+      displayName: "Parents Home",
+      effectiveName: "Parents Home",
+      role: "readonly",
+    });
+    await expect(repository.getHouseholdName("household-1")).resolves.toBe(
+      "My Home",
+    );
+  });
+
+  it("rejects setting a personal display name when the caller is not a household member", async () => {
+    const repository = createMemoryFamilyRepository({
+      members: [
+        { householdId: "household-1", userId: "owner", role: "owner" },
+      ],
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.setHouseholdDisplayNameForCurrentUser({
+        userId: "stranger",
+        householdId: "household-1",
+        displayName: "Parents Home",
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });

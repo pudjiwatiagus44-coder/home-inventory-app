@@ -240,6 +240,26 @@ export function createFamilyService({
       await assertOwner(input.userId, input.householdId);
       return repository.renameHousehold(input.householdId, normalizedName);
     },
+
+    async setHouseholdDisplayNameForCurrentUser(input: {
+      userId: string;
+      householdId: string;
+      displayName: string;
+    }): Promise<void> {
+      await assertMember(input.userId, input.householdId);
+
+      const normalizedDisplayName = input.displayName.trim();
+
+      if (normalizedDisplayName.length > 50) {
+        throw new Error("瀹跺涵鏄剧ず鍚嶇О涓嶈兘瓒呰繃 50 涓瓧绗?");
+      }
+
+      await repository.setHouseholdDisplayName({
+        userId: input.userId,
+        householdId: input.householdId,
+        displayName: normalizedDisplayName || null,
+      });
+    },
   };
 
   return service;

@@ -28,6 +28,10 @@ export function createFamilyHttpClient({
   ) => Promise<{ householdId: string; householdName: string } | null>;
   submitJoinApplication: (token: string) => Promise<string>;
   createHousehold: (name: string) => Promise<{ id: string; name: string }>;
+  setHouseholdDisplayName: (
+    householdId: string,
+    displayName: string,
+  ) => Promise<null>;
 } {
   return {
     listHouseholds() {
@@ -100,6 +104,13 @@ export function createFamilyHttpClient({
       return request<{ id: string; name: string }>(
         "/api/family/households",
         jsonInit("PATCH", { householdId, name }),
+      );
+    },
+
+    setHouseholdDisplayName(householdId: string, displayName: string) {
+      return request<null>(
+        "/api/family/households/display-name",
+        jsonInit("PATCH", { householdId, displayName }),
       );
     },
 

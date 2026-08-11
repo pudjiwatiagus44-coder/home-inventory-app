@@ -103,6 +103,33 @@ describe("createFamilyHttpClient", () => {
     ]);
   });
 
+  it("sets a personal household display name through the API", async () => {
+    const requests: unknown[] = [];
+    const client = createFamilyHttpClient({
+      fetch: async (input, init) => {
+        requests.push({ input, init });
+        return jsonResponse({ ok: true, data: null });
+      },
+    });
+
+    await expect(
+      client.setHouseholdDisplayName("household-1", "Parents Home"),
+    ).resolves.toBeNull();
+    expect(requests).toEqual([
+      {
+        input: "/api/family/households/display-name",
+        init: {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            householdId: "household-1",
+            displayName: "Parents Home",
+          }),
+        },
+      },
+    ]);
+  });
+
   it("creates a household through the API", async () => {
     const requests: unknown[] = [];
     const client = createFamilyHttpClient({

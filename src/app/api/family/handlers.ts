@@ -129,6 +129,34 @@ export function createFamilyHandlers(
       }
     },
 
+    async setHouseholdDisplayName(request: NextRequest) {
+      try {
+        const user = await requireUser(request);
+
+        if (!user) {
+          return unauthorizedResponse();
+        }
+
+        const body = await readJsonObject(request);
+        const householdId = textField(body, "householdId");
+        const displayName = textField(body, "displayName");
+        const missingHousehold = requireHouseholdId(householdId);
+
+        if (missingHousehold) {
+          return missingHousehold;
+        }
+
+        await service().setHouseholdDisplayNameForCurrentUser({
+          userId: user.userId,
+          householdId,
+          displayName,
+        });
+        return successResponse(null);
+      } catch (error) {
+        return familyErrorResponse(error);
+      }
+    },
+
     async createInvitation(request: NextRequest) {
       try {
         const user = await requireUser(request);

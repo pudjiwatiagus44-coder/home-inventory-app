@@ -44,6 +44,7 @@ function familyServiceStub(overrides: Record<string, unknown> = {}) {
       id: "household-1",
       name: "我的家",
     }),
+    setHouseholdDisplayNameForCurrentUser: async () => undefined,
     ...overrides,
   };
 }
@@ -106,6 +107,39 @@ describe("family API handlers", () => {
       ok: true,
       data: { id: "household-1", name: "我的家" },
     });
+  });
+
+  it("sets a personal household display name for the current user", async () => {
+    const calls: unknown[] = [];
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub({
+        setHouseholdDisplayNameForCurrentUser: async (input: unknown) => {
+          calls.push(input);
+        },
+      }),
+    });
+
+    const response = await handlers.setHouseholdDisplayName(
+      authedRequest("http://localhost/api/family/households/display-name", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          householdId: "household-1",
+          displayName: "Parents Home",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        userId: "user-1",
+        householdId: "household-1",
+        displayName: "Parents Home",
+      },
+    ]);
+    await expect(response.json()).resolves.toEqual({ ok: true, data: null });
   });
 
   it("returns 403 when a non-owner tries to rename", async () => {
