@@ -1024,3 +1024,14 @@
 - 路线保护：当前功能只走阿里云自托管 Next.js API/service/repository + 自有 PostgreSQL + Android 客户端；Supabase 历史客户端仅保留归档/兼容占位，不作为当前链路。
 - 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 359 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
 - 版本：Android `versionName=0.5.25`、`versionCode=31`。本轮仅完成本地构建与 git checkpoint；APK 上传、服务器部署和真机验收待后续执行。
+
+## 2026-08-11 家庭空间个人别名与按地点授权验收标准（待实现）
+
+- 用户 A 和用户 B 加入同一个 household 后，A 设置个人别名为“我的家”，B 设置为“爸妈家”；两人再次打开 Web/Android 时分别看到自己的名称，`households.name` 不变。
+- 授权用户长按下拉栏家庭名可修改个人别名；非 owner 调用真实家庭名重命名接口仍返回 403。
+- 创建邀请时默认只勾选当前 household；选择多个 household 后，审批通过会为申请人创建对应多个 membership，并按每个 grant 写入不同 role。
+- 管理成员可以在有管理权的 household 内新增/编辑/删除库存数据，并管理该 household 的邀请和成员授权。
+- 新增成员（`contributor`）可以新增物品和库存位置；可以编辑自己创建的物品和库存位置；删除物品/位置返回 403；编辑他人创建或历史归属不明的物品/位置返回 403。
+- 只读成员（`readonly`）新增、编辑、删除均返回 403。
+- 删除某个 household 授权后，该用户下一次请求该 household 数据返回 403，但其他 household 授权不受影响。
+- 当前状态：设计已确认并写入 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`，尚未实现，不得作为已完成能力宣传。
