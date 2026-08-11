@@ -508,7 +508,18 @@ class InventoryRepository(
         locationId: String?,
         photoKey: String? = null,
     ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
-        request = { api.createItem(ItemCreateRequest(name, note, expireDate, locationId, photoKey)) },
+        request = {
+            api.createItem(
+                ItemCreateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    note = note,
+                    expireDate = expireDate,
+                    locationId = locationId,
+                    photoKey = photoKey,
+                ),
+            )
+        },
         onSuccess = { remoteItem ->
             itemDao.upsert(
                 ItemEntity(
@@ -535,7 +546,19 @@ class InventoryRepository(
         locationId: String?,
         photoKey: String? = null,
     ): Result<Unit> = runOnlineMutation<RemoteItemDto>(
-        request = { api.updateItem(serverId, ItemUpdateRequest(name, note, expireDate, locationId, photoKey)) },
+        request = {
+            api.updateItem(
+                serverId,
+                ItemUpdateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    note = note,
+                    expireDate = expireDate,
+                    locationId = locationId,
+                    photoKey = photoKey,
+                ),
+            )
+        },
         onSuccess = { remoteItem ->
             itemDao.upsert(
                 ItemEntity(
@@ -555,13 +578,21 @@ class InventoryRepository(
     )
 
     suspend fun deleteItemOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
-        request = { api.deleteItem(serverId) },
+        request = { api.deleteItem(serverId, currentHouseholdId) },
         requireData = false,
         onSuccess = { itemDao.deleteById(serverId) },
     )
 
     suspend fun createAreaOnline(name: String, color: String?): Result<Unit> = runOnlineMutation<RemoteAreaDto>(
-        request = { api.createArea(AreaCreateRequest(name, color)) },
+        request = {
+            api.createArea(
+                AreaCreateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    color = color,
+                ),
+            )
+        },
         onSuccess = { remoteArea ->
             areaDao.upsert(
                 AreaEntity(
@@ -578,7 +609,16 @@ class InventoryRepository(
     )
 
     suspend fun updateAreaOnline(serverId: String, name: String, color: String?): Result<Unit> = runOnlineMutation<RemoteAreaDto>(
-        request = { api.updateArea(serverId, AreaUpdateRequest(name, color)) },
+        request = {
+            api.updateArea(
+                serverId,
+                AreaUpdateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    color = color,
+                ),
+            )
+        },
         onSuccess = { remoteArea ->
             areaDao.upsert(
                 AreaEntity(
@@ -595,13 +635,21 @@ class InventoryRepository(
     )
 
     suspend fun deleteAreaOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
-        request = { api.deleteArea(serverId) },
+        request = { api.deleteArea(serverId, currentHouseholdId) },
         requireData = false,
         onSuccess = { areaDao.deleteById(serverId) },
     )
 
     suspend fun createLocationOnline(name: String, areaId: String?): Result<Unit> = runOnlineMutation<RemoteLocationDto>(
-        request = { api.createLocation(LocationCreateRequest(name, areaId)) },
+        request = {
+            api.createLocation(
+                LocationCreateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    areaId = areaId,
+                ),
+            )
+        },
         onSuccess = { remoteLocation ->
             locationDao.upsert(
                 LocationEntity(
@@ -618,7 +666,16 @@ class InventoryRepository(
     )
 
     suspend fun updateLocationOnline(serverId: String, name: String, areaId: String?): Result<Unit> = runOnlineMutation<RemoteLocationDto>(
-        request = { api.updateLocation(serverId, LocationUpdateRequest(name, areaId)) },
+        request = {
+            api.updateLocation(
+                serverId,
+                LocationUpdateRequest(
+                    householdId = currentHouseholdId,
+                    name = name,
+                    areaId = areaId,
+                ),
+            )
+        },
         onSuccess = { remoteLocation ->
             locationDao.upsert(
                 LocationEntity(
@@ -635,7 +692,7 @@ class InventoryRepository(
     )
 
     suspend fun deleteLocationOnline(serverId: String): Result<Unit> = runOnlineMutation<Unit>(
-        request = { api.deleteLocation(serverId) },
+        request = { api.deleteLocation(serverId, currentHouseholdId) },
         requireData = false,
         onSuccess = { locationDao.deleteById(serverId) },
     )
@@ -771,7 +828,7 @@ class InventoryRepository(
     suspend fun syncPendingOperations(): Result<Unit> {
         val engine = SyncEngine(
             queue = DaoPendingOperationQueue(pendingOperationDao),
-            remote = RetrofitRemoteSyncClient(api),
+            remote = RetrofitRemoteSyncClient(api) { currentHouseholdId },
             onOperationApplied = { applied ->
                 when (applied.entity) {
                     "area" -> areaDao.markSynced(

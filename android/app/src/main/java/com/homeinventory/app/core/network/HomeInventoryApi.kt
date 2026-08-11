@@ -101,7 +101,10 @@ interface HomeInventoryApi {
     ): Response<ApiEnvelope<RemoteAreaDto>>
 
     @DELETE("api/inventory/areas/{areaId}")
-    suspend fun deleteArea(@Path("areaId") areaId: String): Response<ApiEnvelope<Unit>>
+    suspend fun deleteArea(
+        @Path("areaId") areaId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<Unit>>
 
     @POST("api/inventory/locations")
     suspend fun createLocation(@Body request: LocationCreateRequest): Response<ApiEnvelope<RemoteLocationDto>>
@@ -113,7 +116,10 @@ interface HomeInventoryApi {
     ): Response<ApiEnvelope<RemoteLocationDto>>
 
     @DELETE("api/inventory/locations/{locationId}")
-    suspend fun deleteLocation(@Path("locationId") locationId: String): Response<ApiEnvelope<Unit>>
+    suspend fun deleteLocation(
+        @Path("locationId") locationId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<Unit>>
 
     @POST("api/inventory/items")
     suspend fun createItem(@Body request: ItemCreateRequest): Response<ApiEnvelope<RemoteItemDto>>
@@ -125,7 +131,10 @@ interface HomeInventoryApi {
     ): Response<ApiEnvelope<RemoteItemDto>>
 
     @DELETE("api/inventory/items/{itemId}")
-    suspend fun deleteItem(@Path("itemId") itemId: String): Response<ApiEnvelope<Unit>>
+    suspend fun deleteItem(
+        @Path("itemId") itemId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<Unit>>
 
     @Multipart
     @POST("api/recognition")

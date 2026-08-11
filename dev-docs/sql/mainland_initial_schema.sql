@@ -54,7 +54,18 @@ create table household_members (
   role text not null default 'owner',
   created_at timestamptz not null default now(),
   primary key (household_id, user_id),
-  constraint household_members_role_check check (role in ('owner', 'member'))
+  constraint household_members_role_check check (role in ('owner', 'member', 'contributor', 'readonly'))
+);
+
+create table household_user_preferences (
+  user_id uuid not null references users(id) on delete cascade,
+  household_id uuid not null references households(id) on delete cascade,
+  display_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, household_id),
+  constraint household_user_preferences_display_name_length
+    check (display_name is null or char_length(display_name) <= 50)
 );
 
 create table areas (
@@ -97,6 +108,7 @@ create table items (
   note text not null default '',
   expire_date date,
   created_by uuid references users(id) on delete set null,
+  photo_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint items_name_length check (char_length(name) between 1 and 120),
@@ -138,6 +150,10 @@ for each row execute function set_updated_at();
 
 create trigger households_set_updated_at
 before update on households
+for each row execute function set_updated_at();
+
+create trigger household_user_preferences_set_updated_at
+before update on household_user_preferences
 for each row execute function set_updated_at();
 
 create trigger areas_set_updated_at

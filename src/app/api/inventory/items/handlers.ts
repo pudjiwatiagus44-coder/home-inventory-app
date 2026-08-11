@@ -21,9 +21,10 @@ export function createItemHandlers(
     POST(request: NextRequest) {
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) => {
+        async ({ service, userId, householdId, body }) => {
           const item = await service.createItemForCurrentUser({
             userId,
+            householdId,
             name: textField(body, "name"),
             note: textField(body, "note"),
             expireDate: optionalTextField(body, "expireDate"),

@@ -77,6 +77,7 @@ data class RemoteItemDto(
 )
 
 data class MobileSyncRequest(
+    val householdId: String? = null,
     val operations: List<MobileSyncOperationDto>,
 )
 
@@ -105,26 +106,31 @@ data class MobileSyncResultDto(
 )
 
 data class AreaCreateRequest(
+    val householdId: String? = null,
     val name: String,
     val color: String? = null,
 )
 
 data class AreaUpdateRequest(
+    val householdId: String? = null,
     val name: String,
     val color: String? = null,
 )
 
 data class LocationCreateRequest(
+    val householdId: String? = null,
     val name: String,
     val areaId: String? = null,
 )
 
 data class LocationUpdateRequest(
+    val householdId: String? = null,
     val name: String,
     val areaId: String? = null,
 )
 
 data class ItemCreateRequest(
+    val householdId: String? = null,
     val name: String,
     val note: String = "",
     val expireDate: String? = null,
@@ -133,6 +139,7 @@ data class ItemCreateRequest(
 )
 
 data class ItemUpdateRequest(
+    val householdId: String? = null,
     val name: String,
     val note: String = "",
     val expireDate: String? = null,

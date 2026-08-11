@@ -28,6 +28,8 @@ import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
+import com.homeinventory.app.data.remote.MobileSyncRequest
+import com.homeinventory.app.data.remote.MobileSyncResponse
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -318,6 +320,36 @@ class InventoryRepositoryTest {
         assertEquals("牛奶", item.name)
         assertEquals(10, item.expireDate?.length)
         assertEquals("2026-08-29T16:00:00.000Z" != item.expireDate, true)
+    }
+
+    @Test
+    fun onlineCreateItemSendsCurrentHouseholdId() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+
+        val result = repository.createItemOnline(
+            name = "鐗涘ザ",
+            note = "",
+            expireDate = null,
+            locationId = null,
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastCreatedItemHouseholdId)
+    }
+
+    @Test
+    fun syncPendingOperationsSendsCurrentHouseholdId() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+        repository.createItemOffline(name = "绂荤嚎鐗涘ザ")
+
+        val result = repository.syncPendingOperations()
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastSyncHouseholdId)
     }
 
     @Test
@@ -670,9 +702,24 @@ private class FailingVersionApi(
 
 private class RecordingApi : TestApiStub() {
     var createdItems = 0
+    var lastCreatedItemHouseholdId: String? = null
+    var lastSyncHouseholdId: String? = null
+
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = householdId ?: "household-1", name = "瀹跺涵"),
+                ),
+            ),
+        )
 
     override suspend fun createItem(request: ItemCreateRequest): Response<ApiEnvelope<RemoteItemDto>> {
         createdItems += 1
+        lastCreatedItemHouseholdId = request.householdId
         return Response.success(
             ApiEnvelope(
                 ok = true,
@@ -683,6 +730,18 @@ private class RecordingApi : TestApiStub() {
                     expireDate = request.expireDate,
                     locationId = request.locationId,
                     updatedAt = "2026-08-05T00:00:00.000Z",
+                ),
+            ),
+        )
+    }
+
+    override suspend fun syncInventory(request: MobileSyncRequest): Response<ApiEnvelope<MobileSyncResponse>> {
+        lastSyncHouseholdId = request.householdId
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = MobileSyncResponse(
+                    results = emptyList(),
                 ),
             ),
         )

@@ -102,9 +102,11 @@ class DaoPendingOperationQueue(
 
 class RetrofitRemoteSyncClient(
     private val api: HomeInventoryApi,
+    private val householdIdProvider: () -> String? = { null },
 ) : RemoteSyncClient {
     override suspend fun submit(operations: List<PendingSyncOperation>): RemoteSyncResult {
         val request = MobileSyncRequest(
+            householdId = householdIdProvider(),
             operations = operations.map { operation ->
                 MobileSyncOperationDto(
                     clientOperationId = operation.clientOperationId,

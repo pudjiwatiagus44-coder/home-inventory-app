@@ -201,6 +201,122 @@ describe("mobile inventory route permissions", () => {
     expect(response.status).toBe(200);
     expect(repository.writeCalls).toEqual([]);
   });
+
+  it("uses selected household permissions for contributor sync checks", async () => {
+    const dashboardRequests: Array<{ userId: string; householdId?: string }> = [];
+    const writeCalls: string[] = [];
+    const repository: InventoryRepository = {
+      ...createContributorMobileRepository(),
+      getDashboardForUser: async (userId, householdId) => {
+        dashboardRequests.push({ userId, householdId });
+        if (householdId === "household-shared") {
+          return {
+            household: {
+              id: "household-shared",
+              name: "Shared Home",
+              role: "contributor",
+            },
+            areas: [],
+            locations: [],
+            items: [
+              {
+                id: "other-item",
+                name: "Other item",
+                note: "",
+                expire_date: null,
+                location_id: null,
+                createdBy: "owner-1",
+                updatedAt: "2026-08-04T00:00:00.000Z",
+              },
+            ],
+          };
+        }
+
+        return {
+          household: { id: "default-household", name: "Default", role: "owner" },
+          areas: [],
+          locations: [],
+          items: [
+            {
+              id: "other-item",
+              name: "Other item",
+              note: "",
+              expire_date: null,
+              location_id: null,
+              createdBy: "owner-1",
+              updatedAt: "2026-08-04T00:00:00.000Z",
+            },
+          ],
+        };
+      },
+      updateItemIfVersionMatches: async () => {
+        writeCalls.push("updateItemIfVersionMatches");
+        return {
+          id: "other-item",
+          name: "Changed",
+          note: "",
+          expire_date: null,
+          location_id: null,
+          updatedAt: "2026-08-04T00:00:01.000Z",
+        };
+      },
+    };
+    const { POST } = createMobileSyncHandlers({
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "member-1",
+          email: "member-1@example.com",
+        }),
+      },
+      inventoryService: createInventoryService({ repository }),
+    });
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/mobile/inventory/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "home_inventory_session=session-token",
+        },
+        body: JSON.stringify({
+          householdId: "household-shared",
+          operations: [
+            {
+              clientOperationId: "op-selected-household-update",
+              entity: "item",
+              action: "update",
+              serverId: "other-item",
+              baseServerUpdatedAt: "2026-08-04T00:00:00.000Z",
+              payload: {
+                name: "Changed",
+                note: "",
+                expireDate: null,
+                locationId: null,
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        results: [
+          {
+            clientOperationId: "op-selected-household-update",
+            status: "failed",
+            entity: "item",
+            serverId: "other-item",
+          },
+        ],
+      },
+    });
+    expect(dashboardRequests).toEqual([
+      { userId: "member-1", householdId: "household-shared" },
+    ]);
+    expect(writeCalls).toEqual([]);
+  });
 });
 
 function createContributorMobileRepository(): InventoryRepository & {

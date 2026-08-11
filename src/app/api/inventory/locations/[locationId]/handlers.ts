@@ -20,9 +20,10 @@ export function createLocationItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) =>
+        async ({ service, userId, householdId, body }) =>
           service.updateLocationForCurrentUser({
             userId,
+            householdId,
             locationId,
             name: textField(body, "name"),
             areaId: optionalTextField(body, "areaId"),
@@ -36,8 +37,12 @@ export function createLocationItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId }) => {
-          await service.deleteLocationForCurrentUser({ userId, locationId });
+        async ({ service, userId, householdId }) => {
+          await service.deleteLocationForCurrentUser({
+            userId,
+            householdId,
+            locationId,
+          });
           return null;
         },
         dependencies,

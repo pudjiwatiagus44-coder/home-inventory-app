@@ -48,6 +48,10 @@ type InventoryServiceDependencies = {
   >;
 };
 
+type SelectedHouseholdInput = {
+  householdId?: string;
+};
+
 export class CurrentUserHouseholdNotFoundError extends Error {
   constructor() {
     super("No household found for current user");
@@ -107,8 +111,8 @@ export class ContributorDeletePermissionError extends Error {
 export function createInventoryService({
   repository,
 }: InventoryServiceDependencies) {
-  async function loadDashboard(userId: string) {
-    const dashboard = await repository.getDashboardForUser(userId);
+  async function loadDashboard(userId: string, householdId?: string) {
+    const dashboard = await repository.getDashboardForUser(userId, householdId);
 
     if (!dashboard) {
       throw new CurrentUserHouseholdNotFoundError();
@@ -158,8 +162,8 @@ export function createInventoryService({
     async previewImportForCurrentUser(input: {
       userId: string;
       rows: InventoryBackupRow[];
-    }) {
-      const dashboard = await loadDashboard(input.userId);
+    } & SelectedHouseholdInput) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       return planInventoryImport({ dashboard, rows: input.rows });
     },
 
@@ -167,8 +171,8 @@ export function createInventoryService({
       userId: string;
       rows: InventoryBackupRow[];
       conflictResolutions: Record<string, InventoryConflictResolution>;
-    }) {
-      const dashboard = await loadDashboard(input.userId);
+    } & SelectedHouseholdInput) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanManageArea(dashboard);
 
       return commitInventoryImportRows({
@@ -183,8 +187,8 @@ export function createInventoryService({
     async importItemsForCurrentUser(input: {
       userId: string;
       rows: InventoryBackupRow[];
-    }) {
-      const dashboard = await loadDashboard(input.userId);
+    } & SelectedHouseholdInput) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanManageArea(dashboard);
 
       return commitInventoryImportRows({
@@ -196,14 +200,16 @@ export function createInventoryService({
       });
     },
 
-    async createAreaForCurrentUser(input: AreaInput & { userId: string }) {
+    async createAreaForCurrentUser(
+      input: AreaInput & { userId: string } & SelectedHouseholdInput,
+    ) {
       const validation = validateAreaInput(input);
 
       if (!validation.isValid) {
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanManageArea(dashboard);
 
       return repository.createArea({
@@ -213,7 +219,7 @@ export function createInventoryService({
     },
 
     async updateAreaForCurrentUser(
-      input: AreaInput & { userId: string; areaId: string },
+      input: AreaInput & { userId: string; areaId: string } & SelectedHouseholdInput,
     ) {
       const validation = validateAreaInput(input);
 
@@ -221,7 +227,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanManageArea(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
@@ -235,8 +241,10 @@ export function createInventoryService({
       });
     },
 
-    async deleteAreaForCurrentUser(input: { userId: string; areaId: string }) {
-      const dashboard = await loadDashboard(input.userId);
+    async deleteAreaForCurrentUser(
+      input: { userId: string; areaId: string } & SelectedHouseholdInput,
+    ) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanManageArea(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
@@ -250,7 +258,7 @@ export function createInventoryService({
     },
 
     async createLocationForCurrentUser(
-      input: LocationInput & { userId: string },
+      input: LocationInput & { userId: string } & SelectedHouseholdInput,
     ) {
       const validation = validateLocationInput(input);
 
@@ -258,7 +266,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       if (
@@ -276,7 +284,7 @@ export function createInventoryService({
     },
 
     async updateLocationForCurrentUser(
-      input: LocationInput & { userId: string; locationId: string },
+      input: LocationInput & { userId: string; locationId: string } & SelectedHouseholdInput,
     ) {
       const validation = validateLocationInput(input);
 
@@ -284,7 +292,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       const location = dashboard.locations.find(
@@ -317,8 +325,8 @@ export function createInventoryService({
     async deleteLocationForCurrentUser(input: {
       userId: string;
       locationId: string;
-    }) {
-      const dashboard = await loadDashboard(input.userId);
+    } & SelectedHouseholdInput) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       if (!dashboard.locations.some((location) => location.id === input.locationId)) {
@@ -333,7 +341,7 @@ export function createInventoryService({
     },
 
     async createItemForCurrentUser(
-      input: InventoryItemInput & { userId: string },
+      input: InventoryItemInput & { userId: string } & SelectedHouseholdInput,
     ) {
       const validation = validateInventoryItemInput(input);
 
@@ -341,7 +349,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       if (
@@ -361,7 +369,7 @@ export function createInventoryService({
     },
 
     async updateItemForCurrentUser(
-      input: InventoryItemInput & { userId: string; itemId: string },
+      input: InventoryItemInput & { userId: string; itemId: string } & SelectedHouseholdInput,
     ) {
       const validation = validateInventoryItemInput(input);
 
@@ -369,7 +377,7 @@ export function createInventoryService({
         throw new Error(validation.error);
       }
 
-      const dashboard = await loadDashboard(input.userId);
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       const item = dashboard.items.find((candidate) => candidate.id === input.itemId);
@@ -399,8 +407,10 @@ export function createInventoryService({
       });
     },
 
-    async deleteItemForCurrentUser(input: { userId: string; itemId: string }) {
-      const dashboard = await loadDashboard(input.userId);
+    async deleteItemForCurrentUser(
+      input: { userId: string; itemId: string } & SelectedHouseholdInput,
+    ) {
+      const dashboard = await loadDashboard(input.userId, input.householdId);
       assertCanWrite(dashboard);
 
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
@@ -417,12 +427,17 @@ export function createInventoryService({
     async syncQueuedOperationsForCurrentUser(input: {
       userId: string;
       operations: MobileSyncOperation[];
+      householdId?: string;
     }): Promise<MobileSyncData> {
       const results: MobileSyncOperationResult[] = [];
 
       for (const operation of input.operations) {
         results.push(
-          await syncQueuedOperationForCurrentUser(input.userId, operation),
+          await syncQueuedOperationForCurrentUser(
+            input.userId,
+            operation,
+            input.householdId,
+          ),
         );
       }
 
@@ -433,10 +448,11 @@ export function createInventoryService({
   async function syncQueuedOperationForCurrentUser(
     userId: string,
     operation: MobileSyncOperation,
+    householdId?: string,
   ): Promise<MobileSyncOperationResult> {
     try {
       if (operation.action === "create") {
-        return await applyCreateOperation(userId, operation);
+        return await applyCreateOperation(userId, operation, householdId);
       }
 
       const serverId = operation.serverId;
@@ -444,7 +460,7 @@ export function createInventoryService({
         return failedResult(operation, "serverId is required");
       }
 
-      const dashboard = await loadDashboard(userId);
+      const dashboard = await loadDashboard(userId, householdId);
       const currentEntity = findVersionedEntity(
         dashboard,
         operation.entity,
@@ -478,10 +494,12 @@ export function createInventoryService({
   async function applyCreateOperation(
     userId: string,
     operation: MobileSyncOperation,
+    householdId?: string,
   ): Promise<MobileSyncOperationResult> {
     if (operation.entity === "area") {
       const area = await service.createAreaForCurrentUser({
         userId,
+        householdId,
         ...requireAreaPayload(operation),
       });
       return appliedResult(operation, area.id, readServerUpdatedAt(area));
@@ -490,6 +508,7 @@ export function createInventoryService({
     if (operation.entity === "location") {
       const location = await service.createLocationForCurrentUser({
         userId,
+        householdId,
         ...requireLocationPayload(operation),
       });
       return appliedResult(operation, location.id, readServerUpdatedAt(location));
@@ -497,6 +516,7 @@ export function createInventoryService({
 
     const item = await service.createItemForCurrentUser({
       userId,
+      householdId,
       ...requireItemPayload(operation),
     });
     return appliedResult(operation, item.id, readServerUpdatedAt(item));

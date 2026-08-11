@@ -34,6 +34,7 @@ export type MobileSyncOperation = {
 };
 
 export type MobileSyncRequest = {
+  householdId?: string;
   operations: MobileSyncOperation[];
 };
 
@@ -69,6 +70,7 @@ export function parseMobileSyncRequest(input: unknown): MobileSyncRequest {
   }
 
   return {
+    householdId: readOptionalString(input, "householdId"),
     operations: input.operations.map(parseMobileSyncOperation),
   };
 }

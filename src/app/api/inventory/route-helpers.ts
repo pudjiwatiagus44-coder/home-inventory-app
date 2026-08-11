@@ -38,6 +38,7 @@ type JsonObject = Record<string, unknown>;
 
 type MutationContext = {
   userId: string;
+  householdId?: string;
   body: JsonObject;
   service: InventoryRouteService;
 };
@@ -78,8 +79,10 @@ export async function runInventoryMutation<T>(
     }
 
     const body = await readJsonObject(request);
+    const householdId = selectedHouseholdId(request, body);
     const data = await mutation({
       userId: currentUser.userId,
+      householdId,
       body,
       get service() {
         return dependencies.inventoryService ?? createRouteInventoryService();
@@ -193,6 +196,16 @@ export function textField(body: JsonObject, key: string) {
 export function optionalTextField(body: JsonObject, key: string) {
   const value = body[key];
   return typeof value === "string" ? value : null;
+}
+
+function selectedHouseholdId(request: NextRequest, body: JsonObject) {
+  const bodyValue = body.householdId;
+  if (typeof bodyValue === "string" && bodyValue.trim()) {
+    return bodyValue;
+  }
+
+  const queryValue = request.nextUrl.searchParams.get("householdId");
+  return queryValue?.trim() || undefined;
 }
 
 export { AUTH_SESSION_COOKIE };

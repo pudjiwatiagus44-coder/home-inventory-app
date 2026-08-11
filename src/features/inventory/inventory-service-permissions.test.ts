@@ -78,6 +78,32 @@ function createPermissionRepository(overrides: Partial<InventoryRepository> = {}
 }
 
 describe("createInventoryService permission boundaries", () => {
+  it("loads the explicitly selected household before writing", async () => {
+    const dashboardRequests: Array<{ userId: string; householdId?: string }> = [];
+    const { repository } = createPermissionRepository({
+      getDashboardForUser: async (userId, householdId) => {
+        dashboardRequests.push({ userId, householdId });
+        return dashboardWithRole("member", {
+          household: { id: householdId ?? "default-household", name: "Home", role: "member" },
+        });
+      },
+    });
+    const service = createInventoryService({ repository });
+
+    await service.createItemForCurrentUser({
+      userId: "user-1",
+      householdId: "household-shared",
+      name: "Shared item",
+      note: "",
+      expireDate: null,
+      locationId: null,
+    });
+
+    expect(dashboardRequests).toEqual([
+      { userId: "user-1", householdId: "household-shared" },
+    ]);
+  });
+
   it("rejects creating a location under another user's area", async () => {
     const { repository, writes } = createPermissionRepository();
     const service = createInventoryService({ repository });

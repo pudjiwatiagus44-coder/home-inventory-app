@@ -25,6 +25,7 @@ type CurrentUserAuthService = Pick<
 type MobileInventorySyncService = {
   syncQueuedOperationsForCurrentUser(input: {
     userId: string;
+    householdId?: string;
     operations: MobileSyncOperation[];
   }): Promise<MobileSyncData>;
 };
@@ -69,6 +70,7 @@ export function createMobileSyncHandlers(
           });
         const data = await service.syncQueuedOperationsForCurrentUser({
           userId: currentUser.userId,
+          householdId: syncRequest.householdId,
           operations: syncRequest.operations,
         });
 

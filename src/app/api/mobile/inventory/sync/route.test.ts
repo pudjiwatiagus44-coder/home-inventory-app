@@ -75,7 +75,10 @@ describe("POST /api/mobile/inventory/sync", () => {
           "content-type": "application/json",
           cookie: "home_inventory_session=session-token",
         },
-        body: JSON.stringify({ operations: [operation] }),
+        body: JSON.stringify({
+          householdId: "household-shared",
+          operations: [operation],
+        }),
       }),
     );
 
@@ -98,6 +101,7 @@ describe("POST /api/mobile/inventory/sync", () => {
     expect(calls).toEqual([
       {
         userId: "user-1",
+        householdId: "household-shared",
         operations: [operation],
       },
     ]);

@@ -27,9 +27,10 @@ export function createItemItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) => {
+        async ({ service, userId, householdId, body }) => {
           const item = await service.updateItemForCurrentUser({
             userId,
+            householdId,
             itemId,
             name: textField(body, "name"),
             note: textField(body, "note"),
@@ -64,8 +65,8 @@ export function createItemItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId }) => {
-          await service.deleteItemForCurrentUser({ userId, itemId });
+        async ({ service, userId, householdId }) => {
+          await service.deleteItemForCurrentUser({ userId, householdId, itemId });
           const photoService =
             dependencies.recognitionService ??
             createRouteRecognitionService();

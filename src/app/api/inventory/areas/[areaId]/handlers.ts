@@ -20,9 +20,10 @@ export function createAreaItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) =>
+        async ({ service, userId, householdId, body }) =>
           service.updateAreaForCurrentUser({
             userId,
+            householdId,
             areaId,
             name: textField(body, "name"),
             color: optionalTextField(body, "color") ?? undefined,
@@ -36,8 +37,8 @@ export function createAreaItemHandlers(
 
       return runInventoryMutation(
         request,
-        async ({ service, userId }) => {
-          await service.deleteAreaForCurrentUser({ userId, areaId });
+        async ({ service, userId, householdId }) => {
+          await service.deleteAreaForCurrentUser({ userId, householdId, areaId });
           return null;
         },
         dependencies,

@@ -84,7 +84,10 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun updateArea(areaId: String, request: AreaUpdateRequest): Response<ApiEnvelope<RemoteAreaDto>> =
         Response.success(ApiEnvelope(ok = true, data = RemoteAreaDto(id = areaId, name = request.name, color = request.color ?: "#000000")))
 
-    override suspend fun deleteArea(areaId: String): Response<ApiEnvelope<Unit>> =
+    override suspend fun deleteArea(
+        areaId: String,
+        householdId: String?,
+    ): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
 
     override suspend fun createLocation(request: LocationCreateRequest): Response<ApiEnvelope<RemoteLocationDto>> =
@@ -93,7 +96,10 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun updateLocation(locationId: String, request: LocationUpdateRequest): Response<ApiEnvelope<RemoteLocationDto>> =
         Response.success(ApiEnvelope(ok = true, data = RemoteLocationDto(id = locationId, name = request.name, areaId = request.areaId)))
 
-    override suspend fun deleteLocation(locationId: String): Response<ApiEnvelope<Unit>> =
+    override suspend fun deleteLocation(
+        locationId: String,
+        householdId: String?,
+    ): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
 
     override suspend fun createItem(request: ItemCreateRequest): Response<ApiEnvelope<RemoteItemDto>> =
@@ -102,7 +108,10 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun updateItem(itemId: String, request: ItemUpdateRequest): Response<ApiEnvelope<RemoteItemDto>> =
         Response.success(ApiEnvelope(ok = true, data = RemoteItemDto(id = itemId, name = request.name, note = request.note, expireDate = request.expireDate, locationId = request.locationId)))
 
-    override suspend fun deleteItem(itemId: String): Response<ApiEnvelope<Unit>> =
+    override suspend fun deleteItem(
+        itemId: String,
+        householdId: String?,
+    ): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
 
     override suspend fun recognize(

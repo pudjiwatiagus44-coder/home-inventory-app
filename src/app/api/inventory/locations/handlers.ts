@@ -14,9 +14,10 @@ export function createLocationHandlers(
     POST(request: NextRequest) {
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) =>
+        async ({ service, userId, householdId, body }) =>
           service.createLocationForCurrentUser({
             userId,
+            householdId,
             name: textField(body, "name"),
             areaId: optionalTextField(body, "areaId"),
           }),

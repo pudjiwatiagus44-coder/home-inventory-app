@@ -267,6 +267,46 @@ describe("inventory API route permission boundaries", () => {
     );
   });
 
+  it("passes selected householdId from item create body to the inventory service", async () => {
+    const calls: unknown[] = [];
+    const handlers = createItemHandlers(
+      createAuthenticatedDependencies({
+        createItemForCurrentUser: async (input) => {
+          calls.push(input);
+          return {
+            id: "item-b",
+            name: input.name,
+            note: input.note,
+            expire_date: input.expireDate,
+            location_id: input.locationId,
+          };
+        },
+      }),
+    );
+
+    const response = await handlers.POST(
+      jsonRequest("http://localhost/api/inventory/items", "POST", {
+        householdId: "household-shared",
+        name: "Battery",
+        note: "",
+        expireDate: null,
+        locationId: null,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        userId: "user-b",
+        householdId: "household-shared",
+        name: "Battery",
+        note: "",
+        expireDate: null,
+        locationId: null,
+      },
+    ]);
+  });
+
   it("maps updating another user's item to 403", async () => {
     const handlers = createItemItemHandlers(
       createAuthenticatedDependencies({
@@ -451,6 +491,7 @@ describe("inventory API route permission boundaries", () => {
     expect(calls).toEqual([
       {
         userId: "user-b",
+        householdId: "household-a",
         name: "Kitchen",
         color: "#256f6b",
       },

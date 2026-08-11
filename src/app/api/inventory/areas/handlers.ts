@@ -14,9 +14,10 @@ export function createAreaHandlers(
     POST(request: NextRequest) {
       return runInventoryMutation(
         request,
-        async ({ service, userId, body }) =>
+        async ({ service, userId, householdId, body }) =>
           service.createAreaForCurrentUser({
             userId,
+            householdId,
             name: textField(body, "name"),
             color: optionalTextField(body, "color") ?? undefined,
           }),

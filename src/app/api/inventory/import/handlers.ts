@@ -46,6 +46,7 @@ async function handleImportPost(
 
     if (mode === "commit") {
       const body = (await request.json()) as {
+        householdId?: unknown;
         rows?: unknown;
         conflictResolutions?: unknown;
       };
@@ -55,6 +56,7 @@ async function handleImportPost(
       );
       const summary = await service.commitImportForCurrentUser({
         userId: currentUser.userId,
+        householdId: text(body.householdId) || undefined,
         rows,
         conflictResolutions,
       });
@@ -96,6 +98,7 @@ async function handleImportPost(
     const { rows } = parseInventoryBackupRows(buffer);
     const preview = await service.previewImportForCurrentUser({
       userId: currentUser.userId,
+      householdId: request.nextUrl.searchParams.get("householdId") ?? undefined,
       rows,
     });
 
