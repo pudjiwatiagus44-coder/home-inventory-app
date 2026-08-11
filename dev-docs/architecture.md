@@ -320,8 +320,8 @@ Android 拍物品正面照
 - 新增 `household_user_preferences` 表保存个人家庭空间显示名，主键为 `(user_id, household_id)`；服务端只允许当前用户读写自己的 preference，并必须校验该用户属于对应 household。
 - `GET /api/family/households` 应返回 `name`、`displayName`、`effectiveName`、`role`；Web 和 Android 显示家庭空间名时优先使用 `effectiveName`。
 - `PATCH /api/family/households/display-name` 用于当前用户设置/清除个人别名；`PATCH /api/family/households` 继续表示 owner-only 的真实家庭名修改。
-- `household_members.role` 扩展 `contributor`：可读、可新增物品和库存位置、可编辑自己创建的物品和库存位置、不可删除、不可管理成员/邀请。现有 `member` 作为“管理”档位保留完整库存权限和授权管理权限，`readonly` 保持只读。
+- `household_members.role` 扩展 `contributor`：可读、可新增物品和库存位置、可编辑自己创建的物品和库存位置、不可删除、不可管理成员/邀请。`member` 作为“成员”档位保留完整库存权限，但不保留授权管理权限；只有 `owner` 可以管理邀请和成员，`readonly` 保持只读。
 - 为支持 `contributor` 自己创建内容可编辑，`items.created_by` 继续作为物品归属依据；`locations` 需要补充 `created_by`，历史/未知创建者位置不得被 contributor 编辑。
 - 邀请从单家庭 token 升级为“邀请包 + 授权明细”：`household_invitations` 承载 token，`household_invitation_grants` 承载多个 `{ household_id, role }`。创建邀请默认只包含当前 household，可多选多个 household；审批通过后按 grants 创建 membership。
-- 成员授权管理接口必须显式携带 `householdId`，支持按家庭空间修改 role 或删除授权；删除授权只移除 membership，不删除家庭空间数据。
+- 成员授权管理接口必须显式携带 `householdId`，支持按家庭空间修改 role 或删除授权；删除授权只移除 membership，不删除家庭空间数据。非 owner 不能调用成员列表、邀请和成员管理接口，也不能看到其他成员。
 - 详细设计见 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`。本节为已确认架构设计，已完成本地实现与验证；部署与真机验收待后续执行。

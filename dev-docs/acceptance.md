@@ -1030,7 +1030,7 @@
 - 用户 A 和用户 B 加入同一个 household 后，A 设置个人别名为“我的家”，B 设置为“爸妈家”；两人再次打开 Web/Android 时分别看到自己的名称，`households.name` 不变。
 - 授权用户长按下拉栏家庭名可修改个人别名；非 owner 调用真实家庭名重命名接口仍返回 403。
 - 创建邀请时默认只勾选当前 household；选择多个 household 后，审批通过会为申请人创建对应多个 membership，并按每个 grant 写入不同 role。
-- 管理成员可以在有管理权的 household 内新增/编辑/删除库存数据，并管理该 household 的邀请和成员授权。
+- 只有主账号（`owner`）可以管理该 household 的邀请和成员授权；`member`、`contributor`、`readonly` 均无管理权限，也不能查看其他成员。非 owner 的“邀请”入口仅用于邀请其他人使用 App。
 - 新增成员（`contributor`）可以新增物品和库存位置；可以编辑自己创建的物品和库存位置；删除物品/位置返回 403；编辑他人创建或历史归属不明的物品/位置返回 403。
 - 只读成员（`readonly`）新增、编辑、删除均返回 403。
 - 删除某个 household 授权后，该用户下一次请求该 household 数据返回 403，但其他 household 授权不受影响。
@@ -1067,3 +1067,12 @@
 - 问题：App 只在启动/登录时检查一次版本，从后台回前台或在线时不会重新检查，导致已发布新版本但看不到更新提示。
 - 修复：`AppRoot` 监听 `ON_RESUME`，每次回到前台都重新调用 `checkForUpdates()`；已通过 `AppRootTest` 与 Android 全量单测。
 - Android：版本升至 0.5.28 / code 34，APK 已上传并重启服务；`version.json` 返回 versionCode 34 / versionName 0.5.28，APK 下载返回 HTTP 200。
+
+## 2026-08-11 仅主账号管理成员决策证据
+
+- 用户确认：只有主账号（`owner`）可以管理邀请和成员；`member`、`contributor`、`readonly` 均无管理权限，也不能查看其他成员。
+- 服务端：邀请、加入申请、成员列表、成员角色修改、移除成员全部改为 `owner` 校验，非 owner 返回 403。
+- Android：非 owner 的邀请弹窗只显示“邀请使用本 App”，不显示家庭邀请、加入申请、成员列表和管理按钮；角色文案改为 房主 / 成员 / 新增 / 只读。
+- Web：非 owner 家庭设置只显示“仅主账号可管理成员”与“邀请使用本 App”，不显示成员列表和管理按钮；角色文案同步为 房主 / 成员 / 新增 / 只读。
+- 本地验证：`npx vitest run` 通过 56 文件 / 394 测试；`npx eslint src`、`npm run build`、Android `testDebugUnitTest assembleDebug` 均通过。
+- Android：版本升至 0.5.29 / code 35，APK 已上传并重启服务；`version.json` 返回 versionCode 35 / versionName 0.5.29。
