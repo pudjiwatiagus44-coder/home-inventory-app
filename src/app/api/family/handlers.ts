@@ -379,7 +379,11 @@ export function createFamilyHandlers(
 
           const role = textField(body, "role");
 
-        if (role !== "member" && role !== "readonly") {
+        if (
+          role !== "member" &&
+          role !== "contributor" &&
+          role !== "readonly"
+        ) {
           return NextResponse.json(
             { ok: false, message: "不支持的角色" },
             { status: 400 },

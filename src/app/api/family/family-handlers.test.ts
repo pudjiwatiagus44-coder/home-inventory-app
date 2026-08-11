@@ -36,6 +36,7 @@ function familyServiceStub(overrides: Record<string, unknown> = {}) {
     approveJoinRequestForCurrentUser: async () => undefined,
     rejectJoinRequestForCurrentUser: async () => undefined,
     removeMemberForCurrentUser: async () => undefined,
+    setMemberRoleForCurrentUser: async () => undefined,
     createHouseholdForCurrentUser: async () => ({
       id: "household-new",
       name: "储藏间",
@@ -275,6 +276,41 @@ describe("family API handlers", () => {
       ok: false,
       message: "缺少家庭 ID",
     });
+  });
+
+  it("passes contributor member role updates through PATCH member role", async () => {
+    const calls: unknown[] = [];
+    const handlers = createFamilyHandlers({
+      authService,
+      familyService: familyServiceStub({
+        setMemberRoleForCurrentUser: async (input: unknown) => {
+          calls.push(input);
+        },
+      }),
+    });
+
+    const response = await handlers.updateMemberRole(
+      authedRequest("http://localhost/api/family/members/user-2", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          householdId: "household-1",
+          role: "contributor",
+        }),
+      }),
+      { params: Promise.resolve({ userId: "user-2" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      {
+        userId: "user-1",
+        householdId: "household-1",
+        targetUserId: "user-2",
+        role: "contributor",
+      },
+    ]);
+    await expect(response.json()).resolves.toEqual({ ok: true, data: null });
   });
 
   it("returns 400 when DELETE member is missing householdId", async () => {

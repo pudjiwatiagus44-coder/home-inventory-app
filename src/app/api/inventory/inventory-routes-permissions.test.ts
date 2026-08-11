@@ -4,6 +4,9 @@ import { NextRequest } from "next/server";
 import type { createInventoryService } from "../../../features/inventory/inventory-service";
 import {
   AreaOutsideCurrentHouseholdError,
+  ContributorAreaPermissionError,
+  ContributorDeletePermissionError,
+  ContributorOwnRecordPermissionError,
   ItemOutsideCurrentHouseholdError,
   LocationOutsideCurrentHouseholdError,
 } from "../../../features/inventory/inventory-service";
@@ -329,6 +332,68 @@ describe("inventory API route permission boundaries", () => {
       response,
       "Selected item does not belong to current user",
     );
+  });
+
+  it("maps contributor area permission errors to 403", async () => {
+    const handlers = createAreaHandlers(
+      createAuthenticatedDependencies({
+        createAreaForCurrentUser: async () => {
+          throw new ContributorAreaPermissionError();
+        },
+      }),
+    );
+
+    const response = await handlers.POST(
+      jsonRequest("http://localhost/api/inventory/areas", "POST", {
+        name: "Kitchen",
+        color: "#256f6b",
+      }),
+    );
+
+    await expectForbidden(response, "贡献者不能管理区域");
+  });
+
+  it("maps contributor own-record permission errors to 403", async () => {
+    const handlers = createItemItemHandlers(
+      createAuthenticatedDependencies({
+        updateItemForCurrentUser: async () => {
+          throw new ContributorOwnRecordPermissionError();
+        },
+      }),
+    );
+
+    const response = await handlers.PATCH(
+      jsonRequest("http://localhost/api/inventory/items/item-a", "PATCH", {
+        name: "Battery",
+        note: "",
+        expireDate: null,
+        locationId: null,
+      }),
+      { params: Promise.resolve({ itemId: "item-a" }) },
+    );
+
+    await expectForbidden(response, "贡献者只能编辑自己创建的物品或位置");
+  });
+
+  it("maps contributor delete permission errors to 403", async () => {
+    const handlers = createLocationItemHandlers(
+      createAuthenticatedDependencies({
+        deleteLocationForCurrentUser: async () => {
+          throw new ContributorDeletePermissionError();
+        },
+      }),
+    );
+
+    const response = await handlers.DELETE(
+      jsonRequest(
+        "http://localhost/api/inventory/locations/location-a",
+        "DELETE",
+        {},
+      ),
+      { params: Promise.resolve({ locationId: "location-a" }) },
+    );
+
+    await expectForbidden(response, "贡献者不能删除物品或位置");
   });
 
   it("keeps area creation on the current-user route contract", async () => {

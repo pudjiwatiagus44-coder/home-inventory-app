@@ -397,6 +397,33 @@ describe("createFamilyService", () => {
     );
   });
 
+  it("lets the owner set a member to contributor", async () => {
+    const members: {
+      householdId: string;
+      userId: string;
+      role: HouseholdRole;
+    }[] = [
+      { householdId: "household-1", userId: "user-1", role: "owner" },
+      { householdId: "household-1", userId: "user-2", role: "member" },
+    ];
+    const repository = createMemoryFamilyRepository({
+      ownerUserId: "user-1",
+      members,
+    });
+    const service = createFamilyService({ repository });
+
+    await service.setMemberRoleForCurrentUser({
+      userId: "user-1",
+      householdId: "household-1",
+      targetUserId: "user-2",
+      role: "contributor",
+    });
+
+    expect(members.find((member) => member.userId === "user-2")?.role).toBe(
+      "contributor",
+    );
+  });
+
   it("rejects role changes by a non-owner member", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",

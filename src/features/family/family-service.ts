@@ -5,6 +5,7 @@ import {
   getInvitationExpiresAt,
   type FamilyJoinRequestRow,
   type FamilyMemberRow,
+  type HouseholdRole,
   type HouseholdOption,
   type InvitationLinkRow,
 } from "./family-data";
@@ -207,7 +208,7 @@ export function createFamilyService({
       userId: string;
       householdId: string;
       targetUserId: string;
-      role: "member" | "readonly";
+      role: Exclude<HouseholdRole, "owner">;
     }): Promise<void> {
       await assertOwner(input.userId, input.householdId);
 
@@ -215,7 +216,7 @@ export function createFamilyService({
         throw new AuthorizationError("房主不能修改自己的角色");
       }
 
-      if (input.role !== "member" && input.role !== "readonly") {
+      if (!isAssignableMemberRole(input.role)) {
         throw new AuthorizationError("不支持的角色");
       }
 
@@ -263,6 +264,12 @@ export function createFamilyService({
   };
 
   return service;
+}
+
+function isAssignableMemberRole(
+  role: HouseholdRole,
+): role is Exclude<HouseholdRole, "owner"> {
+  return role === "member" || role === "contributor" || role === "readonly";
 }
 
 export type FamilyService = ReturnType<typeof createFamilyService>;

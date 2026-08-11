@@ -62,7 +62,7 @@ export type FamilyRepository = {
   updateMemberRole: (input: {
     householdId: string;
     userId: string;
-    role: "member" | "readonly";
+    role: Exclude<HouseholdRole, "owner">;
   }) => Promise<void>;
   renameHousehold: (
     householdId: string,

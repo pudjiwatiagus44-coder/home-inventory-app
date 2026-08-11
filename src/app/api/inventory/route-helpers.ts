@@ -7,6 +7,9 @@ import {
 import {
   createInventoryService,
   AreaOutsideCurrentHouseholdError,
+  ContributorAreaPermissionError,
+  ContributorDeletePermissionError,
+  ContributorOwnRecordPermissionError,
   CurrentUserHouseholdNotFoundError,
   ItemOutsideCurrentHouseholdError,
   ReadOnlyMemberError,
@@ -152,6 +155,17 @@ function createInventoryErrorResponse(error: unknown) {
   }
 
   if (error instanceof ReadOnlyMemberError) {
+    return NextResponse.json(
+      { ok: false, message: error.message },
+      { status: 403 },
+    );
+  }
+
+  if (
+    error instanceof ContributorAreaPermissionError ||
+    error instanceof ContributorOwnRecordPermissionError ||
+    error instanceof ContributorDeletePermissionError
+  ) {
     return NextResponse.json(
       { ok: false, message: error.message },
       { status: 403 },
