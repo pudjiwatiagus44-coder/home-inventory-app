@@ -62,6 +62,17 @@ export type FamilyActionClient = {
         };
       };
     };
+    (table: "households"): {
+      update: (payload: Record<string, unknown>) => {
+        eq: (column: string, value: string) => {
+          select: (columns?: string) => {
+            maybeSingle: () => Promise<
+              SingleResult<{ id: string; name: string }>
+            >;
+          };
+        };
+      };
+    };
   };
   rpc: (
     fn: string,
