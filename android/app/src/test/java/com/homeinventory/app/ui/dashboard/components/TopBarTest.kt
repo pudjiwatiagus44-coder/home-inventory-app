@@ -30,6 +30,7 @@ class TopBarTest {
         assertTrue(source.contains("HouseholdDropdownRow"))
         assertTrue(source.contains("onSetHouseholdDisplayName(household)"))
         assertTrue(source.contains("effectiveName"))
+        assertTrue(source.contains("\"member\" -> \"成员\""))
         assertTrue(source.contains("onCreateHousehold"))
         assertTrue(source.contains("添加新地点"))
         assertFalse(source.contains("Text(\"设置\")"))

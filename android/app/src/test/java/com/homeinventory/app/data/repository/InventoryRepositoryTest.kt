@@ -557,6 +557,50 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    fun refreshSnapshotWithoutHouseholdIdKeepsSavedSelection() = runTest {
+        val api = RecordingApi()
+        val syncStateDao = FakeSyncStateDao().apply {
+            put(SyncStateEntity("current_household_id", "household-2"))
+        }
+        val repository = InventoryRepository(
+            api = api,
+            areaDao = FakeAreaDao(),
+            locationDao = FakeLocationDao(),
+            itemDao = FakeItemDao(),
+            pendingOperationDao = FakePendingOperationDao(),
+            syncStateDao = syncStateDao,
+        )
+
+        val result = repository.refreshSnapshot()
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastSnapshotHouseholdId)
+        assertEquals("household-2", repository.selectedHouseholdId())
+    }
+
+    @Test
+    fun refreshSnapshotRestoresHouseholdForMatchingUser() = runTest {
+        val api = RecordingApi()
+        val syncStateDao = FakeSyncStateDao().apply {
+            put(SyncStateEntity("current_household_id_user-a", "household-2"))
+        }
+        val repository = InventoryRepository(
+            api = api,
+            areaDao = FakeAreaDao(),
+            locationDao = FakeLocationDao(),
+            itemDao = FakeItemDao(),
+            pendingOperationDao = FakePendingOperationDao(),
+            syncStateDao = syncStateDao,
+            currentUserIdProvider = { "user-a" },
+        )
+
+        val result = repository.refreshSnapshot()
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastSnapshotHouseholdId)
+    }
+
+    @Test
     fun createInvitationLinkReturnsSharedUrlAfterSnapshotLoaded() = runTest {
         val repository = repositoryWith(
             api = FakeSnapshotApi(
@@ -908,6 +952,7 @@ private class RecordingApi : TestApiStub() {
     var createdItems = 0
     var lastCreatedItemHouseholdId: String? = null
     var lastSyncHouseholdId: String? = null
+    var lastSnapshotHouseholdId: String? = null
     var lastRecognizeHouseholdId: String? = null
     var lastItemPhotoHouseholdId: String? = null
     var lastDisplayNameRequest: HouseholdDisplayNameRequest? = null
@@ -915,8 +960,9 @@ private class RecordingApi : TestApiStub() {
 
     override suspend fun snapshot(
         householdId: String?,
-    ): Response<ApiEnvelope<RemoteDashboardDto>> =
-        Response.success(
+    ): Response<ApiEnvelope<RemoteDashboardDto>> {
+        lastSnapshotHouseholdId = householdId
+        return Response.success(
             ApiEnvelope(
                 ok = true,
                 data = RemoteDashboardDto(
@@ -924,6 +970,7 @@ private class RecordingApi : TestApiStub() {
                 ),
             ),
         )
+    }
 
     override suspend fun createItem(request: ItemCreateRequest): Response<ApiEnvelope<RemoteItemDto>> {
         createdItems += 1

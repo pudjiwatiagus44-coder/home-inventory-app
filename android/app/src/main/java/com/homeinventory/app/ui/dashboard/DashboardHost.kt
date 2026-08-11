@@ -77,6 +77,10 @@ fun DashboardHost(
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsState()
     val householdsState by viewModel.householdsState().collectAsState()
+    val isHouseholdOwner =
+        householdsState.households
+            .firstOrNull { it.id == householdsState.currentHouseholdId }
+            ?.role == "owner"
     val inviteState by viewModel.invitations().collectAsState()
     val joinRequestsState by viewModel.joinRequestsState().collectAsState()
     val membersUi by viewModel.membersState().collectAsState()
@@ -436,8 +440,10 @@ fun DashboardHost(
         },
         onInvite = {
             showInviteDialog = true
-            viewModel.refreshJoinRequests()
-            viewModel.refreshMembers()
+            if (isHouseholdOwner) {
+                viewModel.refreshJoinRequests()
+                viewModel.refreshMembers()
+            }
         },
         onHelp = {
             showHelpDialog = true
@@ -461,6 +467,7 @@ fun DashboardHost(
             joinRequests = joinRequestsState,
             households = householdsState.households,
             currentHouseholdId = householdsState.currentHouseholdId,
+            isOwner = isHouseholdOwner,
             onGenerate = viewModel::generateInvitationLink,
             onRefreshRequests = viewModel::refreshJoinRequests,
             onApproveRequest = viewModel::approveRequest,

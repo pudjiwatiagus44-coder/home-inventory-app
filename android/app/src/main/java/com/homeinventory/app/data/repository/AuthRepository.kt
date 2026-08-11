@@ -79,6 +79,7 @@ class AuthRepository(
         }
 
         sessionStore.saveSessionCookie(setCookie)
+        body?.userId?.let { sessionStore.saveUserId(it) }
         return Result.success(Unit)
     }
 

@@ -47,6 +47,7 @@ fun InviteDialog(
     joinRequests: JoinRequestsUiState,
     households: List<HouseholdDto>,
     currentHouseholdId: String?,
+    isOwner: Boolean,
     onGenerate: (List<Pair<String, String>>) -> Unit,
     onRefreshRequests: () -> Unit,
     onApproveRequest: (String) -> Unit,
@@ -88,6 +89,7 @@ fun InviteDialog(
                 fontSize = 13.sp,
             )
 
+            if (isOwner) {
             Text(text = "邀请授权", fontSize = 15.sp)
             households.forEach { household ->
                 val selected = selectedHouseholdIds.contains(household.id)
@@ -382,6 +384,14 @@ fun InviteDialog(
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            } else {
+                Text(
+                    text = "仅主账号可管理邀请和成员",
+                    fontSize = 13.sp,
+                    color = Danger,
+                )
+            }
+
             Text(text = "邀请使用本 App", fontSize = 15.sp)
             Text(
                 text = "分享下载链接给朋友，对方注册后成为独立用户（不会进入你的家庭）。",
@@ -459,7 +469,7 @@ private fun shareText(context: Context, text: String, chooserTitle: String) {
 
 private fun roleLabel(role: String): String = when (role) {
     "owner" -> "房主"
-    "member" -> "管理"
+    "member" -> "成员"
     "contributor" -> "新增"
     "readonly" -> "只读"
     else -> "成员"

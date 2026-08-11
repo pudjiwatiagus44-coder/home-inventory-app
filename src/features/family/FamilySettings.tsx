@@ -23,7 +23,7 @@ type PanelMessage =
 
 const roleLabels: Record<string, string> = {
   owner: "房主",
-  member: "管理",
+  member: "成员",
   contributor: "新增",
   readonly: "只读",
 };
@@ -313,41 +313,47 @@ export function FamilySettings({
               </section>
             ) : null}
 
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">成员</h3>
-              {members.length === 0 ? (
-                <p className="text-[13px] text-[var(--muted-foreground)]">
-                  暂无成员
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {members.map((member) => (
-                    <li
-                      className="flex items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2"
-                      key={member.user_id}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[13px]">
-                        {member.email}
-                        <span className="ml-2 text-[var(--muted-foreground)]">
-                          {roleLabels[member.role] ?? "成员"}
+            {isOwner ? (
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">成员</h3>
+                {members.length === 0 ? (
+                  <p className="text-[13px] text-[var(--muted-foreground)]">
+                    暂无成员
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {members.map((member) => (
+                      <li
+                        className="flex items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2"
+                        key={member.user_id}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[13px]">
+                          {member.email}
+                          <span className="ml-2 text-[var(--muted-foreground)]">
+                            {roleLabels[member.role] ?? "成员"}
+                          </span>
                         </span>
-                      </span>
-                      {isOwner && member.role === "member" ? (
-                        <button
-                          className="shrink-0 rounded-md px-2 py-1 text-[12px] text-red-600"
-                          onClick={() =>
-                            void handleRemoveMember(member.user_id, member.email)
-                          }
-                          type="button"
-                        >
-                          移除
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                        {member.role !== "owner" ? (
+                          <button
+                            className="shrink-0 rounded-md px-2 py-1 text-[12px] text-red-600"
+                            onClick={() =>
+                              void handleRemoveMember(member.user_id, member.email)
+                            }
+                            type="button"
+                          >
+                            移除
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : (
+              <p className="text-[13px] text-[var(--muted-foreground)]">
+                仅主账号可管理成员
+              </p>
+            )}
           </div>
         )}
       </div>

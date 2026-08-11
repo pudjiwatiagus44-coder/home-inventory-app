@@ -53,7 +53,13 @@ function createMemoryFamilyRepository(
       });
       return { id: "household-new", name };
     },
-    getHouseholdOwner: async () => state.ownerUserId ?? null,
+    getHouseholdOwner: async (householdId) => {
+      const owner = members.find(
+        (member) =>
+          member.householdId === householdId && member.role === "owner",
+      );
+      return owner?.userId ?? (members.length === 0 ? state.ownerUserId : null);
+    },
     isHouseholdMember: async (userId, householdId) =>
       members.some(
         (member) =>
@@ -406,6 +412,9 @@ describe("createFamilyService", () => {
   it("only lets the household owner approve a join request", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",
+      members: [
+        { householdId: "household-1", userId: "user-1", role: "owner" },
+      ],
       pendingRequests: [
         { id: "request-1", householdId: "household-1", userId: "user-2" },
       ],
@@ -423,6 +432,9 @@ describe("createFamilyService", () => {
   it("approving a request creates the member relationship", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",
+      members: [
+        { householdId: "household-1", userId: "user-1", role: "owner" },
+      ],
       pendingRequests: [
         { id: "request-1", householdId: "household-1", userId: "user-2" },
       ],
@@ -435,7 +447,7 @@ describe("createFamilyService", () => {
     });
 
     const members = await service.listMembersForCurrentUser({
-      userId: "user-2",
+      userId: "user-1",
       householdId: "household-1",
     });
 
@@ -484,7 +496,7 @@ describe("createFamilyService", () => {
     );
   });
 
-  it("lets members list members and manage invitations", async () => {
+  it("does not let members list or manage invitations", async () => {
     const repository = createMemoryFamilyRepository({
       ownerUserId: "user-1",
       members: [
@@ -494,21 +506,21 @@ describe("createFamilyService", () => {
     });
     const service = createFamilyService({ repository });
 
-    const members = await service.listMembersForCurrentUser({
-      userId: "user-2",
-      householdId: "household-1",
-    });
+    await expect(
+      service.listMembersForCurrentUser({
+        userId: "user-2",
+        householdId: "household-1",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
 
-    expect(members).toHaveLength(2);
-
-    const link = await service.createInvitationLinkForCurrentUser({
-      userId: "user-2",
-      householdId: "household-1",
-      token: "token_member_invite",
-      now: new Date("2026-08-11T00:00:00.000Z"),
-    });
-
-    expect(link.household_id).toBe("household-1");
+    await expect(
+      service.createInvitationLinkForCurrentUser({
+        userId: "user-2",
+        householdId: "household-1",
+        token: "token_member_invite",
+        now: new Date("2026-08-11T00:00:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("does not let the owner remove themselves", async () => {
@@ -579,7 +591,7 @@ describe("createFamilyService", () => {
     );
   });
 
-  it("lets members with management role change another member's role", async () => {
+  it("rejects role changes by a non-owner member", async () => {
     const members = [
       { householdId: "household-1", userId: "user-1", role: "owner" },
       { householdId: "household-1", userId: "user-2", role: "member" },
@@ -591,16 +603,14 @@ describe("createFamilyService", () => {
     });
     const service = createFamilyService({ repository });
 
-    await service.setMemberRoleForCurrentUser({
-      userId: "user-2",
-      householdId: "household-1",
-      targetUserId: "user-3",
-      role: "contributor",
-    });
-
-    expect(members.find((member) => member.userId === "user-3")?.role).toBe(
-      "contributor",
-    );
+    await expect(
+      service.setMemberRoleForCurrentUser({
+        userId: "user-2",
+        householdId: "household-1",
+        targetUserId: "user-3",
+        role: "readonly",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("rejects role changes by a contributor", async () => {
