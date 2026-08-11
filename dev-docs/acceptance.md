@@ -1075,4 +1075,5 @@
 - Android：非 owner 的邀请弹窗只显示“邀请使用本 App”，不显示家庭邀请、加入申请、成员列表和管理按钮；角色文案改为 房主 / 成员 / 新增 / 只读。
 - Web：非 owner 家庭设置只显示“仅主账号可管理成员”与“邀请使用本 App”，不显示成员列表和管理按钮；角色文案同步为 房主 / 成员 / 新增 / 只读。
 - 本地验证：`npx vitest run` 通过 56 文件 / 394 测试；`npx eslint src`、`npm run build`、Android `testDebugUnitTest assembleDebug` 均通过。
-- Android：版本升至 0.5.29 / code 35，APK 已上传并重启服务；`version.json` 返回 versionCode 35 / versionName 0.5.29。
+- 线上：服务器已合并到 `codex/area-location-photos-deploy`（commit `380c3c4`），保留区域/位置照片能力并包含本次 owner-only 权限修复；临时 owner/member 冒烟通过，成员访问成员列表与邀请接口返回 403，临时账号已清理。
+- Android：版本升至 0.5.29 / code 35，APK（20,245,947 字节）已上传并重启服务；`version.json` 返回 versionCode 35 / versionName 0.5.29，APK 下载返回 HTTP 200。
