@@ -1052,3 +1052,25 @@
 - APK：`scripts/upload-apk.ps1` 构建并上传 0.5.26 / code 32 APK（20,213,183 字节）；`https://homestorag.xyz/apk/version.json` 返回 versionCode 32 / versionName 0.5.26，APK 下载返回 HTTP 200。
 - 线上 smoke：`/login` 200；未登录 `/api/family/households` 401；临时账号注册、个人显示名 PATCH、多家庭 grants 邀请 POST 均 200；临时测试账号与数据已清理。
 - 待办：Web/Android 真机验收（长按设置显示名、多家庭邀请选择、成员角色显示等）。生产上线前仍需隐私政策、用户协议、备份恢复与账号安全评审。
+
+## 2026-08-11 区域/位置照片验收证据
+
+状态：本地实现、数据库 migration 与自动化验证完成；真机/线上部署验收待进行。
+
+- 实现：`dev-docs/sql/area_location_photos_self_hosted.sql`（`areas.photo_key`、`locations.photo_key` + 唯一索引）；`src/server/photos/area-location-photo-service.ts` 与 `photo-route-helpers.ts`（上传/读取/删除/清理）；`PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `locations/[locationId]/photo`；Dashboard/快照透传 `photoKey`；Web 物品行 `A1`/区域小按钮与无照片提示；Android Room/API/Repository、物品行小按钮、照片查看、长按弹窗照片区。
+- Web 验证：`npx vitest run --exclude <2 个 PostgreSQL 集成文件>` 53 个文件 / 348 个测试通过；`npx eslint src` exit 0；`npm run build` exit 0，构建产物包含新增两个照片路由。
+- Android 验证：`gradle :app:testDebugUnitTest --no-daemon` 通过；`gradle :app:assembleDebug --no-daemon` 通过。
+- 数据库验证：`dev-docs/sql/area_location_photos_self_hosted.sql` 已在 `home_inventory_test` 执行成功，`areas.photo_key`、`locations.photo_key` 及两个唯一索引已确认；新增 `src/server/photos/photo-repository.integration.test.ts`，真实 PostgreSQL 集成测试通过。
+- 待办：真机拍照/相册、替换/删除、readonly 只读、用户 A/B 越权、替换和删除后的文件清理；线上部署与页面验收。
+
+- 每个区域、每个位置各有一张主照片，可上传、替换、删除。
+- 长按区域/位置可拍照或从相册选择；有照片时可查看、替换、删除。
+- 物品行中位置名（如 `A1`）和区域名显示为小按钮，点击分别查看位置照片、区域照片。
+- 无照片时点击按钮提示“拍照或从相册选择”，完成后自动保存。
+- 服务器保存约 1280px、100–300KB 清晰图；Web 与 Android 均可查看。
+- Android 本地缓存照片，查看本地优先、缺失联网；Web 浏览器缓存生效。
+- 照片拍摄、替换、删除必须联网；断网时明确提示，不做离线队列。
+- readonly 成员可查看照片，但上传/替换/删除被服务端拒绝（403）。
+- 用户 A/B 越权读取或写入照片返回 403/404。
+- 替换照片和删除区域/位置后，旧照片文件被清理。
+- 未登录访问照片接口返回 401。

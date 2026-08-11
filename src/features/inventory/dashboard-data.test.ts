@@ -24,11 +24,11 @@ describe("buildDashboardSummary", () => {
     const summary = buildDashboardSummary({
       household: { id: "household-1", name: "我的家庭" },
       areas: [
-        { id: "area-1", name: "厨房", color: "#64748b" },
+        { id: "area-1", name: "厨房", color: "#64748b", photo_key: "area_photo.jpg" },
         { id: "area-2", name: "卧室", color: "#256f6b" },
       ],
       locations: [
-        { id: "location-1", name: "上层抽屉", area_id: "area-1" },
+        { id: "location-1", name: "上层抽屉", area_id: "area-1", photo_key: "location_photo.jpg" },
         { id: "location-2", name: "药箱", area_id: "area-2" },
       ],
       items: [
@@ -61,12 +61,14 @@ describe("buildDashboardSummary", () => {
           id: "area-1",
           name: "厨房",
           color: "#64748b",
+          photoKey: "area_photo.jpg",
           locationCount: 1,
         },
         {
           id: "area-2",
           name: "卧室",
           color: "#256f6b",
+          photoKey: null,
           locationCount: 1,
         },
       ],
@@ -77,6 +79,7 @@ describe("buildDashboardSummary", () => {
           areaId: "area-1",
           areaName: "厨房",
           createdBy: null,
+          photoKey: "location_photo.jpg",
         },
         {
           id: "location-2",
@@ -84,6 +87,7 @@ describe("buildDashboardSummary", () => {
           areaId: "area-2",
           areaName: "卧室",
           createdBy: null,
+          photoKey: null,
         },
       ],
       items: [
@@ -96,6 +100,8 @@ describe("buildDashboardSummary", () => {
           locationName: "上层抽屉",
           areaId: "area-1",
           areaName: "厨房",
+          areaPhotoKey: "area_photo.jpg",
+          locationPhotoKey: "location_photo.jpg",
           expirationStatus: "none",
           photoKey: null,
           createdBy: null,
@@ -109,6 +115,8 @@ describe("buildDashboardSummary", () => {
           locationName: "药箱",
           areaId: "area-2",
           areaName: "卧室",
+          areaPhotoKey: null,
+          locationPhotoKey: null,
           expirationStatus: "normal",
           photoKey: null,
           createdBy: null,
@@ -134,6 +142,7 @@ describe("buildDashboardSummary", () => {
         id: "area-1",
         name: "默认区域",
         color: "#64748b",
+        photoKey: null,
         locationCount: 0,
       },
     ]);
@@ -167,6 +176,8 @@ describe("buildDashboardSummary", () => {
         locationName: "未设置位置",
         areaId: null,
         areaName: "未分区",
+        areaPhotoKey: null,
+        locationPhotoKey: null,
         expirationStatus: "none",
         photoKey: null,
         createdBy: null,
@@ -197,6 +208,7 @@ describe("buildDashboardSummary", () => {
         areaId: null,
         areaName: "未分区",
         createdBy: null,
+        photoKey: null,
       },
     ]);
     expect(summary.items[0]).toMatchObject({

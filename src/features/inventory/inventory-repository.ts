@@ -166,7 +166,7 @@ export function createPostgresInventoryRepository(
       const [areasResult, locationsResult, itemsResult] = await Promise.all([
         client.query<PostgresAreaRow>(
           `
-            select id, name, color, updated_at as "updatedAt"
+            select id, name, color, photo_key, updated_at as "updatedAt"
             from areas
             where household_id = $1
             order by sort_order asc, created_at asc
@@ -175,7 +175,7 @@ export function createPostgresInventoryRepository(
         ),
         client.query<PostgresLocationRow>(
           `
-            select id, name, area_id, created_by as "createdBy", updated_at as "updatedAt"
+            select id, name, area_id, created_by as "createdBy", photo_key, updated_at as "updatedAt"
             from locations
             where household_id = $1
             order by sort_order asc, created_at asc
@@ -215,12 +215,13 @@ export function createPostgresInventoryRepository(
         id: string;
         name: string;
         color: string;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
           insert into areas (household_id, name, color)
           values ($1, $2, $3)
-          returning id, name, color, updated_at as "updatedAt"
+          returning id, name, color, photo_key, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -247,6 +248,7 @@ export function createPostgresInventoryRepository(
         id: string;
         name: string;
         color: string;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
@@ -257,7 +259,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name, color, updated_at as "updatedAt"
+          returning id, name, color, photo_key, updated_at as "updatedAt"
         `,
         [
           input.areaId,
@@ -291,7 +293,7 @@ export function createPostgresInventoryRepository(
           where id = $1
             and household_id = $2
             and updated_at = $5::timestamptz
-          returning id, name, color, updated_at as "updatedAt"
+          returning id, name, color, photo_key, updated_at as "updatedAt"
         `,
         [
           input.areaId,
@@ -343,12 +345,13 @@ export function createPostgresInventoryRepository(
         name: string;
         area_id: string | null;
         createdBy: string | null;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
           insert into locations (household_id, area_id, name, created_by)
           values ($1, $2, $3, $4)
-          returning id, name, area_id, created_by as "createdBy", updated_at as "updatedAt"
+          returning id, name, area_id, created_by as "createdBy", photo_key, updated_at as "updatedAt"
         `,
         [
           input.householdId,
@@ -377,6 +380,7 @@ export function createPostgresInventoryRepository(
         name: string;
         area_id: string | null;
         createdBy: string | null;
+        photo_key: string | null;
         updatedAt: string;
       }>(
         `
@@ -387,7 +391,7 @@ export function createPostgresInventoryRepository(
             updated_at = now()
           where id = $1
             and household_id = $2
-          returning id, name, area_id, created_by as "createdBy", updated_at as "updatedAt"
+          returning id, name, area_id, created_by as "createdBy", photo_key, updated_at as "updatedAt"
         `,
         [
           input.locationId,
@@ -421,7 +425,7 @@ export function createPostgresInventoryRepository(
           where id = $1
             and household_id = $2
             and updated_at = $5::timestamptz
-          returning id, name, area_id, created_by as "createdBy", updated_at as "updatedAt"
+          returning id, name, area_id, created_by as "createdBy", photo_key, updated_at as "updatedAt"
         `,
         [
           input.locationId,

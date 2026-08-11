@@ -56,6 +56,8 @@ fun ItemList(
     onEditItem: (DashboardUiItem) -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
     onAddPhoto: (DashboardUiItem) -> Unit,
+    onLocationPhotoClick: (DashboardUiItem) -> Unit,
+    onAreaPhotoClick: (DashboardUiItem) -> Unit,
     unassignedFilter: Boolean,
     onToggleUnassigned: () -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
@@ -118,6 +120,8 @@ fun ItemList(
                         onClick = { onEditItem(item) },
                         onPhotoClick = onPhotoClick,
                         onAddPhoto = onAddPhoto,
+                        onLocationPhotoClick = onLocationPhotoClick,
+                        onAreaPhotoClick = onAreaPhotoClick,
                         loadPhoto = loadPhoto,
                     )
                 }
@@ -167,6 +171,8 @@ private fun ItemRow(
     onClick: () -> Unit,
     onPhotoClick: (DashboardUiItem) -> Unit,
     onAddPhoto: (DashboardUiItem) -> Unit,
+    onLocationPhotoClick: (DashboardUiItem) -> Unit,
+    onAreaPhotoClick: (DashboardUiItem) -> Unit,
     loadPhoto: suspend (itemId: String) -> Result<Bitmap>,
 ) {
     val thumbnail by produceState<Bitmap?>(
@@ -241,16 +247,48 @@ private fun ItemRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = listOfNotNull(item.locationName, item.note.takeIf { it.isNotBlank() })
-                .joinToString(" · ")
-            if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = MutedForeground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (item.locationName != null) {
+                    Text(
+                        text = item.locationName,
+                        color = Primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SurfaceMuted)
+                            .clickable { onLocationPhotoClick(item) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+                if (item.areaName != null) {
+                    Text(
+                        text = item.areaName,
+                        color = MutedForeground,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SurfaceMuted)
+                            .clickable { onAreaPhotoClick(item) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+                if (item.note.isNotBlank()) {
+                    Text(
+                        text = item.note,
+                        color = MutedForeground,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         Column(horizontalAlignment = Alignment.End) {

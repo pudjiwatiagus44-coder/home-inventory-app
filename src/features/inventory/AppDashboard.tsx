@@ -52,6 +52,7 @@ import {
   downloadInventoryBackupBuffer,
   generateInventoryBackupFilename,
 } from "./excel-backup";
+import { NoPhotoDialog, PhotoViewerDialog } from "./photo-dialogs";
 
 type DashboardState =
   | { status: "loading" }
@@ -245,6 +246,16 @@ export function AppDashboard({
     Record<string, InventoryConflictResolution>
   >({});
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [photoViewer, setPhotoViewer] = useState<{
+    kind: "area" | "location";
+    id: string;
+    title: string;
+  } | null>(null);
+  const [photoSource, setPhotoSource] = useState<{
+    kind: "area" | "location";
+    id: string;
+  } | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const loadDashboard = useCallback(
     async (shouldUpdate: () => boolean = () => true) => {
@@ -1259,9 +1270,60 @@ export function AppDashboard({
                         <span className="block truncate text-[14px] font-semibold leading-4">
                           {item.name}
                         </span>
-                        <span className="mt-0.5 block truncate text-[11px] leading-3 text-[var(--muted-foreground)]">
-                          {item.locationName}
-                          {item.note ? ` · ${item.note}` : ""}
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                          {item.locationId ? (
+                            <button
+                              className="rounded-md border border-[var(--primary)] bg-[#eef5ef] px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary)]"
+                              data-testid="mobile-location-photo-chip"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (item.locationPhotoKey) {
+                                  setPhotoViewer({
+                                    kind: "location",
+                                    id: item.locationId!,
+                                    title: item.locationName,
+                                  });
+                                } else {
+                                  setPhotoSource({
+                                    kind: "location",
+                                    id: item.locationId!,
+                                  });
+                                }
+                              }}
+                              type="button"
+                            >
+                              {item.locationName}
+                            </button>
+                          ) : null}
+                          {item.areaId ? (
+                            <button
+                              className="rounded-md border border-[var(--border)] bg-white px-1.5 py-0.5 text-[11px] text-[var(--muted-foreground)]"
+                              data-testid="mobile-area-photo-chip"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (item.areaPhotoKey) {
+                                  setPhotoViewer({
+                                    kind: "area",
+                                    id: item.areaId!,
+                                    title: item.areaName,
+                                  });
+                                } else {
+                                  setPhotoSource({
+                                    kind: "area",
+                                    id: item.areaId!,
+                                  });
+                                }
+                              }}
+                              type="button"
+                            >
+                              {item.areaName}
+                            </button>
+                          ) : null}
+                          {item.note ? (
+                            <span className="text-[11px] leading-3 text-[var(--muted-foreground)]">
+                              · {item.note}
+                            </span>
+                          ) : null}
                         </span>
                       </span>
                       <span className="grid justify-items-end gap-0 text-[11px] leading-3 text-[var(--muted-foreground)]">
@@ -1428,6 +1490,25 @@ export function AppDashboard({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            aria-label="区域照片"
+                            className="rounded-md border border-[var(--border)] px-1.5 text-[11px] text-[var(--primary)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (area.photoKey) {
+                                setPhotoViewer({
+                                  kind: "area",
+                                  id: area.id,
+                                  title: area.name,
+                                });
+                              } else {
+                                setPhotoSource({ kind: "area", id: area.id });
+                              }
+                            }}
+                            type="button"
+                          >
+                            {area.photoKey ? "照片" : "拍照"}
+                          </button>
                           <span className="text-[13px] text-[var(--muted-foreground)]">
                             {itemCount} 件
                           </span>
@@ -1590,6 +1671,28 @@ export function AppDashboard({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            aria-label="位置照片"
+                            className="rounded-md border border-[var(--border)] px-1.5 text-[11px] text-[var(--primary)]"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (location.photoKey) {
+                                setPhotoViewer({
+                                  kind: "location",
+                                  id: location.id,
+                                  title: location.name,
+                                });
+                              } else {
+                                setPhotoSource({
+                                  kind: "location",
+                                  id: location.id,
+                                });
+                              }
+                            }}
+                            type="button"
+                          >
+                            {location.photoKey ? "照片" : "拍照"}
+                          </button>
                           <span className="text-[13px] text-[var(--muted-foreground)]">
                             {itemCount} 件
                           </span>
@@ -2576,6 +2679,73 @@ export function AppDashboard({
           onClose={() => setShowHelpDialog(false)}
         />
       ) : null}
+
+      {photoViewer ? (
+        <PhotoViewerDialog
+          title={photoViewer.title}
+          loadUrl={
+            photoViewer.kind === "area"
+              ? `/api/inventory/areas/${photoViewer.id}/photo?householdId=${
+                  state.status === "ready" ? state.summary.householdId : ""
+                }`
+              : `/api/inventory/locations/${photoViewer.id}/photo?householdId=${
+                  state.status === "ready" ? state.summary.householdId : ""
+                }`
+          }
+          onAdd={() => {
+            setPhotoSource(photoViewer);
+            setPhotoViewer(null);
+            photoInputRef.current?.click();
+          }}
+          onDismiss={() => setPhotoViewer(null)}
+        />
+      ) : null}
+
+      {photoSource ? (
+        <NoPhotoDialog
+          kind={photoSource.kind === "area" ? "区域" : "位置"}
+          onTake={() => {
+            if (photoInputRef.current) {
+              photoInputRef.current.setAttribute("capture", "environment");
+              photoInputRef.current.click();
+            }
+          }}
+          onPick={() => {
+            if (photoInputRef.current) {
+              photoInputRef.current.removeAttribute("capture");
+              photoInputRef.current.click();
+            }
+          }}
+          onDismiss={() => setPhotoSource(null)}
+        />
+      ) : null}
+
+      <input
+        ref={photoInputRef}
+        className="hidden"
+        type="file"
+        accept="image/jpeg"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          const target = photoSource;
+          setPhotoSource(null);
+          event.target.value = "";
+          if (!file || !target) return;
+          try {
+            const client = createSelfHostedInventoryClient();
+            const householdId =
+              state.status === "ready" ? state.summary.householdId : undefined;
+            if (target.kind === "area") {
+              await client.uploadAreaPhoto(target.id, file, householdId);
+            } else {
+              await client.uploadLocationPhoto(target.id, file, householdId);
+            }
+            await loadDashboard();
+          } catch {
+            setFormMessage("照片上传失败，请重试");
+          }
+        }}
+      />
     </div>
   );
 }

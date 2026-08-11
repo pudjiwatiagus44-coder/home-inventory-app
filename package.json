@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:postgres": "vitest run --no-file-parallelism src/server/auth/postgres-auth-repository.integration.test.ts src/features/inventory/postgres-inventory.integration.test.ts"
+    "test:postgres": "vitest run --no-file-parallelism src/server/auth/postgres-auth-repository.integration.test.ts src/server/photos/photo-repository.integration.test.ts src/features/inventory/postgres-inventory.integration.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

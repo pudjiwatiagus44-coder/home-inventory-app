@@ -22,6 +22,7 @@ import com.homeinventory.app.data.remote.LocationCreateRequest
 import com.homeinventory.app.data.remote.LocationUpdateRequest
 import com.homeinventory.app.data.remote.MobileSyncRequest
 import com.homeinventory.app.data.remote.MobileSyncResponse
+import com.homeinventory.app.data.remote.PhotoUploadResponseDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
@@ -40,6 +41,7 @@ import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -150,6 +152,46 @@ interface HomeInventoryApi {
         @Path("itemId") itemId: String,
         @Query("householdId") householdId: String? = null,
     ): Response<ResponseBody>
+
+    @Multipart
+    @PUT("api/inventory/areas/{areaId}/photo")
+    suspend fun uploadAreaPhoto(
+        @Path("areaId") areaId: String,
+        @Part file: MultipartBody.Part,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<PhotoUploadResponseDto>>
+
+    @GET("api/inventory/areas/{areaId}/photo")
+    suspend fun areaPhoto(
+        @Path("areaId") areaId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ResponseBody>
+
+    @DELETE("api/inventory/areas/{areaId}/photo")
+    suspend fun deleteAreaPhoto(
+        @Path("areaId") areaId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<Unit>>
+
+    @Multipart
+    @PUT("api/inventory/locations/{locationId}/photo")
+    suspend fun uploadLocationPhoto(
+        @Path("locationId") locationId: String,
+        @Part file: MultipartBody.Part,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<PhotoUploadResponseDto>>
+
+    @GET("api/inventory/locations/{locationId}/photo")
+    suspend fun locationPhoto(
+        @Path("locationId") locationId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ResponseBody>
+
+    @DELETE("api/inventory/locations/{locationId}/photo")
+    suspend fun deleteLocationPhoto(
+        @Path("locationId") locationId: String,
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<Unit>>
 
     @Multipart
     @POST("api/inventory/import")

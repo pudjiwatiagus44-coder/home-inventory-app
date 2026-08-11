@@ -126,6 +126,7 @@ users
 - `household_id`
 - `name`
 - `color`
+- `photo_key`（2026-08-11 新增：区域照片文件名，可空、唯一）
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -136,6 +137,7 @@ users
 - `household_id`
 - `area_id`
 - `name`
+- `photo_key`（2026-08-11 新增：位置照片文件名，可空、唯一）
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -325,3 +327,16 @@ Android 拍物品正面照
 - 邀请从单家庭 token 升级为“邀请包 + 授权明细”：`household_invitations` 承载 token，`household_invitation_grants` 承载多个 `{ household_id, role }`。创建邀请默认只包含当前 household，可多选多个 household；审批通过后按 grants 创建 membership。
 - 成员授权管理接口必须显式携带 `householdId`，支持按家庭空间修改 role 或删除授权；删除授权只移除 membership，不删除家庭空间数据。
 - 详细设计见 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`。本节为已确认架构设计，已完成本地实现与验证；部署与真机验收待后续执行。
+
+## 2026-08-11 区域/位置照片架构
+
+用户确认将区域/位置照片纳入 Web/PWA 与 Android 内测版当前范围（每区域、每位置各一张主照片）：
+
+- 数据：`areas`、`locations` 各新增 `photo_key` 字段（可空、唯一）；照片文件沿用 `PhotoStore` 存储抽象，第一版存服务器本地磁盘。
+- 存储：服务器保存约 1280px、100–300KB 清晰图；区域/位置照片不走 `pending_photos` 暂存，上传后直接落库关联。
+- 接口：新增 `PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `PUT/GET/DELETE /api/inventory/locations/[locationId]/photo`。
+- 照片接口携带 `householdId` 查询参数，服务端按 membership 校验后再操作，支持切换家庭后读写对应家庭照片。
+- 权限：owner/member 可上传、替换、删除；readonly 只能读取；服务端按家庭成员与角色校验，禁止越权。
+- 缓存与离线：Android 用 `LocalPhotoStore` 缓存清晰图，Web 用浏览器缓存；查看本地优先、缺失联网；拍摄/替换/删除必须联网，不做离线上传队列。
+- 界面：物品行中位置名和区域名显示为小按钮，点击查看对应照片；长按区域/位置的编辑弹窗内提供拍照、相册、查看、替换、删除。
+- 设计文档：`docs/superpowers/specs/2026-08-11-area-location-photos-design.md`；表结构与接口细节见 `dev-docs/database-design.md`。

@@ -132,6 +132,76 @@ export function createSelfHostedInventoryClient({
       );
     },
 
+    uploadAreaPhoto(areaId: string, file: File, householdId?: string) {
+      const formData = new FormData();
+      formData.append("file", file);
+      return request<{ photoKey: string }>(
+        withHouseholdQuery(
+          `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+          householdId,
+        ),
+        { method: "PUT", body: formData },
+      );
+    },
+
+    deleteAreaPhoto(areaId: string, householdId?: string) {
+      return request(
+        withHouseholdQuery(
+          `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+          householdId,
+        ),
+        jsonInit("DELETE"),
+      );
+    },
+
+    async getAreaPhoto(areaId: string, householdId?: string) {
+      const response = await fetchImpl(
+        withHouseholdQuery(
+          `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+          householdId,
+        ),
+      );
+      if (!response.ok) {
+        throw new Error("加载区域照片失败");
+      }
+      return response.blob();
+    },
+
+    uploadLocationPhoto(locationId: string, file: File, householdId?: string) {
+      const formData = new FormData();
+      formData.append("file", file);
+      return request<{ photoKey: string }>(
+        withHouseholdQuery(
+          `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+          householdId,
+        ),
+        { method: "PUT", body: formData },
+      );
+    },
+
+    deleteLocationPhoto(locationId: string, householdId?: string) {
+      return request(
+        withHouseholdQuery(
+          `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+          householdId,
+        ),
+        jsonInit("DELETE"),
+      );
+    },
+
+    async getLocationPhoto(locationId: string, householdId?: string) {
+      const response = await fetchImpl(
+        withHouseholdQuery(
+          `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+          householdId,
+        ),
+      );
+      if (!response.ok) {
+        throw new Error("加载位置照片失败");
+      }
+      return response.blob();
+    },
+
     previewImport(file: File, householdId?: string) {
       const formData = new FormData();
       formData.append("file", file);

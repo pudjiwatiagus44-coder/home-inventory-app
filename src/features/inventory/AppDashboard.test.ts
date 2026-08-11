@@ -139,6 +139,8 @@ describe("AppDashboard location actions", () => {
     expect(source).toContain('data-testid="mobile-area-strip"');
     expect(source).toContain('data-testid="mobile-location-strip"');
     expect(source).toContain('data-testid="mobile-add-item-button"');
+    expect(source).toContain('data-testid="mobile-location-photo-chip"');
+    expect(source).toContain('data-testid="mobile-area-photo-chip"');
     expect(source).toContain("overflow-x-auto");
     expect(source).toContain("搜索物品（名称 / 类别 / 位置 / 备注）");
     expect(source).not.toContain("查看区域");
@@ -191,5 +193,12 @@ describe("AppDashboard location actions", () => {
 
     expect(source).toContain("showHelpDialog");
     expect(source).toContain("帮助");
+  });
+
+  it("adds area and location photo entries on the desktop panels", () => {
+    const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
+
+    expect(source).toContain('aria-label="区域照片"');
+    expect(source).toContain('aria-label="位置照片"');
   });
 });

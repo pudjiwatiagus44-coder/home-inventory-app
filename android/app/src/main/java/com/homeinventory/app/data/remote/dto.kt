@@ -59,6 +59,8 @@ data class RemoteAreaDto(
     val id: String,
     val name: String,
     val color: String,
+    @SerializedName("photo_key")
+    val photoKey: String? = null,
     val updatedAt: String? = null,
 )
 
@@ -67,6 +69,8 @@ data class RemoteLocationDto(
     val name: String,
     @SerializedName("area_id")
     val areaId: String? = null,
+    @SerializedName("photo_key")
+    val photoKey: String? = null,
     val updatedAt: String? = null,
 )
 
@@ -280,4 +284,8 @@ data class RecognitionResponseDto(
     val note: String? = null,
     val expireDate: String? = null,
     val thumbnailId: String? = null,
+)
+
+data class PhotoUploadResponseDto(
+    val photoKey: String? = null,
 )

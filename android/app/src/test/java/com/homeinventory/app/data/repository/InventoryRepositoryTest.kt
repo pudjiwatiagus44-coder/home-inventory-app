@@ -19,6 +19,7 @@ import com.homeinventory.app.data.remote.HouseholdDisplayNameRequest
 import com.homeinventory.app.data.remote.InvitationGrantDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.JoinRequestDto
+import com.homeinventory.app.data.remote.PhotoUploadResponseDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
@@ -94,6 +95,85 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    fun uploadAreaPhotoReturnsKeyOnSuccess() = runTest {
+        val repository = repositoryWith(
+            api = object : TestApiStub() {
+                override suspend fun uploadAreaPhoto(
+                    areaId: String,
+                    file: MultipartBody.Part,
+                    householdId: String?,
+                ): Response<ApiEnvelope<PhotoUploadResponseDto>> =
+                    Response.success(
+                        ApiEnvelope(ok = true, data = PhotoUploadResponseDto(photoKey = "area_1.jpg")),
+                    )
+            },
+        )
+
+        val result = repository.uploadAreaPhoto("area-1", byteArrayOf(1, 2, 3))
+
+        assertTrue(result.isSuccess)
+        assertEquals("area_1.jpg", result.getOrNull())
+    }
+
+    @Test
+    fun uploadLocationPhotoReturnsKeyOnSuccess() = runTest {
+        val repository = repositoryWith(
+            api = object : TestApiStub() {
+                override suspend fun uploadLocationPhoto(
+                    locationId: String,
+                    file: MultipartBody.Part,
+                    householdId: String?,
+                ): Response<ApiEnvelope<PhotoUploadResponseDto>> =
+                    Response.success(
+                        ApiEnvelope(
+                            ok = true,
+                            data = PhotoUploadResponseDto(photoKey = "location_1.jpg"),
+                        ),
+                    )
+            },
+        )
+
+        val result = repository.uploadLocationPhoto("location-1", byteArrayOf(1, 2, 3))
+
+        assertTrue(result.isSuccess)
+        assertEquals("location_1.jpg", result.getOrNull())
+    }
+
+    @Test
+    fun deleteAreaPhotoSucceedsWhenServerAccepts() = runTest {
+        val repository = repositoryWith(
+            api = object : TestApiStub() {
+                override suspend fun deleteAreaPhoto(
+                    areaId: String,
+                    householdId: String?,
+                ): Response<ApiEnvelope<Unit>> =
+                    Response.success(ApiEnvelope(ok = true))
+            },
+        )
+
+        val result = repository.deleteAreaPhoto("area-1")
+
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun deleteLocationPhotoSucceedsWhenServerAccepts() = runTest {
+        val repository = repositoryWith(
+            api = object : TestApiStub() {
+                override suspend fun deleteLocationPhoto(
+                    locationId: String,
+                    householdId: String?,
+                ): Response<ApiEnvelope<Unit>> =
+                    Response.success(ApiEnvelope(ok = true))
+            },
+        )
+
+        val result = repository.deleteLocationPhoto("location-1")
+
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
     fun offlineCreatedItemIsMarkedPendingCreate() {
         val item = ItemEntity.pendingCreate(
             localId = "local-item-1",
@@ -113,8 +193,22 @@ class InventoryRepositoryTest {
     fun refreshSnapshotWritesServerDataToRoom() = runTest {
         val dashboard = RemoteDashboardDto(
             household = RemoteHouseholdDto(id = "household-1", name = "我的家"),
-            areas = listOf(RemoteAreaDto(id = "area-1", name = "厨房", color = "#ff0000")),
-            locations = listOf(RemoteLocationDto(id = "location-1", name = "冰箱", areaId = "area-1")),
+            areas = listOf(
+                RemoteAreaDto(
+                    id = "area-1",
+                    name = "厨房",
+                    color = "#ff0000",
+                    photoKey = "area_photo.jpg",
+                ),
+            ),
+            locations = listOf(
+                RemoteLocationDto(
+                    id = "location-1",
+                    name = "冰箱",
+                    areaId = "area-1",
+                    photoKey = "location_photo.jpg",
+                ),
+            ),
             items = listOf(
                 RemoteItemDto(
                     id = "item-1",
@@ -135,7 +229,9 @@ class InventoryRepositoryTest {
         val snapshot = repository.observeInventory().first()
         assertEquals(1, snapshot.areas.size)
         assertEquals("厨房", snapshot.areas[0].name)
+        assertEquals("area_photo.jpg", snapshot.areas[0].photoKey)
         assertEquals(1, snapshot.locations.size)
+        assertEquals("location_photo.jpg", snapshot.locations[0].photoKey)
         assertEquals(1, snapshot.items.size)
         assertEquals("牛奶", snapshot.items[0].name)
         assertEquals("冰箱", snapshot.items[0].locationName)

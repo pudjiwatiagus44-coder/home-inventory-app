@@ -36,6 +36,10 @@ import com.homeinventory.app.ui.theme.Danger
 fun AreaFormDialog(
     title: String,
     initial: AreaFormValues,
+    photoKey: String?,
+    onUploadPhoto: suspend (ByteArray) -> Result<String>,
+    onViewPhoto: () -> Unit,
+    onDeletePhoto: suspend () -> Result<Unit>,
     isSaving: Boolean,
     errorMessage: String?,
     onSave: (AreaFormValues) -> Unit,
@@ -77,6 +81,13 @@ fun AreaFormDialog(
                     )
                 }
             }
+            AreaLocationPhotoSection(
+                photoKey = photoKey,
+                entityLabel = "区域",
+                onUpload = onUploadPhoto,
+                onView = onViewPhoto,
+                onDelete = onDeletePhoto,
+            )
             errorMessage?.let {
                 Text(text = it, color = com.homeinventory.app.ui.theme.Danger, fontSize = 13.sp)
             }

@@ -6,13 +6,16 @@ import {
   textField,
   type InventoryMutationDependencies,
 } from "../../route-helpers";
+import { createRouteAreaLocationPhotoService } from "../../photo-route-helpers";
 
 type LocationRouteContext = {
   params: Promise<{ locationId: string }>;
 };
 
 export function createLocationItemHandlers(
-  dependencies: InventoryMutationDependencies = {},
+  dependencies: InventoryMutationDependencies & {
+    photoService?: ReturnType<typeof createRouteAreaLocationPhotoService>;
+  } = {},
 ) {
   return {
     async PATCH(request: NextRequest, context: LocationRouteContext) {
@@ -38,11 +41,19 @@ export function createLocationItemHandlers(
       return runInventoryMutation(
         request,
         async ({ service, userId, householdId }) => {
+          const photoService =
+            dependencies.photoService ?? createRouteAreaLocationPhotoService();
+          const keys = await photoService.listLocationPhotoKeys({
+            userId,
+            locationId,
+            householdId,
+          });
           await service.deleteLocationForCurrentUser({
             userId,
             householdId,
             locationId,
           });
+          await photoService.deletePhotoFiles(keys);
           return null;
         },
         dependencies,

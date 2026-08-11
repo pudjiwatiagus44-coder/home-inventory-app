@@ -31,8 +31,11 @@ data class DashboardUiItem(
     val note: String,
     val expireDate: String?,
     val areaId: String?,
+    val areaName: String? = null,
+    val areaPhotoKey: String? = null,
     val locationId: String?,
     val locationName: String?,
+    val locationPhotoKey: String? = null,
     val serverUpdatedAt: String?,
     val syncStatus: String,
     val expirationStatus: String,
@@ -611,6 +614,8 @@ class DashboardViewModel(
     val state: StateFlow<DashboardUiState> =
         combine(inventory, filters, sortMode, refreshFlag) { snapshot, filter, sort, _ ->
             val locationNames = snapshot.locations.associate { it.id to it.name }
+            val areaById = snapshot.areas.associateBy { it.id }
+            val locationById = snapshot.locations.associateBy { it.id }
             val items = snapshot.items.map { item ->
                 DashboardUiItem(
                     id = item.id,
@@ -618,8 +623,11 @@ class DashboardViewModel(
                     note = item.note,
                     expireDate = item.expireDate,
                     areaId = item.areaId,
+                    areaName = item.areaId?.let { areaById[it]?.name },
+                    areaPhotoKey = item.areaId?.let { areaById[it]?.photoKey },
                     locationId = item.locationId,
                     locationName = item.locationName ?: item.locationId?.let(locationNames::get),
+                    locationPhotoKey = item.locationId?.let { locationById[it]?.photoKey },
                     serverUpdatedAt = item.serverUpdatedAt,
                     syncStatus = item.syncStatus,
                     expirationStatus = expirationStatus(item.expireDate),

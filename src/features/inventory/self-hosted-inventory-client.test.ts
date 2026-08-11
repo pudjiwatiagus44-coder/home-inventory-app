@@ -232,6 +232,57 @@ describe("createSelfHostedInventoryClient", () => {
     ]);
   });
 
+  it("uploads, deletes, and reads area and location photos", async () => {
+    const requests: unknown[] = [];
+    const client = createSelfHostedInventoryClient({
+      fetch: async (input, init) => {
+        requests.push({
+          input,
+          init: {
+            ...init,
+            body: init?.body instanceof FormData ? "form-data" : init?.body,
+          },
+        });
+        if (!init?.method || init.method === "GET") {
+          return new Response(new Blob(["jpeg-bytes"]), {
+            status: 200,
+            headers: { "content-type": "image/jpeg" },
+          });
+        }
+        if (init?.method === "PUT") {
+          return jsonResponse({ ok: true, data: { photoKey: "area_1.jpg" } });
+        }
+        return jsonResponse({ ok: true, data: null });
+      },
+    });
+    const file = new File(["jpeg-bytes"], "photo.jpg");
+
+    await client.uploadAreaPhoto("area-1", file);
+    await client.deleteAreaPhoto("area-1");
+    await client.uploadLocationPhoto("location-1", file);
+    await client.deleteLocationPhoto("location-1");
+    const areaBlob = await client.getAreaPhoto("area-1");
+    const locationBlob = await client.getLocationPhoto("location-1");
+
+    expect(requests.map((entry) => entry.input)).toEqual([
+      "/api/inventory/areas/area-1/photo",
+      "/api/inventory/areas/area-1/photo",
+      "/api/inventory/locations/location-1/photo",
+      "/api/inventory/locations/location-1/photo",
+      "/api/inventory/areas/area-1/photo",
+      "/api/inventory/locations/location-1/photo",
+    ]);
+    expect(requests.slice(0, 4).map((entry) => entry.init.method)).toEqual([
+      "PUT",
+      "DELETE",
+      "PUT",
+      "DELETE",
+    ]);
+    expect(requests[0].init.body).toBe("form-data");
+    expect(await areaBlob.text()).toBe("jpeg-bytes");
+    expect(await locationBlob.text()).toBe("jpeg-bytes");
+  });
+
   it("previews and commits Excel imports through self-hosted API routes", async () => {
     const requests: unknown[] = [];
     const client = createSelfHostedInventoryClient({
