@@ -383,13 +383,14 @@ describe("createPostgresInventoryRepository", () => {
         householdId: "household-1",
         name: " 上层抽屉 ",
         areaId: "area-1",
+        createdBy: "user-1",
       }),
     ).resolves.toEqual({ id: "location-1", name: "上层抽屉" });
 
     expect(calls).toEqual([
       {
         text: expect.stringContaining("insert into locations"),
-        values: ["household-1", "area-1", "上层抽屉"],
+        values: ["household-1", "area-1", "上层抽屉", "user-1"],
       },
     ]);
   });

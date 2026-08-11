@@ -1,7 +1,7 @@
 export type HouseholdRow = {
   id: string;
   name: string;
-  role?: "owner" | "member" | "readonly";
+  role?: "owner" | "member" | "contributor" | "readonly";
 };
 
 export type AreaRow = {
@@ -19,6 +19,7 @@ export type LocationRow = {
   id: string;
   name: string;
   area_id: string | null;
+  createdBy?: string | null;
   updatedAt?: string;
 };
 
@@ -27,6 +28,7 @@ export type DashboardLocation = {
   name: string;
   areaId: string | null;
   areaName: string;
+  createdBy?: string | null;
 };
 
 export type ExpirationStatus = "none" | "expired" | "soon" | "normal";
@@ -37,6 +39,7 @@ export type ItemRow = {
   note: string;
   expire_date: string | null;
   location_id: string | null;
+  createdBy?: string | null;
   photo_key?: string | null;
   updatedAt?: string;
 };
@@ -75,6 +78,7 @@ export type DashboardItem = {
     areaId: string | null;
     areaName: string;
     expirationStatus: ExpirationStatus;
+    createdBy?: string | null;
     photoKey?: string | null;
 };
 
@@ -114,6 +118,7 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
     id: location.id,
     name: location.name,
     areaId: location.area_id,
+    createdBy: location.createdBy ?? null,
     areaName: location.area_id
       ? (areaNames.get(location.area_id) ?? "未知区域")
       : "未分区",
@@ -149,6 +154,7 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
           ? areaNameForLocation(areaId, areaNames)
           : "未分区",
         expirationStatus: getExpirationStatus(expireDate),
+        createdBy: item.createdBy ?? null,
         photoKey: item.photo_key ?? null,
       };
     }),

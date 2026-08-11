@@ -8,6 +8,9 @@ alter table household_members
   add constraint household_members_role_check
   check (role in ('owner', 'member', 'contributor', 'readonly'));
 
+alter table locations
+  add column if not exists created_by uuid references users(id) on delete set null;
+
 create table if not exists household_user_preferences (
   user_id uuid not null references users(id) on delete cascade,
   household_id uuid not null references households(id) on delete cascade,

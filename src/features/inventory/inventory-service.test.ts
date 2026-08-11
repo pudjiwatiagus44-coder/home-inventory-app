@@ -220,6 +220,7 @@ describe("createInventoryService", () => {
         "createLocation",
         {
           householdId: "household-1",
+          createdBy: "user-1",
           name: "Shelf",
           areaId: null,
         },

@@ -83,6 +83,27 @@ export class ReadOnlyMemberError extends Error {
   }
 }
 
+export class ContributorAreaPermissionError extends Error {
+  constructor() {
+    super("贡献者不能管理区域");
+    this.name = "ContributorAreaPermissionError";
+  }
+}
+
+export class ContributorOwnRecordPermissionError extends Error {
+  constructor() {
+    super("贡献者只能编辑自己创建的物品或位置");
+    this.name = "ContributorOwnRecordPermissionError";
+  }
+}
+
+export class ContributorDeletePermissionError extends Error {
+  constructor() {
+    super("贡献者不能删除物品或位置");
+    this.name = "ContributorDeletePermissionError";
+  }
+}
+
 export function createInventoryService({
   repository,
 }: InventoryServiceDependencies) {
@@ -102,6 +123,37 @@ export function createInventoryService({
     }
   }
 
+  function assertCanManageArea(dashboard: DashboardData) {
+    assertCanWrite(dashboard);
+
+    if (dashboard.household.role === "contributor") {
+      throw new ContributorAreaPermissionError();
+    }
+  }
+
+  function assertContributorCanUpdateRecord(input: {
+    dashboard: DashboardData;
+    userId: string;
+    createdBy: string | null | undefined;
+  }) {
+    assertCanWrite(input.dashboard);
+
+    if (
+      input.dashboard.household.role === "contributor" &&
+      input.createdBy !== input.userId
+    ) {
+      throw new ContributorOwnRecordPermissionError();
+    }
+  }
+
+  function assertCanDeleteRecord(dashboard: DashboardData) {
+    assertCanWrite(dashboard);
+
+    if (dashboard.household.role === "contributor") {
+      throw new ContributorDeletePermissionError();
+    }
+  }
+
   const service = {
     async previewImportForCurrentUser(input: {
       userId: string;
@@ -117,7 +169,7 @@ export function createInventoryService({
       conflictResolutions: Record<string, InventoryConflictResolution>;
     }) {
       const dashboard = await loadDashboard(input.userId);
-      assertCanWrite(dashboard);
+      assertCanManageArea(dashboard);
 
       return commitInventoryImportRows({
         userId: input.userId,
@@ -133,7 +185,7 @@ export function createInventoryService({
       rows: InventoryBackupRow[];
     }) {
       const dashboard = await loadDashboard(input.userId);
-      assertCanWrite(dashboard);
+      assertCanManageArea(dashboard);
 
       return commitInventoryImportRows({
         userId: input.userId,
@@ -152,7 +204,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
-      assertCanWrite(dashboard);
+      assertCanManageArea(dashboard);
 
       return repository.createArea({
         householdId: dashboard.household.id,
@@ -170,7 +222,7 @@ export function createInventoryService({
       }
 
       const dashboard = await loadDashboard(input.userId);
-      assertCanWrite(dashboard);
+      assertCanManageArea(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -185,7 +237,7 @@ export function createInventoryService({
 
     async deleteAreaForCurrentUser(input: { userId: string; areaId: string }) {
       const dashboard = await loadDashboard(input.userId);
-      assertCanWrite(dashboard);
+      assertCanManageArea(dashboard);
 
       if (!dashboard.areas.some((area) => area.id === input.areaId)) {
         throw new AreaOutsideCurrentHouseholdError();
@@ -218,6 +270,7 @@ export function createInventoryService({
 
       return repository.createLocation({
         householdId: dashboard.household.id,
+        createdBy: input.userId,
         ...validation.value,
       });
     },
@@ -234,9 +287,18 @@ export function createInventoryService({
       const dashboard = await loadDashboard(input.userId);
       assertCanWrite(dashboard);
 
-      if (!dashboard.locations.some((location) => location.id === input.locationId)) {
+      const location = dashboard.locations.find(
+        (candidate) => candidate.id === input.locationId,
+      );
+      if (!location) {
         throw new LocationOutsideCurrentHouseholdError();
       }
+
+      assertContributorCanUpdateRecord({
+        dashboard,
+        userId: input.userId,
+        createdBy: location.createdBy,
+      });
 
       if (
         validation.value.areaId &&
@@ -262,6 +324,7 @@ export function createInventoryService({
       if (!dashboard.locations.some((location) => location.id === input.locationId)) {
         throw new LocationOutsideCurrentHouseholdError();
       }
+      assertCanDeleteRecord(dashboard);
 
       return repository.deleteLocation({
         householdId: dashboard.household.id,
@@ -309,9 +372,16 @@ export function createInventoryService({
       const dashboard = await loadDashboard(input.userId);
       assertCanWrite(dashboard);
 
-      if (!dashboard.items.some((item) => item.id === input.itemId)) {
+      const item = dashboard.items.find((candidate) => candidate.id === input.itemId);
+      if (!item) {
         throw new ItemOutsideCurrentHouseholdError();
       }
+
+      assertContributorCanUpdateRecord({
+        dashboard,
+        userId: input.userId,
+        createdBy: item.createdBy,
+      });
 
       if (
         validation.value.locationId &&
@@ -336,6 +406,7 @@ export function createInventoryService({
       if (!dashboard.items.some((item) => item.id === input.itemId)) {
         throw new ItemOutsideCurrentHouseholdError();
       }
+      assertCanDeleteRecord(dashboard);
 
       return repository.deleteItem({
         householdId: dashboard.household.id,
@@ -392,7 +463,7 @@ export function createInventoryService({
       }
 
       if (operation.action === "update") {
-        return await applyUpdateOperation(operation, dashboard);
+        return await applyUpdateOperation(userId, operation, dashboard);
       }
 
       return await applyDeleteOperation(operation, dashboard);
@@ -432,6 +503,7 @@ export function createInventoryService({
   }
 
   async function applyUpdateOperation(
+    userId: string,
     operation: MobileSyncOperation,
     dashboard: DashboardData,
   ): Promise<MobileSyncOperationResult> {
@@ -439,6 +511,7 @@ export function createInventoryService({
     const householdId = dashboard.household.id;
 
     if (operation.entity === "area") {
+      assertCanManageArea(dashboard);
       const validation = validateAreaInput(requireAreaPayload(operation));
 
       if (!validation.isValid) {
@@ -474,6 +547,15 @@ export function createInventoryService({
         throw new AreaOutsideCurrentHouseholdError();
       }
 
+      const existingLocation = dashboard.locations.find(
+        (location) => location.id === serverId,
+      );
+      assertContributorCanUpdateRecord({
+        dashboard,
+        userId,
+        createdBy: existingLocation?.createdBy,
+      });
+
       const location = await requireAtomicUpdateLocation(repository)({
         householdId,
         locationId: serverId,
@@ -504,6 +586,13 @@ export function createInventoryService({
       throw new LocationOutsideCurrentHouseholdError();
     }
 
+    const existingItem = dashboard.items.find((item) => item.id === serverId);
+    assertContributorCanUpdateRecord({
+      dashboard,
+      userId,
+      createdBy: existingItem?.createdBy,
+    });
+
     const item = await requireAtomicUpdateItem(repository)({
       householdId,
       itemId: serverId,
@@ -529,18 +618,21 @@ export function createInventoryService({
     let deleted = true;
 
     if (operation.entity === "area") {
+      assertCanManageArea(dashboard);
       deleted = await requireAtomicDeleteArea(repository)({
         householdId,
         areaId: serverId,
         baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
       });
     } else if (operation.entity === "location") {
+      assertCanDeleteRecord(dashboard);
       deleted = await requireAtomicDeleteLocation(repository)({
         householdId,
         locationId: serverId,
         baseServerUpdatedAt: requireBaseServerUpdatedAt(operation),
       });
     } else {
+      assertCanDeleteRecord(dashboard);
       deleted = await requireAtomicDeleteItem(repository)({
         householdId,
         itemId: serverId,
@@ -874,6 +966,7 @@ async function createItemFromImportRow({
 
     location = await repository.createLocation({
       householdId,
+      createdBy: userId,
       name: locationName,
       areaId: area.id,
     });

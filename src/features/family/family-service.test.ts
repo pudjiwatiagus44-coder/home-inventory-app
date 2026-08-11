@@ -5,12 +5,13 @@ import {
   createFamilyService,
   FamilyInvitationInvalidError,
 } from "./family-service";
+import type { HouseholdRole } from "./family-data";
 
 function createMemoryFamilyRepository(
   state: {
     ownerUserId?: string | null;
     householdName?: string;
-    members?: { householdId: string; userId: string; role: "owner" | "member" | "readonly" }[];
+    members?: { householdId: string; userId: string; role: HouseholdRole }[];
     validToken?: string | null;
     pendingRequests?: { id: string; householdId: string; userId: string }[];
   } = {},
@@ -133,7 +134,7 @@ describe("createFamilyService", () => {
     const members: {
       householdId: string;
       userId: string;
-      role: "owner" | "member" | "readonly";
+      role: HouseholdRole;
     }[] = [];
     const repository = createMemoryFamilyRepository({ members });
     const service = createFamilyService({ repository });
