@@ -155,6 +155,15 @@ describe("AppDashboard location actions", () => {
     expect(source).toContain("覆盖");
   });
 
+  it("uses effective household names in the selector and settings", () => {
+    const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
+
+    expect(source).toContain("household.effectiveName ?? household.name");
+    expect(source).toContain(
+      "effectiveName ?? state.summary.householdName",
+    );
+  });
+
   it("keeps the mobile dashboard compact with independent scrolling zones", () => {
     const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
 

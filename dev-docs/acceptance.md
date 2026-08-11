@@ -1025,7 +1025,7 @@
 - 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 359 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
 - 版本：Android `versionName=0.5.25`、`versionCode=31`。本轮仅完成本地构建与 git checkpoint；APK 上传、服务器部署和真机验收待后续执行。
 
-## 2026-08-11 家庭空间个人别名与按地点授权验收标准（待实现）
+## 2026-08-11 家庭空间个人别名与按地点授权验收标准（已实现，本地验证完成）
 
 - 用户 A 和用户 B 加入同一个 household 后，A 设置个人别名为“我的家”，B 设置为“爸妈家”；两人再次打开 Web/Android 时分别看到自己的名称，`households.name` 不变。
 - 授权用户长按下拉栏家庭名可修改个人别名；非 owner 调用真实家庭名重命名接口仍返回 403。
@@ -1034,4 +1034,13 @@
 - 新增成员（`contributor`）可以新增物品和库存位置；可以编辑自己创建的物品和库存位置；删除物品/位置返回 403；编辑他人创建或历史归属不明的物品/位置返回 403。
 - 只读成员（`readonly`）新增、编辑、删除均返回 403。
 - 删除某个 household 授权后，该用户下一次请求该 household 数据返回 403，但其他 household 授权不受影响。
-- 当前状态：设计已确认并写入 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`，尚未实现，不得作为已完成能力宣传。
+- 当前状态：设计已确认并写入 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`，已完成本地实现与验证；部署与真机验收待后续执行。
+
+## 2026-08-11 家庭空间个人别名与按地点授权实现证据
+
+- 服务端：新增 `household_user_preferences` 个人显示名表与 `PATCH /api/family/households/display-name`；`household_members.role` 支持 `contributor`；库存写入/同步/照片按当前选中的 `householdId` 作用域校验；邀请升级为 `household_invitation_grants` 多家庭授权，审批按 grants 创建 membership；owner/member 可管理邀请与成员授权，contributor/readonly 无管理权。
+- SQL：`dev-docs/sql/household_alias_and_scoped_authorization.sql` 与 `dev-docs/sql/family_sharing_self_hosted.sql` 增加 grants 表、邀请 token 多家庭承载与 join request 的 `invitation_id`。
+- Android：家庭下拉与顶部栏优先显示 `effectiveName`；长按家庭名设置个人显示名；邀请弹窗支持多家庭多选与 管理/新增/只读 角色；`pending_operations` 增加 `householdId`（Room v5），避免跨家庭同步。
+- Web：家庭选择器与家庭设置使用 `effectiveName`；成员角色显示 管理/新增/只读；family client 支持 `grants` 邀请载荷。
+- 本地验证：`npx vitest run --exclude src/server/auth/postgres-auth-repository.integration.test.ts --exclude src/features/inventory/postgres-inventory.integration.test.ts` 通过 55 文件 / 392 测试；Android `testDebugUnitTest` 通过；`npx eslint src` 通过；`npm run build` 通过；Android `assembleDebug` 通过。
+- 待办：APK 上传、服务器 migration 与部署、Web/Android 真机验收。

@@ -314,7 +314,7 @@ Android 拍物品正面照
 - Android 顶部栏只负责展示和触发选择；真正可访问哪些家庭、能否重命名，全部由自托管服务端 membership/owner 权限决定。
 - Supabase 历史代码不参与该链路；当前定位只允许进入 Next.js API/service/repository、自有 PostgreSQL、阿里云部署和 Android 客户端。
 
-## 2026-08-11 家庭空间个人别名与按地点授权架构（待实现）
+## 2026-08-11 家庭空间个人别名与按地点授权架构（已实现）
 
 - 当前实现路线只允许定位到阿里云自托管链路：Next.js API/service/repository、自有 PostgreSQL、阿里云部署和 Android 客户端。Supabase 历史目录不参与该链路。
 - 新增 `household_user_preferences` 表保存个人家庭空间显示名，主键为 `(user_id, household_id)`；服务端只允许当前用户读写自己的 preference，并必须校验该用户属于对应 household。
@@ -324,4 +324,4 @@ Android 拍物品正面照
 - 为支持 `contributor` 自己创建内容可编辑，`items.created_by` 继续作为物品归属依据；`locations` 需要补充 `created_by`，历史/未知创建者位置不得被 contributor 编辑。
 - 邀请从单家庭 token 升级为“邀请包 + 授权明细”：`household_invitations` 承载 token，`household_invitation_grants` 承载多个 `{ household_id, role }`。创建邀请默认只包含当前 household，可多选多个 household；审批通过后按 grants 创建 membership。
 - 成员授权管理接口必须显式携带 `householdId`，支持按家庭空间修改 role 或删除授权；删除授权只移除 membership，不删除家庭空间数据。
-- 详细设计见 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`。本节为已确认架构设计，尚未进入代码实现和验收。
+- 详细设计见 `docs/superpowers/specs/2026-08-11-household-alias-and-scoped-authorization-design.md`。本节为已确认架构设计，已完成本地实现与验证；部署与真机验收待后续执行。

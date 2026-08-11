@@ -21,6 +21,13 @@ type PanelMessage =
   | { kind: "info" | "error"; text: string }
   | null;
 
+const roleLabels: Record<string, string> = {
+  owner: "房主",
+  member: "管理",
+  contributor: "新增",
+  readonly: "只读",
+};
+
 export function FamilySettings({
   householdId,
   householdName,
@@ -322,7 +329,7 @@ export function FamilySettings({
                       <span className="min-w-0 flex-1 truncate text-[13px]">
                         {member.email}
                         <span className="ml-2 text-[var(--muted-foreground)]">
-                          {member.role === "owner" ? "房主" : "成员"}
+                          {roleLabels[member.role] ?? "成员"}
                         </span>
                       </span>
                       {isOwner && member.role === "member" ? (

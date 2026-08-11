@@ -974,7 +974,7 @@ export function AppDashboard({
               >
                 {households.map((household) => (
                   <option key={household.id} value={household.id}>
-                    {household.name}
+                    {household.effectiveName ?? household.name}
                   </option>
                 ))}
               </select>
@@ -2546,11 +2546,18 @@ export function AppDashboard({
       {showFamilySettings && state.status === "ready" ? (
         <FamilySettings
           householdId={state.summary.householdId}
-          householdName={state.summary.householdName}
+          householdName={
+            households.find(
+              (household) => household.id === state.summary.householdId,
+            )?.effectiveName ?? state.summary.householdName
+          }
           isOwner={
             households.find(
               (household) => household.id === state.summary.householdId,
-            )?.role === "owner"
+            )?.role === "owner" ||
+            households.find(
+              (household) => household.id === state.summary.householdId,
+            )?.role === "member"
           }
           client={
             selfHostedUser
