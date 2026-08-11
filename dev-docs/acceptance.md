@@ -1084,4 +1084,5 @@
 - 数据库：服务器执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，`areas.photo_key`、`locations.photo_key` 及唯一索引已确认。
 - 切换：旧目录备份为 `/opt/home-inventory-app.bak.20260811_202830`，新目录切换后 `home-inventory-app.service` active，当前 commit `a1b395e`。
 - 线上 smoke：`/login` 200；未登录访问区域照片接口 401；临时账号注册后创建区域/位置成功；`PUT .../areas/[areaId]/photo?householdId=...` 上传照片 200 并返回 `photoKey`；`GET` 返回 200 且文件为 JPEG；`DELETE` 返回 200；临时账号与照片文件已清理。
+- APK：Android 版本升至 `0.5.27`（code 33），`scripts/upload-apk.ps1` 构建并上传 APK（20,245,951 字节）；服务重启后 `https://homestorag.xyz/apk/version.json` 显示 versionName 0.5.27 / versionCode 33，APK 下载返回 HTTP 200。
 - 待办：Web/Android 真机拍照、相册选择、替换/删除、readonly 只读、用户 A/B 越权与文件清理验收。
