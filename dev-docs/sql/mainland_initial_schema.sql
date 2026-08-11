@@ -62,6 +62,7 @@ create table areas (
   household_id uuid not null references households(id) on delete cascade,
   name text not null,
   color text not null default '#64748b',
+  photo_key text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -76,6 +77,7 @@ create table locations (
   household_id uuid not null references households(id) on delete cascade,
   area_id uuid,
   name text not null,
+  photo_key text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -95,6 +97,7 @@ create table items (
   name text not null,
   note text not null default '',
   expire_date date,
+  photo_key text,
   created_by uuid references users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -114,6 +117,9 @@ create index household_members_user_id_idx on household_members(user_id);
 create index areas_household_id_sort_idx on areas(household_id, sort_order, created_at);
 create index locations_household_id_sort_idx on locations(household_id, sort_order, created_at);
 create index items_household_id_created_at_idx on items(household_id, created_at desc);
+create unique index areas_photo_key_unique on areas(photo_key) where photo_key is not null;
+create unique index locations_photo_key_unique on locations(photo_key) where photo_key is not null;
+create unique index items_photo_key_unique on items(photo_key) where photo_key is not null;
 create index items_location_id_idx on items(location_id);
 create index items_expire_date_idx on items(expire_date) where expire_date is not null;
 
