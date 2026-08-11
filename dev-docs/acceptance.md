@@ -1061,3 +1061,9 @@
 - 照片数据：服务器数据库有 33 个 `photo_key`，但照片文件只有 11 个；已从 `20260808_164452` 备份恢复缺失的 31 个文件，当前照片文件 42 个（含历史孤儿文件），数据库引用完整。
 - Android：版本升至 0.5.27 / code 33，APK 已上传并重启服务；`version.json` 返回 versionCode 33 / versionName 0.5.27。
 - 当前服务器运行分支为 `codex/area-location-photos-deploy`（`a1b395e`），未切换，避免影响进行中的区域/位置照片能力。
+
+## 2026-08-11 更新提示修复证据
+
+- 问题：App 只在启动/登录时检查一次版本，从后台回前台或在线时不会重新检查，导致已发布新版本但看不到更新提示。
+- 修复：`AppRoot` 监听 `ON_RESUME`，每次回到前台都重新调用 `checkForUpdates()`；已通过 `AppRootTest` 与 Android 全量单测。
+- Android：版本升至 0.5.28 / code 34，APK 已上传并重启服务；`version.json` 返回 versionCode 34 / versionName 0.5.28，APK 下载返回 HTTP 200。
