@@ -978,7 +978,7 @@ git add android/app/src/main/java/com/homeinventory/app/ui/dashboard/dialogs/Hel
 git commit -m "feat: add feedback form to android help dialog"
 ```
 
-### Task 7: Android top bar household switch button and settings menu
+### Task 7: Android top bar household dropdown and settings menu
 
 **Files:**
 - Modify: `android/app/src/main/java/com/homeinventory/app/ui/dashboard/DashboardViewModel.kt`
@@ -1041,7 +1041,7 @@ fun TopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onSwitchHousehold) { Text("⇄ 切换") }
+        TextButton(onClick = onSwitchHousehold) { Text("⌄") }
         TextButton(onClick = onDraftsClick) {
             Text("草稿")
             if (draftCount > 0) {
@@ -1132,7 +1132,232 @@ git add android/app/src/main/java/com/homeinventory/app/ui/dashboard
 git commit -m "feat: add household switch button and settings menu to android top bar"
 ```
 
-### Task 8: Web feedback client and help dialog
+### Task 8: Server household rename
+
+**Files:**
+- Modify: `src/features/family/family-repository.ts`
+- Modify: `src/features/family/family-service.ts`
+- Modify: `src/features/family/family-client.ts`
+- Modify: `src/app/api/family/households/route.ts`
+- Modify: `src/app/api/family/handlers.ts`
+- Test: `src/features/family/family-service.test.ts`
+- Test: `src/app/api/family/family-handlers.test.ts`
+
+- [ ] **Step 1: Write failing service test**
+
+Add to `src/features/family/family-service.test.ts`:
+
+```ts
+  it("renames a household when the caller is owner", async () => {
+    const repository = createFamilyRepositoryStub();
+    repository.getHouseholdOwner = async () => "user-1";
+    repository.renameHousehold = async (householdId, name) => ({
+      id: householdId,
+      name,
+    });
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.renameHouseholdForCurrentUser({
+        userId: "user-1",
+        householdId: "household-1",
+        name: "新家名",
+      }),
+    ).resolves.toEqual({ id: "household-1", name: "新家名" });
+  });
+
+  it("rejects renaming when the caller is not owner", async () => {
+    const repository = createFamilyRepositoryStub();
+    repository.getHouseholdOwner = async () => "user-owner";
+    const service = createFamilyService({ repository });
+
+    await expect(
+      service.renameHouseholdForCurrentUser({
+        userId: "user-1",
+        householdId: "household-1",
+        name: "新家名",
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+```
+
+- [ ] **Step 2: Run failing test**
+
+Run: `npm test -- src/features/family/family-service.test.ts`
+Expected: FAIL, unresolved `renameHouseholdForCurrentUser`.
+
+- [ ] **Step 3: Implement repository and service**
+
+Add to `FamilyRepository`:
+
+```ts
+  renameHousehold: (
+    householdId: string,
+    name: string,
+  ) => Promise<{ id: string; name: string }>;
+```
+
+Add SQL implementation:
+
+```ts
+    async renameHousehold(householdId, name) {
+      const result = await client.query<{ id: string; name: string }>(
+        `update households set name = $2 where id = $1 returning id, name`,
+        [householdId, name],
+      );
+      return result.rows[0];
+    },
+```
+
+Add service method:
+
+```ts
+    async renameHouseholdForCurrentUser(input: {
+      userId: string;
+      householdId: string;
+      name: string;
+    }) {
+      const normalizedName = input.name.trim();
+      if (!normalizedName || normalizedName.length > 50) {
+        throw new Error("家庭名称需为 1-50 个字符");
+      }
+      await assertOwner(input.userId, input.householdId);
+      return repository.renameHousehold(input.householdId, normalizedName);
+    },
+```
+
+- [ ] **Step 4: Add API handler and route**
+
+In `createFamilyHandlers`, add:
+
+```ts
+    async renameHousehold(request: NextRequest) {
+      try {
+        const user = await requireUser(request);
+        if (!user) return unauthorizedResponse();
+        const body = await readJsonObject(request);
+        const householdId = textField(body, "householdId");
+        const name = textField(body, "name");
+        if (!householdId) return requireHouseholdId("");
+        const data = await service().renameHouseholdForCurrentUser({
+          userId: user.userId,
+          householdId,
+          name,
+        });
+        return successResponse(data);
+      } catch (error) {
+        return familyErrorResponse(error);
+      }
+    },
+```
+
+In `src/app/api/family/households/route.ts`, add:
+
+```ts
+export async function PATCH(request: NextRequest) {
+  return handlers.renameHousehold(request);
+}
+```
+
+Add `renameHousehold` to `family-client.ts`:
+
+```ts
+    renameHousehold(householdId: string, name: string) {
+      return request<{ id: string; name: string }>(
+        "/api/family/households",
+        jsonInit("PATCH", { householdId, name }),
+      );
+    },
+```
+
+- [ ] **Step 5: Run tests**
+
+Run: `npm test -- src/features/family/family-service.test.ts src/app/api/family/family-handlers.test.ts`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/features/family src/app/api/family
+git commit -m "feat: allow owner to rename household"
+```
+
+### Task 9: Android household rename UI
+
+**Files:**
+- Modify: `android/app/src/main/java/com/homeinventory/app/core/network/HomeInventoryApi.kt`
+- Modify: `android/app/src/main/java/com/homeinventory/app/data/remote/dto.kt`
+- Modify: `android/app/src/main/java/com/homeinventory/app/data/repository/InventoryRepository.kt`
+- Modify: `android/app/src/main/java/com/homeinventory/app/ui/dashboard/components/TopBar.kt`
+- Modify: `android/app/src/main/java/com/homeinventory/app/ui/dashboard/dialogs/HouseholdSwitcherDialog.kt`
+- Test: `android/app/src/test/java/com/homeinventory/app/data/repository/InventoryRepositoryTest.kt`
+
+- [ ] **Step 1: Add API and repository rename support with tests**
+
+Add DTO:
+
+```kotlin
+data class RenameHouseholdRequest(
+    val householdId: String,
+    val name: String,
+)
+```
+
+Add API:
+
+```kotlin
+    @PATCH("api/family/households")
+    suspend fun renameHousehold(
+        @Body request: RenameHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>>
+```
+
+Add repository method:
+
+```kotlin
+    suspend fun renameCurrentHousehold(name: String): Result<Unit> {
+        val householdId = currentHouseholdId ?: return Result.failure(
+            IllegalStateException("家庭信息未加载，请先刷新清单"),
+        )
+        val response = try {
+            api.renameHousehold(RenameHouseholdRequest(householdId, name))
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        if (!response.isSuccessful || response.body()?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody())
+                        ?: response.body()?.message
+                        ?: "重命名失败",
+                ),
+            )
+        }
+        return Result.success(Unit)
+    }
+```
+
+Add tests in `InventoryRepositoryTest.kt` for success and non-owner failure.
+
+- [ ] **Step 2: Add long-press rename to TopBar**
+
+Add `onRenameHousehold: () -> Unit` to `TopBar`, and use `combinedClickable` on the household name `Row` so long press triggers rename.
+
+Add a rename dialog in `HouseholdSwitcherDialog.kt` or a new `RenameHouseholdDialog.kt` that calls `repository.renameCurrentHousehold`.
+
+- [ ] **Step 3: Run Android tests**
+
+Run from `android`: `.\gradlew.bat testDebugUnitTest --console=plain`
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add android/app/src/main/java/com/homeinventory/app
+git commit -m "feat: support android household rename"
+```
+
+### Task 10: Web feedback client and help dialog
 
 **Files:**
 - Create: `src/features/feedback/feedback-client.ts`
@@ -1349,7 +1574,7 @@ git add src/features/feedback src/features/inventory/AppDashboard.tsx src/featur
 git commit -m "feat: add web feedback help dialog"
 ```
 
-### Task 9: Docs, version bump, and upload
+### Task 11: Docs, version bump, and upload
 
 **Files:**
 - Modify: `android/app/build.gradle.kts`
