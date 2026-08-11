@@ -8,17 +8,20 @@ export type AreaRow = {
   id: string;
   name: string;
   color: string;
+  photo_key?: string | null;
   updatedAt?: string;
 };
 
 export type DashboardArea = AreaRow & {
   locationCount: number;
+  photoKey: string | null;
 };
 
 export type LocationRow = {
   id: string;
   name: string;
   area_id: string | null;
+  photo_key?: string | null;
   updatedAt?: string;
 };
 
@@ -27,6 +30,7 @@ export type DashboardLocation = {
   name: string;
   areaId: string | null;
   areaName: string;
+  photoKey: string | null;
 };
 
 export type ExpirationStatus = "none" | "expired" | "soon" | "normal";
@@ -74,6 +78,8 @@ export type DashboardItem = {
     locationName: string;
     areaId: string | null;
     areaName: string;
+    areaPhotoKey?: string | null;
+    locationPhotoKey?: string | null;
     expirationStatus: ExpirationStatus;
     photoKey?: string | null;
 };
@@ -97,6 +103,12 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
   const locationAreas = new Map(
     data.locations.map((location) => [location.id, location.area_id]),
   );
+  const areaPhotoKeys = new Map(
+    data.areas.map((area) => [area.id, area.photo_key ?? null]),
+  );
+  const locationPhotoKeys = new Map(
+    data.locations.map((location) => [location.id, location.photo_key ?? null]),
+  );
   const locationCountsByArea = new Map<string, number>();
   for (const location of data.locations) {
     if (location.area_id) {
@@ -107,7 +119,10 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
     }
   }
   const areas = data.areas.map((area) => ({
-    ...area,
+    id: area.id,
+    name: area.name,
+    color: area.color,
+    photoKey: area.photo_key ?? null,
     locationCount: locationCountsByArea.get(area.id) ?? 0,
   }));
   const locations = data.locations.map((location) => ({
@@ -117,6 +132,7 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
     areaName: location.area_id
       ? (areaNames.get(location.area_id) ?? "未知区域")
       : "未分区",
+    photoKey: location.photo_key ?? null,
   }));
 
   return {
@@ -148,6 +164,12 @@ export function buildDashboardSummary(data: DashboardData): DashboardSummary {
         areaName: item.location_id
           ? areaNameForLocation(areaId, areaNames)
           : "未分区",
+        areaPhotoKey: areaId
+          ? (areaPhotoKeys.get(areaId) ?? null)
+          : null,
+        locationPhotoKey: item.location_id
+          ? (locationPhotoKeys.get(item.location_id) ?? null)
+          : null,
         expirationStatus: getExpirationStatus(expireDate),
         photoKey: item.photo_key ?? null,
       };
