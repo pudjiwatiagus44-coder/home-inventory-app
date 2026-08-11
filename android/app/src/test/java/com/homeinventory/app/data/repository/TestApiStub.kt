@@ -26,9 +26,11 @@ import com.homeinventory.app.data.remote.MobileSyncRequest
 import com.homeinventory.app.data.remote.MobileSyncResponse
 import com.homeinventory.app.data.remote.RemoteAreaDto
 import com.homeinventory.app.data.remote.RemoteDashboardDto
+import com.homeinventory.app.data.remote.RemoteHouseholdDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RenameHouseholdRequest
 import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
@@ -147,6 +149,19 @@ abstract class TestApiStub : HomeInventoryApi {
         request: UpdateMemberRoleRequest,
     ): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
+
+    override suspend fun renameHousehold(
+        request: RenameHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>> =
+        Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteHouseholdDto(
+                    id = request.householdId,
+                    name = request.name,
+                ),
+            ),
+        )
 
     override suspend fun approveJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))

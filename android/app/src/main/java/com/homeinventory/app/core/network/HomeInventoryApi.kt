@@ -22,9 +22,11 @@ import com.homeinventory.app.data.remote.MobileSyncRequest
 import com.homeinventory.app.data.remote.MobileSyncResponse
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
+import com.homeinventory.app.data.remote.RemoteHouseholdDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RenameHouseholdRequest
 import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import okhttp3.MultipartBody
@@ -158,6 +160,11 @@ interface HomeInventoryApi {
         @Path("userId") userId: String,
         @Body request: UpdateMemberRoleRequest,
     ): Response<ApiEnvelope<Unit>>
+
+    @PATCH("api/family/households")
+    suspend fun renameHousehold(
+        @Body request: RenameHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>>
 
     @POST("api/family/join-requests/{requestId}/approve")
     suspend fun approveJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>

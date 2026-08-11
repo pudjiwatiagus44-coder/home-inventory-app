@@ -21,6 +21,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteHouseholdDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
+import com.homeinventory.app.data.remote.RenameHouseholdRequest
 import com.homeinventory.app.data.remote.RecognitionResponseDto
 import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
@@ -213,6 +214,55 @@ class InventoryRepositoryTest {
 
         assertTrue(result.isSuccess)
         assertEquals("household-2", api.lastCreateInvitationHouseholdId)
+    }
+
+    @Test
+    fun renameCurrentHouseholdCallsApiWithCurrentHousehold() = runTest {
+        val api = RecordingHouseholdApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+
+        val result = repository.renameCurrentHousehold("新家名")
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastRenameHouseholdId)
+        assertEquals("新家名", api.lastRenameName)
+    }
+
+    @Test
+    fun renameCurrentHouseholdReturnsServerMessageOnFailure() = runTest {
+        val api = object : TestApiStub() {
+            override suspend fun snapshot(
+                householdId: String?,
+            ): Response<ApiEnvelope<RemoteDashboardDto>> =
+                Response.success(
+                    ApiEnvelope(
+                        ok = true,
+                        data = RemoteDashboardDto(
+                            household = RemoteHouseholdDto(
+                                id = householdId ?: "household-1",
+                                name = "家庭",
+                            ),
+                        ),
+                    ),
+                )
+
+            override suspend fun renameHousehold(
+                request: RenameHouseholdRequest,
+            ): Response<ApiEnvelope<RemoteHouseholdDto>> =
+                Response.error(
+                    403,
+                    """{"ok":false,"message":"只有房主可以管理成员和邀请"}"""
+                        .toResponseBody("application/json".toMediaType()),
+                )
+        }
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-1")
+
+        val result = repository.renameCurrentHousehold("新家名")
+
+        assertTrue(result.isFailure)
+        assertEquals("只有房主可以管理成员和邀请", result.exceptionOrNull()?.message)
     }
 
     @Test
@@ -483,6 +533,8 @@ private class HouseholdsApi(
 private class RecordingHouseholdApi : TestApiStub() {
     var lastSnapshotHouseholdId: String? = null
     var lastCreateInvitationHouseholdId: String? = null
+    var lastRenameHouseholdId: String? = null
+    var lastRenameName: String? = null
 
     override suspend fun snapshot(
         householdId: String?,
@@ -509,6 +561,22 @@ private class RecordingHouseholdApi : TestApiStub() {
                     id = "link-1",
                     token = "token_1",
                     url = "https://homestorag.xyz/join/token_1",
+                ),
+            ),
+        )
+    }
+
+    override suspend fun renameHousehold(
+        request: RenameHouseholdRequest,
+    ): Response<ApiEnvelope<RemoteHouseholdDto>> {
+        lastRenameHouseholdId = request.householdId
+        lastRenameName = request.name
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteHouseholdDto(
+                    id = request.householdId,
+                    name = request.name,
                 ),
             ),
         )

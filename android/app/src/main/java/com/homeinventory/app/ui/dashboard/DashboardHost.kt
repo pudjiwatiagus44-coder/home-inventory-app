@@ -46,6 +46,7 @@ import com.homeinventory.app.ui.dashboard.dialogs.ImportSummaryMessage
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.PhotoPreviewDialog
+import com.homeinventory.app.ui.dashboard.dialogs.RenameHouseholdDialog
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
 import kotlinx.coroutines.launch
 
@@ -74,6 +75,7 @@ fun DashboardHost(
     var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
     var locationFormInitialAreaId by remember { mutableStateOf("") }
@@ -198,6 +200,20 @@ fun DashboardHost(
         households = householdsState.households,
         currentHouseholdId = householdsState.currentHouseholdId,
         onSwitchHousehold = viewModel::switchToHousehold,
+        onRenameHousehold = {
+            val currentHousehold = householdsState.households.firstOrNull {
+                it.id == householdsState.currentHouseholdId
+            }
+            if (currentHousehold?.role != "owner") {
+                Toast.makeText(
+                    context,
+                    "只有房主可以重命名家庭",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                showRenameDialog = true
+            }
+        },
         onSearchChange = viewModel::updateSearch,
         onSelectArea = viewModel::selectArea,
         onSelectLocation = viewModel::selectLocation,
@@ -500,6 +516,25 @@ fun DashboardHost(
             onSubmitFeedback = feedbackRepository::submitFeedback,
             onDismiss = {
                 showHelpDialog = false
+            },
+        )
+    }
+
+    if (showRenameDialog) {
+        val currentHousehold = householdsState.households.firstOrNull {
+            it.id == householdsState.currentHouseholdId
+        }
+        RenameHouseholdDialog(
+            initialName = currentHousehold?.name ?: "",
+            onRename = { name ->
+                val result = repository.renameCurrentHousehold(name)
+                if (result.isSuccess) {
+                    viewModel.refreshHouseholds()
+                }
+                result
+            },
+            onDismiss = {
+                showRenameDialog = false
             },
         )
     }

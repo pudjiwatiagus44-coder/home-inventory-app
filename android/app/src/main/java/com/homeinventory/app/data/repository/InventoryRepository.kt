@@ -34,6 +34,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import com.homeinventory.app.data.remote.RemoteItemDto
 import com.homeinventory.app.data.remote.RemoteLocationDto
 import com.homeinventory.app.data.remote.RecognitionResponseDto
+import com.homeinventory.app.data.remote.RenameHouseholdRequest
 import com.homeinventory.app.data.remote.RemoveMemberRequest
 import com.homeinventory.app.data.remote.UpdateMemberRoleRequest
 import com.homeinventory.app.data.sync.DaoPendingOperationQueue
@@ -161,6 +162,32 @@ class InventoryRepository(
     }
 
     suspend fun selectedHouseholdId(): String? = currentHouseholdId
+
+    suspend fun renameCurrentHousehold(name: String): Result<Unit> {
+        val householdId = currentHouseholdId
+
+        if (householdId == null) {
+            return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
+        }
+
+        val response = try {
+            api.renameHousehold(RenameHouseholdRequest(householdId, name))
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+
+        if (!response.isSuccessful || response.body()?.ok != true) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody())
+                        ?: response.body()?.message
+                        ?: "重命名失败",
+                ),
+            )
+        }
+
+        return Result.success(Unit)
+    }
 
     suspend fun createInvitationLink(): Result<String> {
         val householdId = currentHouseholdId

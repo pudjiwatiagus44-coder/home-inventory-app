@@ -1,6 +1,8 @@
 package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +33,13 @@ import com.homeinventory.app.ui.theme.Primary
 import com.homeinventory.app.ui.theme.Surface
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun TopBar(
     householdName: String?,
     households: List<HouseholdDto>,
     currentHouseholdId: String?,
     onSwitchHousehold: (String) -> Unit,
+    onRenameHousehold: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onBackup: () -> Unit,
@@ -80,6 +84,10 @@ fun TopBar(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = onRenameHousehold,
+                ),
             )
             Box {
                 TextButton(onClick = { householdMenuExpanded = true }) {
