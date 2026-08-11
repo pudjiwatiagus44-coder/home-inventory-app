@@ -3,6 +3,7 @@ package com.homeinventory.app.ui.dashboard
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,6 +21,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
@@ -48,6 +50,16 @@ import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.PhotoPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
 import kotlinx.coroutines.launch
+
+private sealed interface PhotoEntityTarget {
+    data class Area(val id: String) : PhotoEntityTarget
+    data class Location(val id: String) : PhotoEntityTarget
+}
+
+private data class EntityPhotoPreview(
+    val entityId: String,
+    val photoKey: String?,
+)
 
 @Composable
 fun DashboardHost(
@@ -169,6 +181,97 @@ fun DashboardHost(
             }
         }
     }
+    var previewAreaPhoto by remember { mutableStateOf<EntityPhotoPreview?>(null) }
+    var previewLocationPhoto by remember { mutableStateOf<EntityPhotoPreview?>(null) }
+    var showAreaPhotoPrompt by remember { mutableStateOf(false) }
+    var showLocationPhotoPrompt by remember { mutableStateOf(false) }
+    var pendingPhotoEntity by remember { mutableStateOf<PhotoEntityTarget?>(null) }
+    val entityCameraFile = remember { mutableStateOf<File?>(null) }
+
+    fun uploadEntityPhoto(target: PhotoEntityTarget, bytes: ByteArray) {
+        scope.launch {
+            val result = when (target) {
+                is PhotoEntityTarget.Area -> repository.uploadAreaPhoto(target.id, bytes)
+                is PhotoEntityTarget.Location -> repository.uploadLocationPhoto(target.id, bytes)
+            }
+            result
+                .onSuccess { key ->
+                    LocalPhotoStore.save(context, key, bytes)
+                }
+                .onFailure { error ->
+                    Toast.makeText(
+                        context,
+                        error.message ?: "上传照片失败",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            pendingPhotoEntity = null
+        }
+    }
+
+    val entityCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val target = pendingPhotoEntity
+        val file = entityCameraFile.value
+        pendingPhotoEntity = null
+        entityCameraFile.value = null
+        if (success && target != null && file != null) {
+            scope.launch {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file,
+                )
+                val bytes = ImageCompressor.compressToJpeg(context, uri)
+                    ?: file.readBytes()
+                file.delete()
+                uploadEntityPhoto(target, bytes)
+            }
+        }
+    }
+
+    val entityGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        val target = pendingPhotoEntity
+        pendingPhotoEntity = null
+        if (uri != null && target != null) {
+            scope.launch {
+                val bytes = ImageCompressor.compressToJpeg(context, uri)
+                if (bytes == null || bytes.isEmpty()) {
+                    Toast.makeText(
+                        context,
+                        "读取照片失败，请重试",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    uploadEntityPhoto(target, bytes)
+                }
+            }
+        }
+    }
+
+    fun launchEntityCamera(target: PhotoEntityTarget) {
+        val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+        val file = File(dir, "entity_${System.currentTimeMillis()}.jpg")
+        entityCameraFile.value = file
+        pendingPhotoEntity = target
+        entityCameraLauncher.launch(
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            ),
+        )
+    }
+
+    fun launchEntityGallery(target: PhotoEntityTarget) {
+        pendingPhotoEntity = target
+        entityGalleryLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -258,6 +361,28 @@ fun DashboardHost(
             pendingPhotoItem = item
             itemCameraFile.value = file
             itemCameraLauncher.launch(uri)
+        },
+        onLocationPhotoClick = { item ->
+            if (item.locationPhotoKey != null) {
+                previewLocationPhoto = EntityPhotoPreview(
+                    entityId = item.locationId!!,
+                    photoKey = item.locationPhotoKey,
+                )
+            } else {
+                pendingPhotoEntity = PhotoEntityTarget.Location(item.locationId!!)
+                showLocationPhotoPrompt = true
+            }
+        },
+        onAreaPhotoClick = { item ->
+            if (item.areaPhotoKey != null) {
+                previewAreaPhoto = EntityPhotoPreview(
+                    entityId = item.areaId!!,
+                    photoKey = item.areaPhotoKey,
+                )
+            } else {
+                pendingPhotoEntity = PhotoEntityTarget.Area(item.areaId!!)
+                showAreaPhotoPrompt = true
+            }
         },
         unassignedFilter = state.unassignedFilter,
         onToggleUnassigned = viewModel::toggleUnassignedFilter,
@@ -742,6 +867,68 @@ fun DashboardHost(
                 importPreview = null
                 importError = null
             },
+        )
+    }
+
+    if (showAreaPhotoPrompt || showLocationPhotoPrompt) {
+        val target = pendingPhotoEntity
+        AlertDialog(
+            onDismissRequest = {
+                showAreaPhotoPrompt = false
+                showLocationPhotoPrompt = false
+            },
+            title = {
+                Text(if (showAreaPhotoPrompt) "还没有区域照片" else "还没有位置照片")
+            },
+            text = {
+                Text("拍照或从相册选择")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAreaPhotoPrompt = false
+                        showLocationPhotoPrompt = false
+                        target?.let { launchEntityCamera(it) }
+                    },
+                ) {
+                    Text("拍照")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAreaPhotoPrompt = false
+                        showLocationPhotoPrompt = false
+                        target?.let { launchEntityGallery(it) }
+                    },
+                ) {
+                    Text("从相册选择")
+                }
+            },
+        )
+    }
+
+    previewAreaPhoto?.let { preview ->
+        PhotoPreviewDialog(
+            title = "区域照片",
+            loadBitmap = {
+                preview.photoKey?.let { key ->
+                    LocalPhotoStore.read(context, key, 1600)?.let { Result.success(it) }
+                } ?: repository.getAreaPhoto(preview.entityId)
+            },
+            onDismiss = { previewAreaPhoto = null },
+        )
+    }
+
+    previewLocationPhoto?.let { preview ->
+        PhotoPreviewDialog(
+            title = "位置照片",
+            loadBitmap = {
+                preview.photoKey?.let { key ->
+                    LocalPhotoStore.read(context, key, 1600)?.let { Result.success(it) }
+                } ?: repository.getLocationPhoto(preview.entityId)
+            },
+            onDismiss = { previewLocationPhoto = null },
         )
     }
 
