@@ -1019,11 +1019,13 @@
 
 ## 2026-08-12 新用户引导与内联新增区域/位置验收证据
 
-状态：Android 本地实现与自动化验证完成；真机/线上部署验收待进行。
+状态：Android 本地实现、自动化验证与阿里云测试环境部署完成；真机验收待进行。
 
 - 实现：新增 `SharedPreferencesFirstRunStore`（注册成功后 `markPending()`，跳过/完成后 `markCompleted()`）；新增 `GuideOverlay` 遮罩组件，用箭头和高亮框引导点击目标按钮，右上角 X 可随时跳过；引导步骤覆盖欢迎介绍、右下角「+ 新增」、「识别名称 / 拍照」、选择或新增区域、选择或新增位置、存入草稿箱或直接保存、打开顶部「草稿」、完成。
 - 内联新增：物品表单的「＋ 新增区域 / ＋ 新增位置」改为在输入框内直接填名称并点「添加」，新增后立即出现在列表并自动选中；新增位置自动匹配当前所选区域；原「＋ 新增格子」文案统一为「＋ 新增位置」。
 - 数据层：`InventoryRepository` 新增 `createAreaOnlineWithId` / `createLocationOnlineWithId`，沿用 `runOnlineMutationData` 返回新记录 id；离线兜底仍走 `createAreaOffline` / `createLocationOffline` 并返回本地 id。
 - 验证：`gradle :app:compileDebugKotlin --console=plain` 通过；`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过（现有 Android 单测全通过，并新增 `createAreaOnlineWithId` / `createLocationOnlineWithId` 两个仓库单测，Debug APK 构建成功）。
 - 真源同步：`dev-docs/README.md`、`dev-docs/user-manual.md` 已更新新用户引导与内联新增说明。
-- 待办：真机验收引导箭头定位、内联新增区域/位置自动刷新、识别中存草稿与草稿箱跳转；部署发布与 APK 上传下一轮进行。
+- 部署：本地提交 `15f9436`（含版本 0.5.24 / code 30）已推送 GitHub `origin/main`；通过 git bundle 传输到服务器，在 `/opt/home-inventory-app-new` 执行 `npm ci` + `npm run build`，备份旧目录为 `/opt/home-inventory-app.bak.20260812_072527`，切换后 `home-inventory-app.service` active，`https://homestorag.xyz/login` 返回 200。
+- APK 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.24 / code 30 APK（20,262,335 字节）到 `/opt/home-inventory-app/public/apk/`，重启服务后 `https://homestorag.xyz/apk/version.json` 显示 v0.5.24 / code 30 / size 20,262,335，APK URL 返回 200。
+- 待办：真机验收引导箭头定位、内联新增区域/位置自动刷新、识别中存草稿与草稿箱跳转。
