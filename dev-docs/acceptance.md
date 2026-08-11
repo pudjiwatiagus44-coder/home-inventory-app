@@ -994,3 +994,19 @@
 - 真源同步：`dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/stages/family-sharing.md`、`dev-docs/user-manual.md` 已更新 Android 当前家庭切换/查看共享家庭清单。
 - 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.23 / code 29 APK（20,164,031 字节）到服务器 `/opt/home-inventory-app/public/apk/`；systemd 重启后服务 active；`https://homestorag.xyz/apk/version.json` 显示 v0.5.23/code 29/size 20,164,031，APK URL 返回 200。
 - 待办：真机验收家庭成员切换到共享家庭后能看到房主清单；Android 写接口与离线同步跨家庭的 `householdId` 支持仍属下一轮范围，本轮不声明共享家庭写入已完整支持。
+
+## 2026-08-11 区域/位置照片验收标准（待实施）
+
+状态：设计已确认，尚未进入代码实施。
+
+- 每个区域、每个位置各有一张主照片，可上传、替换、删除。
+- 长按区域/位置可拍照或从相册选择；有照片时可查看、替换、删除。
+- 物品行中位置名（如 `A1`）和区域名显示为小按钮，点击分别查看位置照片、区域照片。
+- 无照片时点击按钮提示“拍照或从相册选择”，完成后自动保存。
+- 服务器保存约 1280px、100–300KB 清晰图；Web 与 Android 均可查看。
+- Android 本地缓存照片，查看本地优先、缺失联网；Web 浏览器缓存生效。
+- 照片拍摄、替换、删除必须联网；断网时明确提示，不做离线队列。
+- readonly 成员可查看照片，但上传/替换/删除被服务端拒绝（403）。
+- 用户 A/B 越权读取或写入照片返回 403/404。
+- 替换照片和删除区域/位置后，旧照片文件被清理。
+- 未登录访问照片接口返回 401。

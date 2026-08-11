@@ -22,7 +22,7 @@
 | `locations` | 具体位置，如 A1、上橱柜 | 是 | 属于一个 household，可归属 area |
 | `items` | 物品 | 是 | 属于 household，可放在 location |
 | `audit_logs` | 操作审计 | 否 | MVP 暂不做，后续公开用户阶段再评估 |
-| `attachments` | 高清原图/多附件 | 否 | 第一版不上传高清原图；2026-08-07 起仅保存物品缩略图（`items.photo_key` + `pending_photos`） |
+| `attachments` | 高清原图/多附件 | 否 | 第一版不上传高清原图；2026-08-07 起仅保存物品缩略图（`items.photo_key` + `pending_photos`）；2026-08-11 起区域/位置照片各保存一张约 1280px 清晰图（`areas.photo_key` / `locations.photo_key`） |
 | `pending_photos` | 待关联缩略图暂存 | 是 | 2026-08-07 新增；识别接口暂存缩略图，保存物品时关联，超时未关联自动清理 |
 | `subscriptions` | 会员/付费权益 | 否 | 第一版不做支付 |
 
@@ -146,6 +146,7 @@ create table public.areas (
   household_id uuid not null references public.households(id) on delete cascade,
   name text not null,
   color text not null default '#64748b',
+  photo_key text,   -- 2026-08-11 新增：区域照片文件名，可空，唯一
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -164,6 +165,7 @@ create table public.locations (
   household_id uuid not null references public.households(id) on delete cascade,
   area_id uuid,
   name text not null,
+  photo_key text,   -- 2026-08-11 新增：位置照片文件名，可空，唯一
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -245,6 +247,8 @@ create index items_household_id_created_at_idx on public.items(household_id, cre
 create index items_location_id_idx on public.items(location_id);
 create index items_expire_date_idx on public.items(expire_date) where expire_date is not null;
 create unique index items_photo_key_unique on public.items(photo_key) where photo_key is not null;
+create unique index areas_photo_key_unique on public.areas(photo_key) where photo_key is not null;
+create unique index locations_photo_key_unique on public.locations(photo_key) where photo_key is not null;
 create index pending_photos_created_by_idx on public.pending_photos(created_by);
 create index pending_photos_household_id_idx on public.pending_photos(household_id);
 create index pending_photos_status_created_at_idx on public.pending_photos(status, created_at);
@@ -805,6 +809,7 @@ using (public.is_household_member(household_id));
 - 当前证据支持第一版“用户只能访问自己 household 数据”的 RLS 边界。
 - 2026-08-06 家庭成员共享设计已写入真源（`project-brief.md` / `architecture.md` / `database-design.md` / `acceptance.md` / `stages/family-sharing.md`）：邀请方式为分享链接 + 自主申请 + 房主批准，链接落地页含 Android 内测 APK 下载入口。migration（`202608060001_family_sharing.sql`）已编写并与本设计一致，尚未在任何数据库执行。
 - 2026-08-07 拍照识别数据设计（`items.photo_key` + `pending_photos`）已写入本文件，migration 尚未编写/执行。
+- 2026-08-11 区域/位置照片数据设计（`areas.photo_key`、`locations.photo_key`）已写入本文件，migration 尚未编写/执行。
 
 ## 仍需补充验证
 
@@ -812,6 +817,7 @@ using (public.is_household_member(household_id));
 - 针对 `locations.area_id` 和 `items.location_id` 的跨 household 复合外键负例，后续如单独调整区域/位置关系或共享模型，需要再补更细的数据库负例。
 - 家庭共享 migration（`household_invitations` + `household_join_requests` + 成员管理 RLS + 提交/批准/拒绝安全函数）编写并执行后，必须补家庭共享权限负例：未申请/被拒绝不可访问、批准后可读写、member 不能管理成员、被移除立即失效、无效 token 不能申请、非 owner 不能批准。
 - 家庭切换器上线后，必须验证切换家庭不会越权读取其他家庭数据，且每个家庭的清单操作都基于当前家庭。
+- 区域/位置照片 migration 编写并执行后，必须验证上传/替换/删除/读取、用户 A/B 越权、readonly 只读、替换/删除后文件清理。
 
 ## 2026-08-08 密码重置令牌设计（自托管路线）
 
@@ -842,6 +848,17 @@ grant all privileges on password_reset_tokens to home_inventory_app;
 - `users.password_hash` 由重置流程更新（bcrypt 重哈希）；重置成功后作废该用户全部 `auth_sessions`。
 - 负例：无效/已用/过期令牌重置失败（400 统一提示）；邮箱不存在请求忘记密码返回同样成功提示（防枚举）+ 限频 429；重置后旧 session 访问返回 401。
 
+## 2026-08-11 区域/位置照片数据设计
+
+用户确认区域/位置照片纳入当前范围：每个区域、每个位置各一张主照片，服务器保存约 1280px、100–300KB 清晰图；Web 与 Android 均可查看；Android 本地缓存，Web 浏览器缓存；拍摄/替换/删除必须联网。
+
+表结构变化（migration 草案待写，预期文件名 `dev-docs/sql/area_location_photos_self_hosted.sql`）：
+
+- `areas` 新增 `photo_key text`（可空、唯一）。
+- `locations` 新增 `photo_key text`（可空、唯一）。
+- 区域/位置照片不走 `pending_photos` 暂存：上传接口直接压缩、保存文件、更新 `photo_key`；替换时删除旧文件，删除区域/位置时清理关联照片文件。
+- 照片读取沿用家庭成员权限；写入要求非 readonly 成员，服务端校验。
+
 ## 下一步
 
 1. 等待用户确认家庭共享设计与实施计划后，编写家庭共享 migration（新建 `household_invitations`、`household_join_requests`、成员管理 RLS、提交/批准/拒绝安全函数），迁移文件必须回写本设计。
@@ -849,3 +866,4 @@ grant all privileges on password_reset_tokens to home_inventory_app;
 3. 重新运行 `npm test`、`npm run lint`、`npm run build`。
 4. 做用户验收陪跑：真实浏览器验证区域/位置/物品 CRUD、搜索/筛选、移动端布局，以及家庭链接邀请/申请/批准/共同编辑/移除成员路径和链接落地页 App 下载入口。
 5. 阶段收口后创建 Git checkpoint。
+6. 用户审阅区域/位置照片设计后，编写并执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，同步接口、Android/Web 与验收证据。

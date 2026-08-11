@@ -127,6 +127,7 @@ auth.users
 - `household_id`
 - `name`
 - `color`
+- `photo_key`（2026-08-11 新增：区域照片文件名，可空、唯一）
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -137,6 +138,7 @@ auth.users
 - `household_id`
 - `area_id`
 - `name`
+- `photo_key`（2026-08-11 新增：位置照片文件名，可空、唯一）
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -304,3 +306,15 @@ Android 拍物品正面照
 - 记住邮箱：Web 用 localStorage（key `home_inventory_remembered_email`），Android 用 `RememberedEmailStore`（EncryptedSharedPreferences）；只存邮箱，不存密码；登录态保持逻辑不变。
 - Android 注册入口：复用现有 `POST /api/auth/register` 与 session cookie 流程，注册成功即进入 App。
 - 详细设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。
+
+## 2026-08-11 区域/位置照片架构
+
+用户确认将区域/位置照片纳入 Web/PWA 与 Android 内测版当前范围（每区域、每位置各一张主照片）：
+
+- 数据：`areas`、`locations` 各新增 `photo_key` 字段（可空、唯一）；照片文件沿用 `PhotoStore` 存储抽象，第一版存服务器本地磁盘。
+- 存储：服务器保存约 1280px、100–300KB 清晰图；区域/位置照片不走 `pending_photos` 暂存，上传后直接落库关联。
+- 接口：新增 `PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `PUT/GET/DELETE /api/inventory/locations/[locationId]/photo`。
+- 权限：owner/member 可上传、替换、删除；readonly 只能读取；服务端按家庭成员与角色校验，禁止越权。
+- 缓存与离线：Android 用 `LocalPhotoStore` 缓存清晰图，Web 用浏览器缓存；查看本地优先、缺失联网；拍摄/替换/删除必须联网，不做离线上传队列。
+- 界面：物品行中位置名和区域名显示为小按钮，点击查看对应照片；长按区域/位置的编辑弹窗内提供拍照、相册、查看、替换、删除。
+- 设计文档：`docs/superpowers/specs/2026-08-11-area-location-photos-design.md`；表结构与接口细节见 `dev-docs/database-design.md`。
