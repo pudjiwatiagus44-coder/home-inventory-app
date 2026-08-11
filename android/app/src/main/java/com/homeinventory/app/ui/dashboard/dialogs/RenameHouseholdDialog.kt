@@ -23,6 +23,8 @@ fun RenameHouseholdDialog(
     onDismiss: () -> Unit,
     title: String = "重命名家庭",
     confirmText: String = "保存",
+    fieldLabel: String = "名称",
+    allowBlank: Boolean = false,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -36,7 +38,7 @@ fun RenameHouseholdDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("名称") },
+                label = { Text(fieldLabel) },
                 modifier = Modifier.fillMaxWidth(),
             )
             errorMessage?.let {
@@ -49,7 +51,7 @@ fun RenameHouseholdDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank() && !isSaving,
+                enabled = (allowBlank || name.isNotBlank()) && !isSaving,
                 onClick = {
                     scope.launch {
                         isSaving = true

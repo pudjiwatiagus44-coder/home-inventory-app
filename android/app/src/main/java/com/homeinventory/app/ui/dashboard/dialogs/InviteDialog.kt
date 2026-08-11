@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.ui.dashboard.InviteUiState
 import com.homeinventory.app.ui.dashboard.JoinRequestsUiState
 import com.homeinventory.app.ui.dashboard.MembersUiState
@@ -40,7 +45,9 @@ import com.homeinventory.app.ui.theme.Surface
 fun InviteDialog(
     state: InviteUiState,
     joinRequests: JoinRequestsUiState,
-    onRegenerate: () -> Unit,
+    households: List<HouseholdDto>,
+    currentHouseholdId: String?,
+    onGenerate: (List<Pair<String, String>>) -> Unit,
     onRefreshRequests: () -> Unit,
     onApproveRequest: (String) -> Unit,
     onRejectRequest: (String) -> Unit,
@@ -52,6 +59,19 @@ fun InviteDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    var selectedHouseholdIds by remember {
+        mutableStateOf<Set<String>>(setOfNotNull(currentHouseholdId))
+    }
+    var roleByHouseholdId by remember {
+        mutableStateOf<Map<String, String>>(
+            currentHouseholdId?.let { mapOf(it to "member") } ?: emptyMap(),
+        )
+    }
+
+    fun selectedGrants(): List<Pair<String, String>> =
+        selectedHouseholdIds.mapNotNull { householdId ->
+            roleByHouseholdId[householdId]?.let { role -> householdId to role }
+        }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -67,6 +87,57 @@ fun InviteDialog(
                 text = "生成链接后发给家人；家人申请加入后，你可以在这里直接批准或拒绝。",
                 fontSize = 13.sp,
             )
+
+            Text(text = "邀请授权", fontSize = 15.sp)
+            households.forEach { household ->
+                val selected = selectedHouseholdIds.contains(household.id)
+                val householdName = household.effectiveName ?: household.name
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            selectedHouseholdIds =
+                                if (selected) {
+                                    selectedHouseholdIds - household.id
+                                } else {
+                                    selectedHouseholdIds + household.id
+                                }
+                            if (!selected) {
+                                roleByHouseholdId =
+                                    roleByHouseholdId + (household.id to "member")
+                            }
+                        },
+                    ) {
+                        Text(if (selected) "✓ $householdName" else householdName)
+                    }
+                }
+                if (selected) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        grantRoles().forEach { (role, label) ->
+                            TextButton(
+                                onClick = {
+                                    roleByHouseholdId =
+                                        roleByHouseholdId + (household.id to role)
+                                },
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (roleByHouseholdId[household.id] == role) {
+                                        Primary
+                                    } else {
+                                        androidx.compose.ui.graphics.Color(0xFF6B7280)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             when {
                 state.isGenerating -> {
@@ -108,8 +179,18 @@ fun InviteDialog(
                         fontSize = 13.sp,
                         color = Danger,
                     )
-                    TextButton(onClick = onRegenerate) {
+                    TextButton(onClick = { onGenerate(selectedGrants()) }) {
                         Text("重新生成")
+                    }
+                }
+
+                else -> {
+                    Button(
+                        onClick = { onGenerate(selectedGrants()) },
+                        enabled = selectedHouseholdIds.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("生成邀请链接")
                     }
                 }
             }
@@ -378,6 +459,14 @@ private fun shareText(context: Context, text: String, chooserTitle: String) {
 
 private fun roleLabel(role: String): String = when (role) {
     "owner" -> "房主"
+    "member" -> "管理"
+    "contributor" -> "新增"
     "readonly" -> "只读"
-    else -> "全部权限"
+    else -> "成员"
 }
+
+private fun grantRoles(): List<Pair<String, String>> = listOf(
+    "member" to "管理",
+    "contributor" to "新增",
+    "readonly" to "只读",
+)

@@ -36,6 +36,8 @@ data class RemoteHouseholdDto(
 data class HouseholdDto(
     val id: String,
     val name: String,
+    val displayName: String? = null,
+    val effectiveName: String? = null,
     val role: String? = null,
 )
 
@@ -46,6 +48,11 @@ data class CreateHouseholdRequest(
 data class RenameHouseholdRequest(
     val householdId: String,
     val name: String,
+)
+
+data class HouseholdDisplayNameRequest(
+    val householdId: String,
+    val displayName: String,
 )
 
 data class RemoteAreaDto(
@@ -209,7 +216,13 @@ data class ImportSummaryDto(
 )
 
 data class CreateInvitationRequest(
+    val householdId: String? = null,
+    val grants: List<InvitationGrantDto>? = null,
+)
+
+data class InvitationGrantDto(
     val householdId: String,
+    val role: String,
 )
 
 data class InvitationLinkDto(

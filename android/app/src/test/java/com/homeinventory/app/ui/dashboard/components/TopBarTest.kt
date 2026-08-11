@@ -18,7 +18,7 @@ class TopBarTest {
         assertTrue(source.contains("onImport"))
         assertTrue(source.contains("onInvite"))
         assertTrue(source.contains("onSignOut"))
-        assertTrue(source.contains("onRenameHousehold"))
+        assertTrue(source.contains("onSetHouseholdDisplayName"))
     }
 
     @Test
@@ -28,7 +28,8 @@ class TopBarTest {
         assertTrue(source.contains("HamburgerMenuIcon"))
         assertTrue(source.contains("HouseholdSwitchIcon"))
         assertTrue(source.contains("HouseholdDropdownRow"))
-        assertTrue(source.contains("onRenameHousehold(household)"))
+        assertTrue(source.contains("onSetHouseholdDisplayName(household)"))
+        assertTrue(source.contains("effectiveName"))
         assertTrue(source.contains("onCreateHousehold"))
         assertTrue(source.contains("添加新地点"))
         assertFalse(source.contains("Text(\"设置\")"))

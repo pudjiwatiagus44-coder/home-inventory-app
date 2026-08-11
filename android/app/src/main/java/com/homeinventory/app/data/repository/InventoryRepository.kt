@@ -24,6 +24,8 @@ import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.HouseholdDto
+import com.homeinventory.app.data.remote.HouseholdDisplayNameRequest
+import com.homeinventory.app.data.remote.InvitationGrantDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -194,6 +196,21 @@ class InventoryRepository(
         return Result.success(Unit)
     }
 
+    suspend fun setHouseholdDisplayName(
+        householdId: String,
+        displayName: String,
+    ): Result<Unit> = runFamilyMutation(
+        request = {
+            api.setHouseholdDisplayName(
+                HouseholdDisplayNameRequest(
+                    householdId = householdId,
+                    displayName = displayName,
+                ),
+            )
+        },
+        message = "设置显示名称失败",
+    )
+
     suspend fun createHousehold(name: String): Result<Unit> {
         val response = try {
             api.createHousehold(CreateHouseholdRequest(name))
@@ -220,15 +237,26 @@ class InventoryRepository(
         return refreshSnapshot(created.id)
     }
 
-    suspend fun createInvitationLink(): Result<String> {
+    suspend fun createInvitationLink(): Result<String> =
+        createInvitationLink(emptyList())
+
+    suspend fun createInvitationLink(
+        grants: List<Pair<String, String>>,
+    ): Result<String> {
         val householdId = currentHouseholdId
 
         if (householdId == null) {
             return Result.failure(IllegalStateException("家庭信息未加载，请先刷新清单"))
         }
 
+        val grantDtos = grants.map { InvitationGrantDto(it.first, it.second) }
         val response = try {
-            api.createInvitation(CreateInvitationRequest(householdId))
+            api.createInvitation(
+                CreateInvitationRequest(
+                    householdId = grantDtos.takeIf { it.isEmpty() }?.let { householdId },
+                    grants = grantDtos.takeIf { it.isNotEmpty() },
+                ),
+            )
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }

@@ -94,7 +94,9 @@ fun AppRoot() {
                 DashboardViewModel(
                     inventory = repository.observeInventory(),
                     syncPending = repository::syncPendingOperations,
-                    createInvitation = repository::createInvitationLink,
+                    createInvitation = { grants ->
+                        repository.createInvitationLink(grants)
+                    },
                     loadHouseholds = repository::loadHouseholds,
                     switchHousehold = repository::switchHousehold,
                     createHouseholdAction = repository::createHousehold,

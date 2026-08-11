@@ -119,7 +119,7 @@ data class BatchImportUiState(
 class DashboardViewModel(
     inventory: Flow<InventorySnapshot>,
     private val syncPending: suspend () -> Result<Unit> = { Result.success(Unit) },
-    private val createInvitation: suspend () -> Result<String> = {
+    private val createInvitation: suspend (List<Pair<String, String>>) -> Result<String> = { _ ->
         Result.failure(IllegalStateException("邀请功能不可用"))
     },
     private val loadHouseholds: suspend () -> Result<List<HouseholdDto>> = {
@@ -447,13 +447,17 @@ class DashboardViewModel(
     }
 
     fun generateInvitationLink() {
+        generateInvitationLink(emptyList())
+    }
+
+    fun generateInvitationLink(grants: List<Pair<String, String>>) {
         if (invite.value.isGenerating) {
             return
         }
 
         viewModelScope.launch {
             invite.value = InviteUiState(isGenerating = true)
-            createInvitation()
+            createInvitation(grants)
                 .onSuccess { url ->
                     invite.value = InviteUiState(link = url)
                 }

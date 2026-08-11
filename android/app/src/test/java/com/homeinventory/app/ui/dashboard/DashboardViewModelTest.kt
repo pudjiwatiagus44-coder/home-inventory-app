@@ -142,7 +142,9 @@ class DashboardViewModelTest {
             val viewModel = DashboardViewModel(
                 inventory = MutableStateFlow(InventorySnapshot()),
                 syncPending = { Result.success(Unit) },
-                createInvitation = { Result.success("https://homestorag.xyz/join/abc") },
+                createInvitation = { _ ->
+                    Result.success("https://homestorag.xyz/join/abc")
+                },
             )
             advanceUntilIdle()
 
@@ -164,7 +166,7 @@ class DashboardViewModelTest {
             val viewModel = DashboardViewModel(
                 inventory = MutableStateFlow(InventorySnapshot()),
                 syncPending = { Result.success(Unit) },
-                createInvitation = {
+                createInvitation = { _ ->
                     Result.failure(IllegalStateException("只有房主可以管理成员和邀请"))
                 },
             )
@@ -525,6 +527,35 @@ class DashboardViewModelTest {
 
             assertEquals("储藏间", createdName)
             assertEquals("household-new", viewModel.householdsState().value.currentHouseholdId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun generateInvitationLinkWithGrantsDelegatesSelectedHouseholds() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var captured: List<Pair<String, String>>? = null
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                createInvitation = { grants ->
+                    captured = grants
+                    Result.success("https://homestorag.xyz/join/abc")
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.generateInvitationLink(
+                listOf("household-1" to "member", "household-2" to "readonly"),
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("household-1" to "member", "household-2" to "readonly"),
+                captured,
+            )
         } finally {
             Dispatchers.resetMain()
         }

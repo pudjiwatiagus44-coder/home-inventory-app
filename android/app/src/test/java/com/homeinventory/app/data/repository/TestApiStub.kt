@@ -17,6 +17,7 @@ import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.HouseholdDto
+import com.homeinventory.app.data.remote.HouseholdDisplayNameRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -186,6 +187,11 @@ abstract class TestApiStub : HomeInventoryApi {
                 ),
             ),
         )
+
+    override suspend fun setHouseholdDisplayName(
+        request: HouseholdDisplayNameRequest,
+    ): Response<ApiEnvelope<Unit>> =
+        Response.success(ApiEnvelope(ok = true))
 
     override suspend fun approveJoinRequest(requestId: String): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))

@@ -52,7 +52,7 @@ fun TopBar(
     households: List<HouseholdDto>,
     currentHouseholdId: String?,
     onSwitchHousehold: (String) -> Unit,
-    onRenameHousehold: (HouseholdDto) -> Unit,
+    onSetHouseholdDisplayName: (HouseholdDto) -> Unit,
     onCreateHousehold: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
@@ -111,7 +111,7 @@ fun TopBar(
                         },
                         onLongClick = {
                             householdMenuExpanded = false
-                            onRenameHousehold(household)
+                            onSetHouseholdDisplayName(household)
                         },
                     )
                 }
@@ -216,7 +216,7 @@ private fun HouseholdDropdownRow(
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Text(
-            text = if (selected) "${household.name}（当前）" else household.name,
+            text = household.effectiveName ?: household.name,
             color = if (selected) Primary else Foreground,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
@@ -226,12 +226,20 @@ private fun HouseholdDropdownRow(
         household.role?.let { role ->
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (role == "owner") "房主" else "成员",
+                text = householdRoleLabel(role),
                 color = MutedForeground,
                 fontSize = 12.sp,
             )
         }
     }
+}
+
+private fun householdRoleLabel(role: String): String = when (role) {
+    "owner" -> "房主"
+    "member" -> "管理"
+    "contributor" -> "新增"
+    "readonly" -> "只读"
+    else -> "成员"
 }
 
 @Composable

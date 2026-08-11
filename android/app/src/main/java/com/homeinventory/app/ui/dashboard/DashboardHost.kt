@@ -201,16 +201,8 @@ fun DashboardHost(
         households = householdsState.households,
         currentHouseholdId = householdsState.currentHouseholdId,
         onSwitchHousehold = viewModel::switchToHousehold,
-        onRenameHousehold = { household ->
-            if (household.role != "owner") {
-                Toast.makeText(
-                    context,
-                    "只有房主可以重命名家庭",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            } else {
-                householdNameDialog = HouseholdNameDialogTarget.Rename(household)
-            }
+        onSetHouseholdDisplayName = { household ->
+            householdNameDialog = HouseholdNameDialogTarget.DisplayName(household)
         },
         onCreateHousehold = {
             householdNameDialog = HouseholdNameDialogTarget.Create
@@ -319,7 +311,6 @@ fun DashboardHost(
         },
         onInvite = {
             showInviteDialog = true
-            viewModel.generateInvitationLink()
             viewModel.refreshJoinRequests()
             viewModel.refreshMembers()
         },
@@ -343,7 +334,9 @@ fun DashboardHost(
         InviteDialog(
             state = inviteState,
             joinRequests = joinRequestsState,
-            onRegenerate = viewModel::generateInvitationLink,
+            households = householdsState.households,
+            currentHouseholdId = householdsState.currentHouseholdId,
+            onGenerate = viewModel::generateInvitationLink,
             onRefreshRequests = viewModel::refreshJoinRequests,
             onApproveRequest = viewModel::approveRequest,
             onRejectRequest = viewModel::rejectRequest,
@@ -525,12 +518,14 @@ fun DashboardHost(
         RenameHouseholdDialog(
             title = target.title,
             confirmText = target.confirmText,
+            fieldLabel = if (target is HouseholdNameDialogTarget.DisplayName) "显示名" else "名称",
+            allowBlank = target is HouseholdNameDialogTarget.DisplayName,
             initialName = target.initialName,
             onRename = { name ->
                 val result = when (target) {
                     HouseholdNameDialogTarget.Create -> repository.createHousehold(name)
-                    is HouseholdNameDialogTarget.Rename ->
-                        repository.renameHousehold(target.household.id, name)
+                    is HouseholdNameDialogTarget.DisplayName ->
+                        repository.setHouseholdDisplayName(target.household.id, name)
                 }
                 if (result.isSuccess) {
                     viewModel.refreshHouseholds()
@@ -803,9 +798,9 @@ private sealed class HouseholdNameDialogTarget {
         override val initialName = ""
     }
 
-    data class Rename(val household: HouseholdDto) : HouseholdNameDialogTarget() {
-        override val title = "重命名家庭"
+    data class DisplayName(val household: HouseholdDto) : HouseholdNameDialogTarget() {
+        override val title = "我的显示名"
         override val confirmText = "保存"
-        override val initialName = household.name
+        override val initialName = household.effectiveName ?: household.name
     }
 }

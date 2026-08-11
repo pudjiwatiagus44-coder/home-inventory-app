@@ -15,6 +15,8 @@ import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.CreateHouseholdRequest
 import com.homeinventory.app.data.remote.CreateInvitationRequest
 import com.homeinventory.app.data.remote.HouseholdDto
+import com.homeinventory.app.data.remote.HouseholdDisplayNameRequest
+import com.homeinventory.app.data.remote.InvitationGrantDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
@@ -377,6 +379,63 @@ class InventoryRepositoryTest {
         assertTrue(result.isSuccess)
         assertNull(api.lastSyncHouseholdId)
         assertEquals(1, repository.pendingOperations().size)
+    }
+
+    @Test
+    fun loadHouseholdsUsesEffectiveNameWhenDisplayNameExists() = runTest {
+        val api = object : TestApiStub() {
+            override suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>> =
+                Response.success(
+                    ApiEnvelope(
+                        ok = true,
+                        data = listOf(
+                            HouseholdDto(
+                                id = "h1",
+                                name = "原名",
+                                displayName = "我的家",
+                                effectiveName = "我的家",
+                                role = "member",
+                            ),
+                        ),
+                    ),
+                )
+        }
+        val repository = repositoryWith(api = api)
+
+        val households = repository.loadHouseholds().getOrThrow()
+
+        assertEquals("我的家", households.single().effectiveName)
+    }
+
+    @Test
+    fun setHouseholdDisplayNameSendsPersonalAliasRequest() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+
+        val result = repository.setHouseholdDisplayName("h1", "爸爸家")
+
+        assertTrue(result.isSuccess)
+        assertEquals(HouseholdDisplayNameRequest("h1", "爸爸家"), api.lastDisplayNameRequest)
+    }
+
+    @Test
+    fun createInvitationLinkSendsSelectedGrants() = runTest {
+        val api = RecordingApi()
+        val repository = repositoryWith(api = api)
+        repository.refreshSnapshot("household-2")
+
+        val result = repository.createInvitationLink(
+            listOf("household-1" to "member", "household-2" to "readonly"),
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(
+            listOf(
+                InvitationGrantDto("household-1", "member"),
+                InvitationGrantDto("household-2", "readonly"),
+            ),
+            api.lastInvitationGrants,
+        )
     }
 
     @Test
@@ -755,6 +814,8 @@ private class RecordingApi : TestApiStub() {
     var lastSyncHouseholdId: String? = null
     var lastRecognizeHouseholdId: String? = null
     var lastItemPhotoHouseholdId: String? = null
+    var lastDisplayNameRequest: HouseholdDisplayNameRequest? = null
+    var lastInvitationGrants: List<InvitationGrantDto>? = null
 
     override suspend fun snapshot(
         householdId: String?,
@@ -825,6 +886,29 @@ private class RecordingApi : TestApiStub() {
     ): Response<ResponseBody> {
         lastItemPhotoHouseholdId = householdId
         throw IOException("photo request recorded for household scope test")
+    }
+
+    override suspend fun setHouseholdDisplayName(
+        request: HouseholdDisplayNameRequest,
+    ): Response<ApiEnvelope<Unit>> {
+        lastDisplayNameRequest = request
+        return Response.success(ApiEnvelope(ok = true))
+    }
+
+    override suspend fun createInvitation(
+        request: CreateInvitationRequest,
+    ): Response<ApiEnvelope<InvitationLinkDto>> {
+        lastInvitationGrants = request.grants
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = InvitationLinkDto(
+                    id = "link-1",
+                    token = "token_1",
+                    url = "https://homestorag.xyz/join/token_1",
+                ),
+            ),
+        )
     }
 }
 

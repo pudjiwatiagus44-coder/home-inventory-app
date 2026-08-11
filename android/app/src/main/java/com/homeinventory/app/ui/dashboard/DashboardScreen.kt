@@ -31,7 +31,7 @@ fun DashboardScreen(
     households: List<HouseholdDto>,
     currentHouseholdId: String?,
     onSwitchHousehold: (String) -> Unit,
-    onRenameHousehold: (HouseholdDto) -> Unit,
+    onSetHouseholdDisplayName: (HouseholdDto) -> Unit,
     onCreateHousehold: () -> Unit,
     onSearchChange: (String) -> Unit,
     onSelectArea: (String?) -> Unit,
@@ -63,11 +63,13 @@ fun DashboardScreen(
         containerColor = Background,
         topBar = {
             TopBar(
-                householdName = households.firstOrNull { it.id == currentHouseholdId }?.name,
+                householdName = households.firstOrNull { it.id == currentHouseholdId }
+                    ?.effectiveName
+                    ?: households.firstOrNull { it.id == currentHouseholdId }?.name,
                 households = households,
                 currentHouseholdId = currentHouseholdId,
                 onSwitchHousehold = onSwitchHousehold,
-                onRenameHousehold = onRenameHousehold,
+                onSetHouseholdDisplayName = onSetHouseholdDisplayName,
                 onCreateHousehold = onCreateHousehold,
                 onDraftsClick = onDraftsClick,
                 draftCount = draftCount,

@@ -13,6 +13,7 @@ import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.HouseholdDto
+import com.homeinventory.app.data.remote.HouseholdDisplayNameRequest
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -184,6 +185,11 @@ interface HomeInventoryApi {
     suspend fun renameHousehold(
         @Body request: RenameHouseholdRequest,
     ): Response<ApiEnvelope<RemoteHouseholdDto>>
+
+    @PATCH("api/family/households/display-name")
+    suspend fun setHouseholdDisplayName(
+        @Body request: HouseholdDisplayNameRequest,
+    ): Response<ApiEnvelope<Unit>>
 
     @POST("api/family/join-requests/{requestId}/approve")
     suspend fun approveJoinRequest(@Path("requestId") requestId: String): Response<ApiEnvelope<Unit>>
