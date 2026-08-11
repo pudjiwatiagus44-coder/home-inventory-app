@@ -1052,3 +1052,12 @@
 - APK：`scripts/upload-apk.ps1` 构建并上传 0.5.26 / code 32 APK（20,213,183 字节）；`https://homestorag.xyz/apk/version.json` 返回 versionCode 32 / versionName 0.5.26，APK 下载返回 HTTP 200。
 - 线上 smoke：`/login` 200；未登录 `/api/family/households` 401；临时账号注册、个人显示名 PATCH、多家庭 grants 邀请 POST 均 200；临时测试账号与数据已清理。
 - 待办：Web/Android 真机验收（长按设置显示名、多家庭邀请选择、成员角色显示等）。生产上线前仍需隐私政策、用户协议、备份恢复与账号安全评审。
+
+## 2026-08-11 记住家庭与照片恢复修复证据
+
+- 问题：被邀请用户切换家庭后，重启或退出登录再登录会回到默认家庭，导致看起来照片全部消失。
+- 根因：`refreshSnapshot()` 无参调用会拉取默认家庭并覆盖 `sync_state`；退出登录后再次登录时，保存的家庭选择未按账号隔离。
+- 修复：`refreshSnapshot()` 无参时优先使用当前账号保存的家庭；`SessionStore` 保存登录 `userId`，`sync_state` 使用 `current_household_id_<userId>` 按账号记住选择；退出登录不再清除该选择。
+- 照片数据：服务器数据库有 33 个 `photo_key`，但照片文件只有 11 个；已从 `20260808_164452` 备份恢复缺失的 31 个文件，当前照片文件 42 个（含历史孤儿文件），数据库引用完整。
+- Android：版本升至 0.5.27 / code 33，APK 已上传并重启服务；`version.json` 返回 versionCode 33 / versionName 0.5.27。
+- 当前服务器运行分支为 `codex/area-location-photos-deploy`（`a1b395e`），未切换，避免影响进行中的区域/位置照片能力。
