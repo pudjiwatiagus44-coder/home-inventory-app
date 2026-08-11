@@ -21,6 +21,17 @@ export type PasswordResetMailer = {
   }) => Promise<void>;
 };
 
+export type FeedbackMailer = {
+  sendFeedbackEmail: (input: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+  }) => Promise<void>;
+};
+
+export type AppMailer = PasswordResetMailer & FeedbackMailer;
+
 export type SmtpMailerTransporter = {
   sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
 };
@@ -37,7 +48,7 @@ type SmtpMailerDependencies = {
 
 export function createSmtpMailer(
   deps: SmtpMailerDependencies = {},
-): PasswordResetMailer {
+): AppMailer {
   const host = deps.host ?? process.env.SMTP_HOST?.trim() ?? "";
   const port = deps.port ?? Number(process.env.SMTP_PORT ?? 465);
   const secure = deps.secure ?? (process.env.SMTP_SECURE ?? "true") !== "false";
@@ -73,6 +84,33 @@ export function createSmtpMailer(
           to,
           subject: "重置你的家庭物品密码",
           text: `打开以下链接在 30 分钟内设置新密码：${resetUrl}`,
+          html,
+        });
+      } catch (error) {
+        throw new SmtpSendFailedError(error);
+      }
+    },
+
+    async sendFeedbackEmail({ to, subject, text, html }) {
+      if (!user || !pass) {
+        throw new SmtpNotConfiguredError();
+      }
+
+      const transporter: SmtpMailerTransporter =
+        deps.transporter ??
+        (nodemailer.createTransport({
+          host,
+          port,
+          secure,
+          auth: { user, pass },
+        }) as unknown as SmtpMailerTransporter);
+
+      try {
+        await transporter.sendMail({
+          from,
+          to,
+          subject,
+          text,
           html,
         });
       } catch (error) {

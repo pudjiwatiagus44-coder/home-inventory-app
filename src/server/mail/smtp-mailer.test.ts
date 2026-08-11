@@ -71,4 +71,26 @@ describe("smtp mailer", () => {
       }),
     ).rejects.toBeInstanceOf(SmtpSendFailedError);
   });
+
+  it("sends a feedback email to the configured target", async () => {
+    const sendMail = vi.fn().mockResolvedValue({ messageId: "1" });
+    const mailer = createSmtpMailer({
+      user: "sender@qq.com",
+      pass: "auth-code",
+      transporter: { sendMail },
+    });
+
+    await mailer.sendFeedbackEmail({
+      to: "736259416@qq.com",
+      subject: "家庭物品 App 反馈 - user@example.com",
+      text: "反馈内容",
+      html: "<p>反馈内容</p>",
+    });
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0][0] as SendMailInput;
+    expect(mail.to).toBe("736259416@qq.com");
+    expect(mail.subject).toContain("user@example.com");
+    expect(mail.text).toContain("反馈内容");
+  });
 });
