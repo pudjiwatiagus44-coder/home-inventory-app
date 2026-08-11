@@ -22,6 +22,7 @@ import com.homeinventory.app.data.remote.AreaUpdateRequest
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -66,6 +67,7 @@ class InventoryRepository(
 ) {
     @Volatile
     private var currentHouseholdId: String? = null
+    private var households: List<HouseholdDto> = emptyList()
 
     fun observeInventory(): Flow<InventorySnapshot> =
         combine(areaDao.observeAll(), locationDao.observeAll(), itemDao.observeAll()) { areas, locations, items ->
@@ -95,9 +97,9 @@ class InventoryRepository(
             )
         }
 
-    suspend fun refreshSnapshot(): Result<Unit> {
+    suspend fun refreshSnapshot(householdId: String? = null): Result<Unit> {
         val response = try {
-            api.snapshot()
+            api.snapshot(householdId)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -108,10 +110,57 @@ class InventoryRepository(
             )
         }
         replaceServerData(body.data)
-        currentHouseholdId = body.data.household?.id
+        val loadedHouseholdId = body.data.household?.id
+        currentHouseholdId = loadedHouseholdId
+        if (loadedHouseholdId != null) {
+            syncStateDao.put(
+                SyncStateEntity(
+                    key = KEY_CURRENT_HOUSEHOLD_ID,
+                    value = loadedHouseholdId,
+                ),
+            )
+        }
         syncStateDao.put(SyncStateEntity(KEY_LAST_SYNC, System.currentTimeMillis().toString()))
         return Result.success(Unit)
     }
+
+    suspend fun loadHouseholds(): Result<List<HouseholdDto>> {
+        val response = try {
+            api.households()
+        } catch (_: Exception) {
+            return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
+        }
+        val body = response.body()
+
+        if (!response.isSuccessful || body?.ok != true || body.data == null) {
+            return Result.failure(
+                IllegalStateException(
+                    parseErrorMessage(response.errorBody()) ?: body?.message ?: "加载家庭列表失败",
+                ),
+            )
+        }
+
+        val loaded = body.data
+        households = loaded
+        val saved = syncStateDao.get(KEY_CURRENT_HOUSEHOLD_ID)
+        currentHouseholdId = when {
+            saved != null && loaded.any { it.id == saved } -> saved
+            currentHouseholdId != null && loaded.any { it.id == currentHouseholdId } ->
+                currentHouseholdId
+            else -> loaded.firstOrNull()?.id
+        }
+        return Result.success(loaded)
+    }
+
+    suspend fun switchHousehold(householdId: String): Result<Unit> {
+        if (households.isNotEmpty() && households.none { it.id == householdId }) {
+            return Result.failure(IllegalStateException("无权访问该家庭"))
+        }
+
+        return refreshSnapshot(householdId)
+    }
+
+    suspend fun selectedHouseholdId(): String? = currentHouseholdId
 
     suspend fun createInvitationLink(): Result<String> {
         val householdId = currentHouseholdId
@@ -779,5 +828,6 @@ class InventoryRepository(
 
     private companion object {
         const val KEY_LAST_SYNC = "last_sync"
+        const val KEY_CURRENT_HOUSEHOLD_ID = "current_household_id"
     }
 }

@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,8 @@ import com.homeinventory.app.ui.theme.Surface
 
 @Composable
 fun TopBar(
+    householdName: String?,
+    onSwitchHousehold: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onBackup: () -> Unit,
@@ -43,7 +46,9 @@ fun TopBar(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onSwitchHousehold),
         ) {
             Box(
                 modifier = Modifier
@@ -61,11 +66,16 @@ fun TopBar(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "家中清单",
+                text = householdName ?: "家中清单",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "▾",
+                fontSize = 12.sp,
             )
         }
         TextButton(onClick = onDraftsClick) {

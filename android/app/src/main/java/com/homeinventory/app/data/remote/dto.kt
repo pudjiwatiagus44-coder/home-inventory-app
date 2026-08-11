@@ -27,6 +27,12 @@ data class RemoteHouseholdDto(
     val name: String,
 )
 
+data class HouseholdDto(
+    val id: String,
+    val name: String,
+    val role: String? = null,
+)
+
 data class RemoteAreaDto(
     val id: String,
     val name: String,

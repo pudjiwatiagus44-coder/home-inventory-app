@@ -35,6 +35,7 @@
 - 2026-08-06 用户确认将家庭成员共享纳入当前范围，邀请方式为“微信链接 + 对方自主申请 + 房主批准”，链接落地页含 Android 内测 APK 下载入口。
 - 产品、架构、数据库、验收真源已更新；本实施计划已建立。
 - 2026-08-06 已进入实施：用户确认实施目标改为自托管部署（`homestorag.xyz`），Supabase 不作为实施目标。已完成 `supabase/migrations/202608060001_family_sharing.sql`（Supabase 历史参考）、自托管 SQL（`dev-docs/sql/family_sharing_self_hosted.sql`）、服务端 family repository/service、family API routes、链接落地页 `/join/<token>`、家庭设置面板和当前家庭切换器。
+- 2026-08-10 修复 Android 共享成员看不到主账户内容：根因是 Android snapshot 未携带所选 householdId，默认只读自己的空家庭；已实现 Android 当前家庭切换器（点顶部家庭名称切换、记住上次选择、snapshot 携带 householdId）。
 - Android 内测版提供房主邀请分享能力（App 内生成邀请链接并通过系统分享/复制发给家人），申请与审批以 Web 端为主；APK 下载地址为部署配置项。
 
 ## 实施状态（2026-08-06）

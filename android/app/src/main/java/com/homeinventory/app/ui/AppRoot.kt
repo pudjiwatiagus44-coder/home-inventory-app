@@ -90,6 +90,9 @@ fun AppRoot() {
                     inventory = repository.observeInventory(),
                     syncPending = repository::syncPendingOperations,
                     createInvitation = repository::createInvitationLink,
+                    loadHouseholds = repository::loadHouseholds,
+                    switchHousehold = repository::switchHousehold,
+                    selectedHouseholdId = repository::selectedHouseholdId,
                     loadJoinRequests = repository::listJoinRequests,
                     approveJoinRequest = repository::approveJoinRequest,
                     rejectJoinRequest = repository::rejectJoinRequest,
@@ -137,7 +140,11 @@ fun AppRoot() {
         viewModel.checkForUpdates()
 
         if (isLoggedIn) {
-            scope.launch { repository.refreshSnapshot() }
+            scope.launch {
+                repository.loadHouseholds()
+                repository.refreshSnapshot()
+                viewModel.refreshHouseholds()
+            }
             scope.launch {
                 SyncEngine(
                     queue = DaoPendingOperationQueue(app.database.pendingOperationDao()),
@@ -204,7 +211,11 @@ fun AppRoot() {
                                 password = ""
                                 persistRememberedEmail()
                                 isLoggedIn = true
-                                scope.launch { repository.refreshSnapshot() }
+                                scope.launch {
+                                    repository.loadHouseholds()
+                                    repository.refreshSnapshot()
+                                    viewModel.refreshHouseholds()
+                                }
                             }
                             .onFailure { error ->
                                 errorMessage = error.message ?: "登录失败"
@@ -221,7 +232,11 @@ fun AppRoot() {
                                 password = ""
                                 persistRememberedEmail()
                                 isLoggedIn = true
-                                scope.launch { repository.refreshSnapshot() }
+                                scope.launch {
+                                    repository.loadHouseholds()
+                                    repository.refreshSnapshot()
+                                    viewModel.refreshHouseholds()
+                                }
                             }
                             .onFailure { error ->
                                 errorMessage = error.message ?: "注册失败"

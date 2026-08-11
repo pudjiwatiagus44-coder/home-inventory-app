@@ -218,7 +218,7 @@ auth.users
 - 家庭切换器的“当前家庭”选择只是前端状态；真正可访问哪些家庭由 RLS 依据 membership 决定，前端不能靠切换器越权读取其他家庭。
 - 现有 areas/locations/items 的 member-only RLS 天然支持共享，无需改动；需要新增的是 `household_invitations`（邀请链接）、`household_join_requests`（加入申请）、成员管理 RLS 以及提交申请/批准申请的安全函数。
 - 实施路线（2026-08-06 用户确认）：直接在自托管部署（`homestorag.xyz`，自有 PostgreSQL + 自有认证 + 服务端权限校验）上实现并上线；Supabase/RLS 方案仅作为历史设计参考，不以 Supabase 为实施目标。自托管路线的权限由服务端校验兜底（等价于 RLS 设计），数据库表结构与 Supabase 版保持一致。
-- 家庭共享先做 Web/PWA；Android 内测版提供房主邀请分享与申请审批能力（App 内生成邀请链接并通过系统分享/复制发给家人，家人申请后房主在 App 内批准/拒绝），成员管理等仍以 Web 端为主；Android 仍按当前 session 推导的 household 读取数据。
+- 家庭共享先做 Web/PWA；Android 内测版提供房主邀请分享与申请审批能力（App 内生成邀请链接并通过系统分享/复制发给家人，家人申请后房主在 App 内批准/拒绝），成员管理等仍以 Web 端为主；Android 0.5.23 起提供当前家庭切换：启动/登录时加载全部 household，点顶部家庭名称切换，snapshot 请求携带所选 householdId，服务端仍校验 membership。
 
 ## 验证方式
 
@@ -246,12 +246,12 @@ auth.users
 - Android 本地缓存：Room，至少包含 `areas`、`locations`、`items`、`pending_operations`、`sync_state`。
 - Android 安全存储：session/token 使用 Android Keystore 或 EncryptedSharedPreferences；禁止保存明文密码、数据库密码、服务端密钥或真实云密钥。
 - Android 网络层：通过 HTTPS 调用现有 Next.js 认证和库存 API；客户端不得直连 PostgreSQL。
-- 服务端仍根据当前 session 推导 user 和 household；Android 请求不得提交或伪造可信 `householdId`。
+- 服务端仍根据当前 session 推导 user，并按用户选择的 householdId 校验 membership 后读取 household；Android 可以携带“当前家庭”选择，但服务端必须校验该用户确实属于所选家庭，不得信任客户端伪造的 `householdId`。
 - 同步版本依据第一版优先使用服务器返回的 `updatedAt`。更新和删除请求携带客户端操作时看到的基础 `serverUpdatedAt`，服务端发现记录已变化时返回冲突，不允许客户端覆盖较新的服务器数据。
 - 离线新增使用本地临时 id 和 `pending_create` 状态；网络恢复后 Android 自动提交，成功后替换为服务器 id 与最新 `updatedAt`。
 - 离线编辑和删除进入 `pending_operations` 队列；恢复网络后按队列提交，冲突时服务器状态优先，客户端展示需用户重新确认的状态。
 - 第一版同步触发点：登录后、App 启动、手动刷新/同步、网络恢复、在线写入成功后。不做后台长时间同步、推送实时同步或复杂合并 UI。
-- 家庭成员共享先做 Web/PWA（2026-08-06 确认）；Android 内测版包含房主邀请分享与申请审批能力（App 内生成邀请链接并分享/复制，App 内批准/拒绝加入申请），成员管理等以 Web 端为主，服务端权限模型保持兼容，Android 仍按当前 session 推导的 household 读取数据。
+- 家庭成员共享先做 Web/PWA（2026-08-06 确认）；Android 内测版包含房主邀请分享与申请审批能力（App 内生成邀请链接并分享/复制，App 内批准/拒绝加入申请），成员管理等以 Web 端为主，服务端权限模型保持兼容；Android 0.5.23 起包含当前家庭切换器，清单读取携带用户选择的 householdId。
 
 ## 2026-08-07 拍照识别物品架构（Android 内测版先行）
 

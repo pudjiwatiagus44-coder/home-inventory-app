@@ -14,6 +14,7 @@ import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -48,7 +49,12 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun logout(): Response<ApiEnvelope<Unit>> =
         Response.success(ApiEnvelope(ok = true))
 
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+    override suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>> =
+        Response.success(ApiEnvelope(ok = true, data = emptyList()))
+
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
         Response.success(ApiEnvelope(ok = true, data = RemoteDashboardDto()))
 
     override suspend fun syncInventory(request: MobileSyncRequest): Response<ApiEnvelope<MobileSyncResponse>> =

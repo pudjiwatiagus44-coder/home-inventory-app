@@ -13,6 +13,7 @@ import com.homeinventory.app.data.local.SyncStateEntity
 import com.homeinventory.app.data.remote.ApiEnvelope
 import com.homeinventory.app.data.remote.ApkVersionDto
 import com.homeinventory.app.data.remote.CreateInvitationRequest
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.RemoteAreaDto
@@ -161,6 +162,57 @@ class InventoryRepositoryTest {
 
         assertTrue(result.isFailure)
         assertEquals("无法连接服务器，请检查网络", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun refreshSnapshotForSelectedHouseholdSendsHouseholdIdToServer() = runTest {
+        val api = RecordingSnapshotApi()
+        val repository = repositoryWith(api = api)
+
+        val result = repository.refreshSnapshot("household-2")
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastSnapshotHouseholdId)
+    }
+
+    @Test
+    fun loadHouseholdsReturnsAllHouseholdsForCurrentUser() = runTest {
+        val api = HouseholdsApi(
+            listOf(
+                HouseholdDto(id = "household-1", name = "我的家", role = "owner"),
+                HouseholdDto(id = "household-2", name = "共享家庭", role = "member"),
+            ),
+        )
+        val repository = repositoryWith(api = api)
+
+        val result = repository.loadHouseholds()
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrNull()?.size)
+        assertEquals("共享家庭", result.getOrNull()?.get(1)?.name)
+    }
+
+    @Test
+    fun switchHouseholdRefreshesSelectedHouseholdSnapshot() = runTest {
+        val api = RecordingSnapshotApi()
+        val repository = repositoryWith(api = api)
+
+        val result = repository.switchHousehold("household-2")
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastSnapshotHouseholdId)
+    }
+
+    @Test
+    fun afterSwitchingHouseholdInviteTargetsSelectedHousehold() = runTest {
+        val api = RecordingHouseholdApi()
+        val repository = repositoryWith(api = api)
+
+        repository.switchHousehold("household-2")
+        val result = repository.createInvitationLink()
+
+        assertTrue(result.isSuccess)
+        assertEquals("household-2", api.lastCreateInvitationHouseholdId)
     }
 
     @Test
@@ -388,21 +440,87 @@ class InventoryRepositoryTest {
 private class FakeSnapshotApi(
     private val snapshotResponse: Response<ApiEnvelope<RemoteDashboardDto>>,
 ) : TestApiStub() {
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> = snapshotResponse
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> = snapshotResponse
 }
 
 private class FailingSnapshotApi(
     private val error: Throwable,
 ) : TestApiStub() {
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> {
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> {
         throw error
+    }
+}
+
+private class RecordingSnapshotApi : TestApiStub() {
+    var lastSnapshotHouseholdId: String? = null
+
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> {
+        lastSnapshotHouseholdId = householdId
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = "household-2", name = "共享家庭"),
+                ),
+            ),
+        )
+    }
+}
+
+private class HouseholdsApi(
+    private val households: List<HouseholdDto>,
+) : TestApiStub() {
+    override suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>> =
+        Response.success(ApiEnvelope(ok = true, data = households))
+}
+
+private class RecordingHouseholdApi : TestApiStub() {
+    var lastSnapshotHouseholdId: String? = null
+    var lastCreateInvitationHouseholdId: String? = null
+
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> {
+        lastSnapshotHouseholdId = householdId
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = RemoteDashboardDto(
+                    household = RemoteHouseholdDto(id = householdId ?: "household-1", name = "家庭"),
+                ),
+            ),
+        )
+    }
+
+    override suspend fun createInvitation(
+        request: CreateInvitationRequest,
+    ): Response<ApiEnvelope<InvitationLinkDto>> {
+        lastCreateInvitationHouseholdId = request.householdId
+        return Response.success(
+            ApiEnvelope(
+                ok = true,
+                data = InvitationLinkDto(
+                    id = "link-1",
+                    token = "token_1",
+                    url = "https://homestorag.xyz/join/token_1",
+                ),
+            ),
+        )
     }
 }
 
 private class RequestsApi(
     private val requests: List<JoinRequestDto>,
 ) : TestApiStub() {
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
         Response.success(
             ApiEnvelope(
                 ok = true,
@@ -417,7 +535,9 @@ private class RequestsApi(
 }
 
 private class RejectingApprovalApi : TestApiStub() {
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
         Response.success(
             ApiEnvelope(
                 ok = true,
@@ -472,7 +592,9 @@ private class RecordingApi : TestApiStub() {
 }
 
 private class RejectingInvitationApi : TestApiStub() {
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
         Response.success(
             ApiEnvelope(
                 ok = true,
@@ -495,7 +617,9 @@ private class RecordingMemberApi : TestApiStub() {
     var updatedRoleHouseholdId: String? = null
     var removedHouseholdId: String? = null
 
-    override suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>> =
+    override suspend fun snapshot(
+        householdId: String?,
+    ): Response<ApiEnvelope<RemoteDashboardDto>> =
         Response.success(
             ApiEnvelope(
                 ok = true,

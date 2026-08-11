@@ -984,3 +984,13 @@
 - 修复：更新检查移至 `AppRoot` 启动时执行（`LaunchedEffect(isLoggedIn)` 在应用启动与登录状态变化时触发，未登录也会检查）；更新弹窗提升到 `AppRoot` 层级，登录页与清单页均显示；`DashboardHost` 移除重复的检查与弹窗（避免双弹窗）。
 - 验证：Android 单测 65 个全过（含 `checkForUpdates` 三个既有用例：新版本提示/版本相同静默/检查失败静默），`assembleDebug` 通过；0.5.22 / code 28（20,164,031 字节）已上传并重启服务，`https://homestorag.xyz/apk/version.json` 显示 v0.5.22/code 28。
 - 待办：真机验收未登录启动时弹出更新提示。
+
+## 2026-08-10 Android 共享成员读取主账户内容修复证据
+
+- 现象：被邀请加入家庭的共享成员登录 Android 后，清单为空，看不到房主（主账户）家庭里的区域/位置/物品。
+- 根因：Android `InventoryRepository.refreshSnapshot()` 调用 `api.snapshot()` 时没有携带 `householdId`，`HomeInventoryApi.snapshot()` 也没有该参数；服务端 snapshot 路由在未传 `householdId` 时只返回当前用户第一个默认家庭，因此共享成员始终读到自己的空默认家庭。Web 端已有家庭切换器，但 Android 端缺失。
+- 修复：`HomeInventoryApi.snapshot()` 增加 `@Query("householdId")`；`InventoryRepository` 增加 `loadHouseholds()`/`switchHousehold()`/`selectedHouseholdId()`，snapshot 携带用户选择的家庭并用 `sync_state` 记住上次选择；`DashboardViewModel` 暴露家庭列表/当前家庭状态；顶部家庭名称可点击打开切换弹窗；启动/登录时先加载家庭列表再刷新 snapshot；服务端 snapshot 路由保持对 `householdId` 的 membership 校验。
+- 测试：Android 新增 7 个相关单测（snapshot 携带所选家庭、加载家庭列表、切换家庭、切换后邀请使用所选家庭、ViewModel 家庭状态与失败提示、恢复仓库所选家庭）；`testDebugUnitTest` 全通过；`assembleDebug` 通过。服务端新增 snapshot 路由转发 `householdId` 测试；`npx vitest run`（排除 2 个需本机 PostgreSQL 的集成文件）51 文件 / 339 测试通过；`npx eslint src` 通过；`npm run build` 通过（构建时因本机代理无法访问 Google Fonts，清空代理环境变量后成功）。
+- 真源同步：`dev-docs/project-brief.md`、`dev-docs/architecture.md`、`dev-docs/stages/family-sharing.md`、`dev-docs/user-manual.md` 已更新 Android 当前家庭切换/查看共享家庭清单。
+- 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.23 / code 29 APK（20,164,031 字节）到服务器 `/opt/home-inventory-app/public/apk/`；systemd 重启后服务 active；`https://homestorag.xyz/apk/version.json` 显示 v0.5.23/code 29/size 20,164,031，APK URL 返回 200。
+- 待办：真机验收家庭成员切换到共享家庭后能看到房主清单；Android 写接口与离线同步跨家庭的 `householdId` 支持仍属下一轮范围，本轮不声明共享家庭写入已完整支持。

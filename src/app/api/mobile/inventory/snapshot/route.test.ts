@@ -39,4 +39,39 @@ describe("GET /api/mobile/inventory/snapshot", () => {
     });
     expect(response.status).toBe(200);
   });
+
+  it("forwards the selected householdId to the inventory repository", async () => {
+    let receivedHouseholdId: string | undefined;
+    const { GET } = createMobileSnapshotHandlers({
+      authService: {
+        getCurrentUser: async () => ({
+          userId: "user-1",
+          email: "user@example.com",
+        }),
+      },
+      inventoryRepository: {
+        getDashboardForUser: async (userId, householdId) => {
+          receivedHouseholdId = householdId;
+          return {
+            household: { id: householdId ?? "household-1", name: `Home for ${userId}` },
+            areas: [],
+            locations: [],
+            items: [],
+          };
+        },
+      },
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost/api/mobile/inventory/snapshot?householdId=household-2",
+        {
+          headers: { cookie: "home_inventory_session=session-token" },
+        },
+      ),
+    );
+
+    expect(receivedHouseholdId).toBe("household-2");
+    expect(response.status).toBe(200);
+  });
 });

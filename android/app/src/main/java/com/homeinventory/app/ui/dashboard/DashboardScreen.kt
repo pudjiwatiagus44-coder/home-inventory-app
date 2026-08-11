@@ -21,12 +21,16 @@ import com.homeinventory.app.ui.dashboard.components.LocationStrip
 import com.homeinventory.app.ui.dashboard.components.SearchBar
 import com.homeinventory.app.ui.dashboard.components.TopBar
 import com.homeinventory.app.data.repository.InventorySnapshot
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.ui.theme.Background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
+    households: List<HouseholdDto>,
+    currentHouseholdId: String?,
+    onSwitchHousehold: () -> Unit,
     onSearchChange: (String) -> Unit,
     onSelectArea: (String?) -> Unit,
     onSelectLocation: (String?) -> Unit,
@@ -57,6 +61,8 @@ fun DashboardScreen(
         containerColor = Background,
         topBar = {
             TopBar(
+                householdName = households.firstOrNull { it.id == currentHouseholdId }?.name,
+                onSwitchHousehold = onSwitchHousehold,
                 onDraftsClick = onDraftsClick,
                 draftCount = draftCount,
                 onBackup = onBackup,

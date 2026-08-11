@@ -10,6 +10,7 @@ import com.homeinventory.app.data.remote.ImportCommitRequest
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.remote.ImportSummaryDto
 import com.homeinventory.app.data.remote.InvitationLinkDto
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.ItemCreateRequest
 import com.homeinventory.app.data.remote.ItemUpdateRequest
 import com.homeinventory.app.data.remote.JoinRequestDto
@@ -65,8 +66,13 @@ interface HomeInventoryApi {
     @POST("api/auth/logout")
     suspend fun logout(): Response<ApiEnvelope<Unit>>
 
+    @GET("api/family/households")
+    suspend fun households(): Response<ApiEnvelope<List<HouseholdDto>>>
+
     @GET("api/mobile/inventory/snapshot")
-    suspend fun snapshot(): Response<ApiEnvelope<RemoteDashboardDto>>
+    suspend fun snapshot(
+        @Query("householdId") householdId: String? = null,
+    ): Response<ApiEnvelope<RemoteDashboardDto>>
 
     @POST("api/mobile/inventory/sync")
     suspend fun syncInventory(@Body request: MobileSyncRequest): Response<ApiEnvelope<MobileSyncResponse>>

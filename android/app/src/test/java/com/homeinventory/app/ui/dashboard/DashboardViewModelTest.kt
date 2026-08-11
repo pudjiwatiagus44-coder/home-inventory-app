@@ -4,6 +4,7 @@ import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.data.repository.RecognitionDraft
 import com.homeinventory.app.data.repository.DraftGateway
 import com.homeinventory.app.data.remote.ApkVersionDto
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.local.DraftStatus
@@ -421,6 +422,106 @@ class DashboardViewModelTest {
 
             assertTrue(result.isFailure)
             assertEquals("识别失败", result.exceptionOrNull()?.message)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun householdsStateExposesLoadedHouseholds() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            var switchedHouseholdId: String? = null
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadHouseholds = {
+                    Result.success(
+                        listOf(
+                            HouseholdDto(id = "household-1", name = "我的家", role = "owner"),
+                            HouseholdDto(id = "household-2", name = "共享家庭", role = "member"),
+                        ),
+                    )
+                },
+                switchHousehold = { householdId ->
+                    switchedHouseholdId = householdId
+                    Result.success(Unit)
+                },
+            )
+            advanceUntilIdle()
+
+            viewModel.refreshHouseholds()
+            advanceUntilIdle()
+
+            assertEquals(2, viewModel.householdsState().value.households.size)
+            assertEquals("household-1", viewModel.householdsState().value.currentHouseholdId)
+
+            viewModel.switchToHousehold("household-2")
+            advanceUntilIdle()
+
+            assertEquals("household-2", switchedHouseholdId)
+            assertEquals("household-2", viewModel.householdsState().value.currentHouseholdId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun refreshHouseholdsKeepsRepositorySelectedHousehold() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadHouseholds = {
+                    Result.success(
+                        listOf(
+                            HouseholdDto(id = "household-1", name = "我的家", role = "owner"),
+                            HouseholdDto(id = "household-2", name = "共享家庭", role = "member"),
+                        ),
+                    )
+                },
+                selectedHouseholdId = { "household-2" },
+            )
+            advanceUntilIdle()
+
+            viewModel.refreshHouseholds()
+            advanceUntilIdle()
+
+            assertEquals("household-2", viewModel.householdsState().value.currentHouseholdId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun switchToHouseholdShowsErrorWhenSwitchFails() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = DashboardViewModel(
+                inventory = MutableStateFlow(InventorySnapshot()),
+                syncPending = { Result.success(Unit) },
+                loadHouseholds = {
+                    Result.success(
+                        listOf(
+                            HouseholdDto(id = "household-1", name = "我的家", role = "owner"),
+                            HouseholdDto(id = "household-2", name = "共享家庭", role = "member"),
+                        ),
+                    )
+                },
+                switchHousehold = {
+                    Result.failure(IllegalStateException("无权访问该家庭"))
+                },
+            )
+            advanceUntilIdle()
+            viewModel.refreshHouseholds()
+            advanceUntilIdle()
+
+            viewModel.switchToHousehold("household-2")
+            advanceUntilIdle()
+
+            assertEquals("无权访问该家庭", viewModel.householdsState().value.errorMessage)
+            assertEquals("household-1", viewModel.householdsState().value.currentHouseholdId)
         } finally {
             Dispatchers.resetMain()
         }

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homeinventory.app.data.remote.ApkVersionDto
+import com.homeinventory.app.data.remote.HouseholdDto
 import com.homeinventory.app.data.remote.JoinRequestDto
 import com.homeinventory.app.data.remote.MemberDto
 import com.homeinventory.app.data.local.DraftEntity
@@ -65,6 +66,13 @@ data class InviteUiState(
     val errorMessage: String? = null,
 )
 
+data class HouseholdsUiState(
+    val households: List<HouseholdDto> = emptyList(),
+    val currentHouseholdId: String? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+)
+
 data class JoinRequestsUiState(
     val requests: List<JoinRequestDto> = emptyList(),
     val isLoading: Boolean = false,
@@ -114,6 +122,13 @@ class DashboardViewModel(
     private val createInvitation: suspend () -> Result<String> = {
         Result.failure(IllegalStateException("邀请功能不可用"))
     },
+    private val loadHouseholds: suspend () -> Result<List<HouseholdDto>> = {
+        Result.failure(IllegalStateException("家庭功能不可用"))
+    },
+    private val switchHousehold: suspend (String) -> Result<Unit> = {
+        Result.failure(IllegalStateException("家庭功能不可用"))
+    },
+    private val selectedHouseholdId: suspend () -> String? = { null },
     private val loadJoinRequests: suspend () -> Result<List<JoinRequestDto>> = {
         Result.success(emptyList())
     },
@@ -160,6 +175,7 @@ class DashboardViewModel(
     private val invite = MutableStateFlow(InviteUiState())
     private val joinRequests = MutableStateFlow(JoinRequestsUiState())
     private val members = MutableStateFlow(MembersUiState())
+    private val households = MutableStateFlow(HouseholdsUiState())
     private val updateCheck = MutableStateFlow(UpdateCheckUiState())
     private val drafts = MutableStateFlow(DraftsUiState())
     private val batchImport = MutableStateFlow(BatchImportUiState())
@@ -351,6 +367,62 @@ class DashboardViewModel(
     }
 
     fun invitations(): StateFlow<InviteUiState> = invite
+
+    fun householdsState(): StateFlow<HouseholdsUiState> = households
+
+    fun refreshHouseholds() {
+        viewModelScope.launch {
+            households.value = households.value.copy(
+                isLoading = true,
+                errorMessage = null,
+            )
+            loadHouseholds()
+                .onSuccess { list ->
+                    val selected = selectedHouseholdId()
+                        ?.takeIf { id -> list.any { it.id == id } }
+                        ?: households.value.currentHouseholdId
+                        ?.takeIf { id -> list.any { it.id == id } }
+                        ?: list.firstOrNull()?.id
+                    households.value = HouseholdsUiState(
+                        households = list,
+                        currentHouseholdId = selected,
+                    )
+                }
+                .onFailure { error ->
+                    households.value = households.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "加载家庭列表失败",
+                    )
+                }
+        }
+    }
+
+    fun switchToHousehold(householdId: String) {
+        if (households.value.currentHouseholdId == householdId) {
+            return
+        }
+
+        viewModelScope.launch {
+            households.value = households.value.copy(
+                isLoading = true,
+                errorMessage = null,
+            )
+            switchHousehold(householdId)
+                .onSuccess {
+                    households.value = households.value.copy(
+                        isLoading = false,
+                        currentHouseholdId = householdId,
+                    )
+                    refreshHouseholds()
+                }
+                .onFailure { error ->
+                    households.value = households.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "切换家庭失败",
+                    )
+                }
+        }
+    }
 
     fun generateInvitationLink() {
         if (invite.value.isGenerating) {
