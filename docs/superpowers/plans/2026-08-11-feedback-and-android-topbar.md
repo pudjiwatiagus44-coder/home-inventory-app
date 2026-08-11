@@ -978,7 +978,7 @@ git add android/app/src/main/java/com/homeinventory/app/ui/dashboard/dialogs/Hel
 git commit -m "feat: add feedback form to android help dialog"
 ```
 
-### Task 7: Android top bar arrows and settings menu
+### Task 7: Android top bar household switch button and settings menu
 
 **Files:**
 - Modify: `android/app/src/main/java/com/homeinventory/app/ui/dashboard/DashboardViewModel.kt`
@@ -987,79 +987,7 @@ git commit -m "feat: add feedback form to android help dialog"
 - Modify: `android/app/src/main/java/com/homeinventory/app/ui/dashboard/components/TopBar.kt`
 - Test: `android/app/src/test/java/com/homeinventory/app/ui/dashboard/DashboardViewModelTest.kt`
 
-- [ ] **Step 1: Write the failing tests**
-
-Add to `DashboardViewModelTest.kt`:
-
-```kotlin
-    @Test
-    fun switchToRelativeHouseholdCyclesForwardAndBackward() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        try {
-            var switched: String? = null
-            val viewModel = DashboardViewModel(
-                inventory = MutableStateFlow(InventorySnapshot()),
-                syncPending = { Result.success(Unit) },
-                loadHouseholds = {
-                    Result.success(
-                        listOf(
-                            HouseholdDto("h1", "我的家", "owner"),
-                            HouseholdDto("h2", "爸妈家", "member"),
-                        ),
-                    )
-                },
-                selectedHouseholdId = { "h1" },
-                switchHousehold = { id ->
-                    switched = id
-                    Result.success(Unit)
-                },
-            )
-            advanceUntilIdle()
-            viewModel.refreshHouseholds()
-            advanceUntilIdle()
-
-            viewModel.switchToRelativeHousehold(1)
-            advanceUntilIdle()
-            assertEquals("h2", switched)
-
-            viewModel.switchToRelativeHousehold(1)
-            advanceUntilIdle()
-            assertEquals("h1", switched)
-
-            viewModel.switchToRelativeHousehold(-1)
-            advanceUntilIdle()
-            assertEquals("h2", switched)
-        } finally {
-            Dispatchers.resetMain()
-        }
-    }
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run from `android`: `.\gradlew.bat testDebugUnitTest --tests "com.homeinventory.app.ui.dashboard.DashboardViewModelTest.switchToRelativeHouseholdCyclesForwardAndBackward" --console=plain`
-Expected: FAIL, unresolved `switchToRelativeHousehold`.
-
-- [ ] **Step 3: Implement ViewModel relative switching**
-
-In `DashboardViewModel.kt`, add:
-
-```kotlin
-    fun switchToRelativeHousehold(offset: Int) {
-        val list = households.value.households
-        if (list.size < 2) return
-
-        val current = households.value.currentHouseholdId
-        val currentIndex = list.indexOfFirst { it.id == current }
-            .takeIf { it >= 0 }
-            ?: 0
-        val nextIndex =
-            (currentIndex + offset).mod(list.size)
-        switchToHousehold(list[nextIndex].id)
-    }
-```
-
-- [ ] **Step 4: Update TopBar**
+- [ ] **Step 1: Update TopBar**
 
 Replace `TopBar.kt` with the new layout:
 
@@ -1067,9 +995,7 @@ Replace `TopBar.kt` with the new layout:
 @Composable
 fun TopBar(
     householdName: String?,
-    canSwitchHousehold: Boolean,
-    onPreviousHousehold: () -> Unit,
-    onNextHousehold: () -> Unit,
+    onSwitchHousehold: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onBackup: () -> Unit,
@@ -1115,14 +1041,7 @@ fun TopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(
-            onClick = onPreviousHousehold,
-            enabled = canSwitchHousehold,
-        ) { Text("◀") }
-        TextButton(
-            onClick = onNextHousehold,
-            enabled = canSwitchHousehold,
-        ) { Text("▶") }
+        TextButton(onClick = onSwitchHousehold) { Text("⇄ 切换") }
         TextButton(onClick = onDraftsClick) {
             Text("草稿")
             if (draftCount > 0) {
@@ -1182,14 +1101,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 ```
 
-- [ ] **Step 5: Update DashboardScreen and DashboardHost**
+- [ ] **Step 2: Update DashboardScreen and DashboardHost**
 
 In `DashboardScreen.kt`, add params:
 
 ```kotlin
-    canSwitchHousehold: Boolean,
-    onPreviousHousehold: () -> Unit,
-    onNextHousehold: () -> Unit,
+    onSwitchHousehold: () -> Unit,
 ```
 
 Pass to `TopBar`.
@@ -1197,21 +1114,22 @@ Pass to `TopBar`.
 In `DashboardHost.kt`, compute:
 
 ```kotlin
-        canSwitchHousehold = householdsState.households.size > 1,
-        onPreviousHousehold = { viewModel.switchToRelativeHousehold(-1) },
-        onNextHousehold = { viewModel.switchToRelativeHousehold(1) },
+        onSwitchHousehold = {
+            showHouseholdSwitcher = true
+            viewModel.refreshHouseholds()
+        },
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [ ] **Step 3: Run tests**
 
 Run from `android`: `.\gradlew.bat testDebugUnitTest --console=plain`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add android/app/src/main/java/com/homeinventory/app/ui/dashboard android/app/src/test/java/com/homeinventory/app/ui/dashboard/DashboardViewModelTest.kt
-git commit -m "feat: add household arrows and settings menu to android top bar"
+git add android/app/src/main/java/com/homeinventory/app/ui/dashboard
+git commit -m "feat: add household switch button and settings menu to android top bar"
 ```
 
 ### Task 8: Web feedback client and help dialog
