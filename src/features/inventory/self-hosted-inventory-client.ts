@@ -107,6 +107,58 @@ export function createSelfHostedInventoryClient({
       );
     },
 
+    uploadAreaPhoto(areaId: string, file: File) {
+      const formData = new FormData();
+      formData.append("file", file);
+      return request<{ photoKey: string }>(
+        `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+        { method: "PUT", body: formData },
+      );
+    },
+
+    deleteAreaPhoto(areaId: string) {
+      return request(
+        `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+        jsonInit("DELETE"),
+      );
+    },
+
+    async getAreaPhoto(areaId: string) {
+      const response = await fetchImpl(
+        `/api/inventory/areas/${encodeURIComponent(areaId)}/photo`,
+      );
+      if (!response.ok) {
+        throw new Error("加载区域照片失败");
+      }
+      return response.blob();
+    },
+
+    uploadLocationPhoto(locationId: string, file: File) {
+      const formData = new FormData();
+      formData.append("file", file);
+      return request<{ photoKey: string }>(
+        `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+        { method: "PUT", body: formData },
+      );
+    },
+
+    deleteLocationPhoto(locationId: string) {
+      return request(
+        `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+        jsonInit("DELETE"),
+      );
+    },
+
+    async getLocationPhoto(locationId: string) {
+      const response = await fetchImpl(
+        `/api/inventory/locations/${encodeURIComponent(locationId)}/photo`,
+      );
+      if (!response.ok) {
+        throw new Error("加载位置照片失败");
+      }
+      return response.blob();
+    },
+
     previewImport(file: File) {
       const formData = new FormData();
       formData.append("file", file);
