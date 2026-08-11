@@ -13,6 +13,18 @@ export function createThumbnail(
   source: Buffer,
   maxDimension = 200,
 ): Buffer {
+  return resizeJpeg(source, maxDimension, 70);
+}
+
+export function createMediumPhoto(source: Buffer): Buffer {
+  return resizeJpeg(source, 1280, 80);
+}
+
+export function resizeJpeg(
+  source: Buffer,
+  maxDimension = 1280,
+  quality = 80,
+): Buffer {
   const pixels = decode(source, {
     useTArray: true,
     maxMemoryUsageInMB: 256,
@@ -38,7 +50,7 @@ export function createThumbnail(
 
   const encoded = encode(
     { data: resized, width: targetWidth, height: targetHeight },
-    70,
+    quality,
   );
   return Buffer.from(encoded.data);
 }

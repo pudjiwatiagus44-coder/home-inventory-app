@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decode, encode } from "jpeg-js";
 
-import { createThumbnail, isJpeg } from "./thumbnail";
+import { createMediumPhoto, createThumbnail, isJpeg } from "./thumbnail";
 
 function makeJpeg(width: number, height: number) {
   const data = new Uint8Array(width * height * 4);
@@ -36,5 +36,14 @@ describe("thumbnail", () => {
 
     expect(pixels.width).toBe(100);
     expect(pixels.height).toBe(80);
+  });
+
+  it("creates a 1280px medium photo", () => {
+    const medium = createMediumPhoto(makeJpeg(2000, 1000));
+    const pixels = decode(medium, { useTArray: true });
+
+    expect(pixels.width).toBe(1280);
+    expect(pixels.height).toBe(640);
+    expect(isJpeg(medium)).toBe(true);
   });
 });
