@@ -68,6 +68,7 @@ class InventoryRepository(
     private val pendingOperationDao: PendingOperationDao,
     private val syncStateDao: SyncStateDao,
     private val gson: Gson = Gson(),
+    private val currentUserIdProvider: () -> String? = { null },
 ) {
     @Volatile
     private var currentHouseholdId: String? = null
@@ -102,8 +103,10 @@ class InventoryRepository(
         }
 
     suspend fun refreshSnapshot(householdId: String? = null): Result<Unit> {
+        val resolvedHouseholdId =
+            householdId ?: currentHouseholdId ?: syncStateDao.get(currentHouseholdPreferenceKey())
         val response = try {
-            api.snapshot(householdId)
+            api.snapshot(resolvedHouseholdId)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -119,7 +122,7 @@ class InventoryRepository(
         if (loadedHouseholdId != null) {
             syncStateDao.put(
                 SyncStateEntity(
-                    key = KEY_CURRENT_HOUSEHOLD_ID,
+                    key = currentHouseholdPreferenceKey(),
                     value = loadedHouseholdId,
                 ),
             )
@@ -146,7 +149,7 @@ class InventoryRepository(
 
         val loaded = body.data
         households = loaded
-        val saved = syncStateDao.get(KEY_CURRENT_HOUSEHOLD_ID)
+        val saved = syncStateDao.get(currentHouseholdPreferenceKey())
         currentHouseholdId = when {
             saved != null && loaded.any { it.id == saved } -> saved
             currentHouseholdId != null && loaded.any { it.id == currentHouseholdId } ->
@@ -233,7 +236,12 @@ class InventoryRepository(
         households = households.filterNot { it.id == created.id } +
             HouseholdDto(id = created.id, name = created.name, role = "owner")
         currentHouseholdId = created.id
-        syncStateDao.put(SyncStateEntity(KEY_CURRENT_HOUSEHOLD_ID, created.id))
+        syncStateDao.put(
+            SyncStateEntity(
+                currentHouseholdPreferenceKey(),
+                created.id,
+            ),
+        )
         return refreshSnapshot(created.id)
     }
 
@@ -974,8 +982,16 @@ class InventoryRepository(
         }
     }
 
+    private fun currentHouseholdPreferenceKey(): String {
+        val userId = currentUserIdProvider()
+        return if (userId.isNullOrBlank()) {
+            "current_household_id"
+        } else {
+            "current_household_id_$userId"
+        }
+    }
+
     private companion object {
         const val KEY_LAST_SYNC = "last_sync"
-        const val KEY_CURRENT_HOUSEHOLD_ID = "current_household_id"
     }
 }

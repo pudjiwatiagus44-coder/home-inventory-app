@@ -64,6 +64,7 @@ fun AppRoot() {
             itemDao = app.database.itemDao(),
             pendingOperationDao = app.database.pendingOperationDao(),
             syncStateDao = app.database.syncStateDao(),
+            currentUserIdProvider = sessionStore::userId,
         )
     }
     val draftRepository = remember {

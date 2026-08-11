@@ -23,4 +23,13 @@ class SessionStoreTest {
 
         assertNull(store.sessionCookie())
     }
+
+    @Test
+    fun storesUserIdForHouseholdPreferenceScoping() {
+        val store = InMemorySessionStore()
+
+        store.saveUserId("user-1")
+
+        assertEquals("user-1", store.userId())
+    }
 }
