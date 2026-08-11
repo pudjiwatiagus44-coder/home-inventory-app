@@ -2657,10 +2657,7 @@ export function AppDashboard({
           isOwner={
             households.find(
               (household) => household.id === state.summary.householdId,
-            )?.role === "owner" ||
-            households.find(
-              (household) => household.id === state.summary.householdId,
-            )?.role === "member"
+            )?.role === "owner"
           }
           client={
             selfHostedUser

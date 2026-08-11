@@ -236,7 +236,7 @@ private fun HouseholdDropdownRow(
 
 private fun householdRoleLabel(role: String): String = when (role) {
     "owner" -> "房主"
-    "member" -> "管理"
+    "member" -> "成员"
     "contributor" -> "新增"
     "readonly" -> "只读"
     else -> "成员"

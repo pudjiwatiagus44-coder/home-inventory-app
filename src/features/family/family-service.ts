@@ -40,17 +40,6 @@ export function createFamilyService({
     }
   }
 
-  async function assertCanManageHousehold(
-    userId: string,
-    householdId: string,
-  ) {
-    const role = await repository.getHouseholdMemberRole(userId, householdId);
-
-    if (role !== "owner" && role !== "member") {
-      throw new AuthorizationError("只有房主或管理成员可以管理邀请和授权");
-    }
-  }
-
   async function assertMember(userId: string, householdId: string) {
     const isMember = await repository.isHouseholdMember(userId, householdId);
 
@@ -92,7 +81,7 @@ export function createFamilyService({
       const grants = normalizeInvitationGrants(input);
 
       for (const grant of grants) {
-        await assertCanManageHousehold(input.userId, grant.householdId);
+        await assertOwner(input.userId, grant.householdId);
       }
 
       const now = input.now ?? new Date();
@@ -133,10 +122,10 @@ export function createFamilyService({
 
       if (grants.length > 0) {
         for (const grant of grants) {
-          await assertCanManageHousehold(input.userId, grant.householdId);
+          await assertOwner(input.userId, grant.householdId);
         }
       } else {
-        await assertCanManageHousehold(input.userId, link.household_id);
+        await assertOwner(input.userId, link.household_id);
       }
       await repository.deleteInvitationLink(input.linkId);
     },
@@ -145,7 +134,7 @@ export function createFamilyService({
       userId: string;
       householdId: string;
     }): Promise<InvitationLinkRow[]> {
-      await assertCanManageHousehold(input.userId, input.householdId);
+      await assertOwner(input.userId, input.householdId);
       return repository.listInvitationLinks(input.householdId);
     },
 
@@ -183,7 +172,7 @@ export function createFamilyService({
       userId: string;
       householdId: string;
     }): Promise<FamilyJoinRequestRow[]> {
-      await assertCanManageHousehold(input.userId, input.householdId);
+      await assertOwner(input.userId, input.householdId);
       return repository.listJoinRequests(input.householdId);
     },
 
@@ -202,7 +191,7 @@ export function createFamilyService({
         : [{ householdId: pending.householdId, role: "member" as const }];
 
       for (const grant of grants) {
-        await assertCanManageHousehold(input.userId, grant.householdId);
+        await assertOwner(input.userId, grant.householdId);
       }
 
       await repository.approveJoinRequest(input.requestId, input.userId);
@@ -225,7 +214,7 @@ export function createFamilyService({
         throw new FamilyJoinRequestNotFoundError();
       }
 
-      await assertCanManageHousehold(input.userId, pending.householdId);
+      await assertOwner(input.userId, pending.householdId);
       await repository.rejectJoinRequest(input.requestId, input.userId);
     },
 
@@ -233,7 +222,7 @@ export function createFamilyService({
       userId: string;
       householdId: string;
     }): Promise<FamilyMemberRow[]> {
-      await assertMember(input.userId, input.householdId);
+      await assertOwner(input.userId, input.householdId);
       return repository.listMembers(input.householdId);
     },
 
@@ -242,7 +231,7 @@ export function createFamilyService({
       householdId: string;
       targetUserId: string;
     }): Promise<void> {
-      await assertCanManageHousehold(input.userId, input.householdId);
+      await assertOwner(input.userId, input.householdId);
 
       if (input.targetUserId === input.userId) {
         throw new AuthorizationError("不能移除自己");
@@ -260,7 +249,7 @@ export function createFamilyService({
       targetUserId: string;
       role: Exclude<HouseholdRole, "owner">;
     }): Promise<void> {
-      await assertCanManageHousehold(input.userId, input.householdId);
+      await assertOwner(input.userId, input.householdId);
 
       if (input.targetUserId === input.userId) {
         throw new AuthorizationError("不能修改自己的角色");

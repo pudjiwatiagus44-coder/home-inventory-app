@@ -1030,7 +1030,7 @@
 - 用户 A 和用户 B 加入同一个 household 后，A 设置个人别名为“我的家”，B 设置为“爸妈家”；两人再次打开 Web/Android 时分别看到自己的名称，`households.name` 不变。
 - 授权用户长按下拉栏家庭名可修改个人别名；非 owner 调用真实家庭名重命名接口仍返回 403。
 - 创建邀请时默认只勾选当前 household；选择多个 household 后，审批通过会为申请人创建对应多个 membership，并按每个 grant 写入不同 role。
-- 管理成员可以在有管理权的 household 内新增/编辑/删除库存数据，并管理该 household 的邀请和成员授权。
+- 只有主账号（`owner`）可以管理该 household 的邀请和成员授权；`member`、`contributor`、`readonly` 均无管理权限，也不能查看其他成员。非 owner 的“邀请”入口仅用于邀请其他人使用 App。
 - 新增成员（`contributor`）可以新增物品和库存位置；可以编辑自己创建的物品和库存位置；删除物品/位置返回 403；编辑他人创建或历史归属不明的物品/位置返回 403。
 - 只读成员（`readonly`）新增、编辑、删除均返回 403。
 - 删除某个 household 授权后，该用户下一次请求该 household 数据返回 403，但其他 household 授权不受影响。
@@ -1055,7 +1055,7 @@
 
 ## 2026-08-11 区域/位置照片验收证据
 
-状态：本地实现、数据库 migration、自动化验证与服务器部署完成；真机验收待进行。
+状态：本地实现、数据库 migration 与自动化验证完成；真机/线上部署验收待进行。
 
 - 实现：`dev-docs/sql/area_location_photos_self_hosted.sql`（`areas.photo_key`、`locations.photo_key` + 唯一索引）；`src/server/photos/area-location-photo-service.ts` 与 `photo-route-helpers.ts`（上传/读取/删除/清理）；`PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `locations/[locationId]/photo`；Dashboard/快照透传 `photoKey`；Web 物品行 `A1`/区域小按钮与无照片提示；Android Room/API/Repository、物品行小按钮、照片查看、长按弹窗照片区。
 - Web 验证：`npx vitest run --exclude <2 个 PostgreSQL 集成文件>` 53 个文件 / 348 个测试通过；`npx eslint src` exit 0；`npm run build` exit 0，构建产物包含新增两个照片路由。
@@ -1074,15 +1074,26 @@
 - 用户 A/B 越权读取或写入照片返回 403/404。
 - 替换照片和删除区域/位置后，旧照片文件被清理。
 - 未登录访问照片接口返回 401。
+## 2026-08-11 记住家庭与照片恢复修复证据
 
-## 2026-08-11 区域/位置照片服务器部署证据
+- 问题：被邀请用户切换家庭后，重启或退出登录再登录会回到默认家庭，导致看起来照片全部消失。
+- 根因：`refreshSnapshot()` 无参调用会拉取默认家庭并覆盖 `sync_state`；退出登录后再次登录时，保存的家庭选择未按账号隔离。
+- 修复：`refreshSnapshot()` 无参时优先使用当前账号保存的家庭；`SessionStore` 保存登录 `userId`，`sync_state` 使用 `current_household_id_<userId>` 按账号记住选择；退出登录不再清除该选择。
+- 照片数据：服务器数据库有 33 个 `photo_key`，但照片文件只有 11 个；已从 `20260808_164452` 备份恢复缺失的 31 个文件，当前照片文件 42 个（含历史孤儿文件），数据库引用完整。
+- Android：版本升至 0.5.27 / code 33，APK 已上传并重启服务；`version.json` 返回 versionCode 33 / versionName 0.5.27。
+- 当前服务器运行分支为 `codex/area-location-photos-deploy`（`a1b395e`），未切换，避免影响进行中的区域/位置照片能力。
 
-- 部署分支：`codex/area-location-photos-deploy`，服务器 `/opt/home-inventory-app` 已切换至 commit `a1b395e`。
-- 合并方式：基于服务器原 `codex/feedback-and-topbar`（0d59e7c）合并区域/位置照片特性，保留 0.5.26 家庭别名、按地点授权、意见反馈和顶部栏改动；Android Room 版本升级为 6，新增 5→6 migration 加照片列。
-- 验证：合并后分支 `npx vitest run --no-file-parallelism` 61 个文件 / 407 测试通过（含真实 PostgreSQL）；`npx eslint src` 通过；`npm run build` 通过；Android `testDebugUnitTest` 与 `assembleDebug` 通过。
-- 服务器构建：`/opt/home-inventory-app-new` 执行 `npm ci` 与 `npm run build` 成功，构建产物包含 `/api/inventory/areas/[areaId]/photo` 与 `/api/inventory/locations/[locationId]/photo`。
-- 数据库：服务器执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，`areas.photo_key`、`locations.photo_key` 及唯一索引已确认。
-- 切换：旧目录备份为 `/opt/home-inventory-app.bak.20260811_202830`，新目录切换后 `home-inventory-app.service` active，当前 commit `a1b395e`。
-- 线上 smoke：`/login` 200；未登录访问区域照片接口 401；临时账号注册后创建区域/位置成功；`PUT .../areas/[areaId]/photo?householdId=...` 上传照片 200 并返回 `photoKey`；`GET` 返回 200 且文件为 JPEG；`DELETE` 返回 200；临时账号与照片文件已清理。
-- APK：Android 版本升至 `0.5.27`（code 33），`scripts/upload-apk.ps1` 构建并上传 APK（20,245,951 字节）；服务重启后 `https://homestorag.xyz/apk/version.json` 显示 versionName 0.5.27 / versionCode 33，APK 下载返回 HTTP 200。
-- 待办：Web/Android 真机拍照、相册选择、替换/删除、readonly 只读、用户 A/B 越权与文件清理验收。
+## 2026-08-11 更新提示修复证据
+
+- 问题：App 只在启动/登录时检查一次版本，从后台回前台或在线时不会重新检查，导致已发布新版本但看不到更新提示。
+- 修复：`AppRoot` 监听 `ON_RESUME`，每次回到前台都重新调用 `checkForUpdates()`；已通过 `AppRootTest` 与 Android 全量单测。
+- Android：版本升至 0.5.28 / code 34，APK 已上传并重启服务；`version.json` 返回 versionCode 34 / versionName 0.5.28，APK 下载返回 HTTP 200。
+
+## 2026-08-11 仅主账号管理成员决策证据
+
+- 用户确认：只有主账号（`owner`）可以管理邀请和成员；`member`、`contributor`、`readonly` 均无管理权限，也不能查看其他成员。
+- 服务端：邀请、加入申请、成员列表、成员角色修改、移除成员全部改为 `owner` 校验，非 owner 返回 403。
+- Android：非 owner 的邀请弹窗只显示“邀请使用本 App”，不显示家庭邀请、加入申请、成员列表和管理按钮；角色文案改为 房主 / 成员 / 新增 / 只读。
+- Web：非 owner 家庭设置只显示“仅主账号可管理成员”与“邀请使用本 App”，不显示成员列表和管理按钮；角色文案同步为 房主 / 成员 / 新增 / 只读。
+- 本地验证：`npx vitest run` 通过 56 文件 / 394 测试；`npx eslint src`、`npm run build`、Android `testDebugUnitTest assembleDebug` 均通过。
+- Android：版本升至 0.5.29 / code 35，APK 已上传并重启服务；`version.json` 返回 versionCode 35 / versionName 0.5.29。

@@ -58,6 +58,7 @@ class AuthRepositoryTest {
 
         assertTrue(result.isSuccess)
         assertEquals("home_inventory_session=abc", sessionStore.sessionCookie())
+        assertEquals("user-1", sessionStore.userId())
     }
 
     @Test
