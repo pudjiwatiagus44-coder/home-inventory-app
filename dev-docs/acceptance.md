@@ -1055,7 +1055,7 @@
 
 ## 2026-08-11 区域/位置照片验收证据
 
-状态：本地实现、数据库 migration 与自动化验证完成；真机/线上部署验收待进行。
+状态：本地实现、数据库 migration、自动化验证与服务器部署完成；真机验收待进行。
 
 - 实现：`dev-docs/sql/area_location_photos_self_hosted.sql`（`areas.photo_key`、`locations.photo_key` + 唯一索引）；`src/server/photos/area-location-photo-service.ts` 与 `photo-route-helpers.ts`（上传/读取/删除/清理）；`PUT/GET/DELETE /api/inventory/areas/[areaId]/photo` 与 `locations/[locationId]/photo`；Dashboard/快照透传 `photoKey`；Web 物品行 `A1`/区域小按钮与无照片提示；Android Room/API/Repository、物品行小按钮、照片查看、长按弹窗照片区。
 - Web 验证：`npx vitest run --exclude <2 个 PostgreSQL 集成文件>` 53 个文件 / 348 个测试通过；`npx eslint src` exit 0；`npm run build` exit 0，构建产物包含新增两个照片路由。
@@ -1074,3 +1074,14 @@
 - 用户 A/B 越权读取或写入照片返回 403/404。
 - 替换照片和删除区域/位置后，旧照片文件被清理。
 - 未登录访问照片接口返回 401。
+
+## 2026-08-11 区域/位置照片服务器部署证据
+
+- 部署分支：`codex/area-location-photos-deploy`，服务器 `/opt/home-inventory-app` 已切换至 commit `a1b395e`。
+- 合并方式：基于服务器原 `codex/feedback-and-topbar`（0d59e7c）合并区域/位置照片特性，保留 0.5.26 家庭别名、按地点授权、意见反馈和顶部栏改动；Android Room 版本升级为 6，新增 5→6 migration 加照片列。
+- 验证：合并后分支 `npx vitest run --no-file-parallelism` 61 个文件 / 407 测试通过（含真实 PostgreSQL）；`npx eslint src` 通过；`npm run build` 通过；Android `testDebugUnitTest` 与 `assembleDebug` 通过。
+- 服务器构建：`/opt/home-inventory-app-new` 执行 `npm ci` 与 `npm run build` 成功，构建产物包含 `/api/inventory/areas/[areaId]/photo` 与 `/api/inventory/locations/[locationId]/photo`。
+- 数据库：服务器执行 `dev-docs/sql/area_location_photos_self_hosted.sql`，`areas.photo_key`、`locations.photo_key` 及唯一索引已确认。
+- 切换：旧目录备份为 `/opt/home-inventory-app.bak.20260811_202830`，新目录切换后 `home-inventory-app.service` active，当前 commit `a1b395e`。
+- 线上 smoke：`/login` 200；未登录访问区域照片接口 401；临时账号注册后创建区域/位置成功；`PUT .../areas/[areaId]/photo?householdId=...` 上传照片 200 并返回 `photoKey`；`GET` 返回 200 且文件为 JPEG；`DELETE` 返回 200；临时账号与照片文件已清理。
+- 待办：Web/Android 真机拍照、相册选择、替换/删除、readonly 只读、用户 A/B 越权与文件清理验收。
