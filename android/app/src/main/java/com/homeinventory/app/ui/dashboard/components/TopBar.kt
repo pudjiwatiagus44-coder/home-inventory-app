@@ -17,6 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +39,7 @@ fun TopBar(
     onHelp: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    onDraftBounds: (Rect) -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -78,7 +82,10 @@ fun TopBar(
                 fontSize = 12.sp,
             )
         }
-        TextButton(onClick = onDraftsClick) {
+        TextButton(
+            onClick = onDraftsClick,
+            modifier = Modifier.onGloballyPositioned { onDraftBounds(it.boundsInRoot()) },
+        ) {
             Text("草稿")
             if (draftCount > 0) {
                 Spacer(modifier = Modifier.width(3.dp))

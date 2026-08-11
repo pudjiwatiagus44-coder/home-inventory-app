@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import com.homeinventory.app.ui.dashboard.components.AreaStrip
 import com.homeinventory.app.ui.dashboard.components.FloatingAddButton
@@ -57,6 +58,8 @@ fun DashboardScreen(
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onSignOut: () -> Unit,
+    onAddButtonBounds: (Rect) -> Unit,
+    onDraftButtonBounds: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -72,10 +75,14 @@ fun DashboardScreen(
                 onInvite = onInvite,
                 onHelp = onHelp,
                 onSignOut = onSignOut,
+                onDraftBounds = onDraftButtonBounds,
             )
         },
         floatingActionButton = {
-            FloatingAddButton(onClick = onAddItem)
+            FloatingAddButton(
+                onClick = onAddItem,
+                onBounds = onAddButtonBounds,
+            )
         },
     ) { padding ->
         PullToRefreshBox(

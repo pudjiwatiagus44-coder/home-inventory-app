@@ -17,19 +17,24 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Surface
-import com.homeinventory.app.ui.theme.Danger
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,9 +118,18 @@ fun AreaDropdown(
     onSelect: (String) -> Unit,
     includeUnassigned: Boolean = true,
     onAddArea: (() -> Unit)? = null,
+    onQuickAdd: (suspend (String) -> Result<String>)? = null,
+    onFieldBounds: (Rect) -> Unit = {},
+    onQuickAddBounds: (Rect?) -> Unit = {},
+    onQuickAddModeChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var quickAddMode by remember { mutableStateOf(false) }
+    var quickAddName by remember { mutableStateOf("") }
+    var quickAddError by remember { mutableStateOf<String?>(null) }
+    var quickAdding by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
@@ -133,20 +147,90 @@ fun AreaDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .onGloballyPositioned { onFieldBounds(it.boundsInRoot()) },
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = {
+                expanded = false
+                if (quickAddMode) {
+                    quickAddMode = false
+                    quickAddName = ""
+                    quickAddError = null
+                    onQuickAddModeChange(false)
+                    onQuickAddBounds(null)
+                }
+            },
         ) {
-            if (onAddArea != null) {
+            if (onQuickAdd != null || onAddArea != null) {
                 DropdownMenuItem(
                     text = { Text("＋ 新增区域") },
                     onClick = {
-                        expanded = false
-                        onAddArea()
+                        if (onQuickAdd != null) {
+                            quickAddMode = true
+                            quickAddName = ""
+                            quickAddError = null
+                            onQuickAddModeChange(true)
+                        } else {
+                            expanded = false
+                            onAddArea?.invoke()
+                        }
                     },
                 )
+            }
+            if (quickAddMode && onQuickAdd != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .onGloballyPositioned { onQuickAddBounds(it.boundsInRoot()) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = quickAddName,
+                        onValueChange = { quickAddName = it },
+                        placeholder = { Text("区域名，如厨房") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = {
+                            val name = quickAddName.trim()
+                            if (name.isNotEmpty() && !quickAdding) {
+                                quickAddError = null
+                                quickAdding = true
+                                scope.launch {
+                                    onQuickAdd(name)
+                                        .onSuccess { newId ->
+                                            onSelect(newId)
+                                            quickAdding = false
+                                            quickAddMode = false
+                                            quickAddName = ""
+                                            onQuickAddModeChange(false)
+                                            onQuickAddBounds(null)
+                                        }
+                                        .onFailure { error ->
+                                            quickAdding = false
+                                            quickAddError = error.message ?: "新增区域失败"
+                                        }
+                                }
+                            }
+                        },
+                        enabled = !quickAdding,
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) {
+                        Text("添加")
+                    }
+                }
+                quickAddError?.let {
+                    Text(
+                        text = it,
+                        color = Danger,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
             }
             if (includeUnassigned) {
                 DropdownMenuItem(
@@ -154,6 +238,11 @@ fun AreaDropdown(
                     onClick = {
                         onSelect(UNASSIGNED_MARKER)
                         expanded = false
+                        if (quickAddMode) {
+                            quickAddMode = false
+                            onQuickAddModeChange(false)
+                            onQuickAddBounds(null)
+                        }
                     },
                 )
             }
@@ -163,6 +252,11 @@ fun AreaDropdown(
                     onClick = {
                         onSelect(area.id)
                         expanded = false
+                        if (quickAddMode) {
+                            quickAddMode = false
+                            onQuickAddModeChange(false)
+                            onQuickAddBounds(null)
+                        }
                     },
                 )
             }

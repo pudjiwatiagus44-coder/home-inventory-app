@@ -23,6 +23,10 @@
 - `docs/superpowers/specs/2026-08-11-area-location-photos-design.md` - 区域/位置照片设计（2026-08-11，本地实现完成，待部署验收）。
 - `docs/superpowers/plans/2026-08-11-area-location-photos.md` - 区域/位置照片实施计划。
 
+## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，待部署验收）
+
+用户确认 Android 内测版新增新用户使用引导：新注册用户首次进入清单页看到欢迎介绍语，随后按步骤点击「+ 新增」→「识别名称 / 拍照」→ 选择或新增区域 → 选择或新增位置 → 存入草稿箱或直接保存 → 打开草稿箱；右上角 X 可随时跳过。物品表单内新增区域/位置支持直接输入名称即时创建并自动选中，新增位置默认匹配刚选的区域。说明同步到 `dev-docs/user-manual.md`，验收证据见 `dev-docs/acceptance.md`。
+
 ## 2026-08-08 登录页增强与密码重置（设计已确认，实施中）
 
 用户确认：忘记密码接邮箱发送重置链接（QQ 邮箱 SMTP + 授权码，凭据不进仓库）、邮件发链接由网页 `/reset-password?token=...` 完成重置、记住密码=记住邮箱（默认勾选）、Android 登录页新增注册入口。设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`，已同步 `project-brief.md`、`technical-selection.md`、`architecture.md`、`database-design.md` 和 `acceptance.md`。

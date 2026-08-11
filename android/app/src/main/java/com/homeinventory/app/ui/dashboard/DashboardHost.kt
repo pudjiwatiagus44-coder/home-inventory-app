@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.FileProvider
@@ -23,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.homeinventory.app.core.session.SharedPreferencesFirstRunStore
 import com.homeinventory.app.data.local.AppDatabase
 import com.homeinventory.app.data.excel.BackupRow
 import com.homeinventory.app.core.config.AppConfig
@@ -35,6 +38,7 @@ import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.data.repository.InventorySnapshot
 import java.io.File
+import com.homeinventory.app.ui.dashboard.dialogs.AREA_COLORS
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.AreaFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.DraftsDialog
@@ -49,6 +53,7 @@ import com.homeinventory.app.ui.dashboard.dialogs.LocationFormDialog
 import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.PhotoPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
+import com.homeinventory.app.ui.dashboard.onboarding.GuideOverlay
 import kotlinx.coroutines.launch
 
 private sealed interface PhotoEntityTarget {
@@ -102,6 +107,68 @@ fun DashboardHost(
     var isCommittingImport by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
+    val firstRunStore = remember { SharedPreferencesFirstRunStore(context.applicationContext) }
+    var guideStep by remember { mutableStateOf(if (firstRunStore.shouldShow()) 0 else -1) }
+    var addButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    var draftButtonBounds by remember { mutableStateOf<Rect?>(null) }
+
+    fun skipGuide() {
+        firstRunStore.markCompleted()
+        guideStep = -1
+    }
+
+    suspend fun quickAddArea(name: String): Result<String> {
+        val validation = validateAreaForm(name)
+        if (!validation.isValid) {
+            return Result.failure(IllegalStateException(validation.message ?: "区域名称无效"))
+        }
+        isSaving = true
+        val online = repository.createAreaOnlineWithId(name.trim(), null)
+        return if (online.isSuccess) {
+            isSaving = false
+            formError = null
+            online
+        } else {
+            val error = online.exceptionOrNull()
+            if (error != null && isNetworkError(error)) {
+                val area = repository.createAreaOffline(name.trim(), AREA_COLORS.first())
+                isSaving = false
+                formError = null
+                Result.success(area.id)
+            } else {
+                isSaving = false
+                formError = error?.message
+                online
+            }
+        }
+    }
+
+    suspend fun quickAddLocation(areaId: String, name: String): Result<String> {
+        val validation = validateLocationForm(name)
+        if (!validation.isValid) {
+            return Result.failure(IllegalStateException(validation.message ?: "位置名称无效"))
+        }
+        isSaving = true
+        val online = repository.createLocationOnlineWithId(name.trim(), areaId.ifBlank { null })
+        return if (online.isSuccess) {
+            isSaving = false
+            formError = null
+            online
+        } else {
+            val error = online.exceptionOrNull()
+            if (error != null && isNetworkError(error)) {
+                val location = repository.createLocationOffline(name.trim(), areaId.ifBlank { null })
+                isSaving = false
+                formError = null
+                Result.success(location.id)
+            } else {
+                isSaving = false
+                formError = error?.message
+                online
+            }
+        }
+    }
+
     val editingDraft = editingDraftId?.let { id ->
         draftsUi.drafts.firstOrNull { it.id == id }
     }
@@ -134,6 +201,15 @@ fun DashboardHost(
             showItemForm = false
             editingDraftId = null
         }
+    }
+    LaunchedEffect(guideStep, showItemForm) {
+        when (guideStep) {
+            1 -> if (showItemForm) guideStep = 2
+            in 2..6 -> if (!showItemForm) guideStep = 7
+        }
+    }
+    LaunchedEffect(guideStep, showDraftsDialog) {
+        if (guideStep == 7 && showDraftsDialog) guideStep = 8
     }
     var pendingPhotoItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     val itemCameraFile = remember { mutableStateOf<File?>(null) }
@@ -296,159 +372,205 @@ fun DashboardHost(
         }
     }
 
-    DashboardScreen(
-        state = state,
-        households = householdsState.households,
-        currentHouseholdId = householdsState.currentHouseholdId,
-        onSwitchHousehold = {
-            showHouseholdSwitcher = true
-            viewModel.refreshHouseholds()
-        },
-        onSearchChange = viewModel::updateSearch,
-        onSelectArea = viewModel::selectArea,
-        onSelectLocation = viewModel::selectLocation,
-        onSortChange = { mode ->
-            when (mode) {
-                ItemSortMode.ExpireSoon -> viewModel.sortByExpireSoon()
-                ItemSortMode.ExpireLate -> viewModel.sortByExpireLate()
-                ItemSortMode.Name -> viewModel.sortByName()
-            }
-        },
-        onAddItem = {
-            editingItem = null
-            editingDraftId = null
-            formError = null
-            showItemForm = true
-        },
-        onAddLocation = {
-            editingLocation = null
-            locationFormInitialAreaId = state.filters.areaId ?: ""
-            formError = null
-            showLocationForm = true
-        },
-        onAddArea = {
-            editingArea = null
-            formError = null
-            showAreaForm = true
-        },
-        onLongPressArea = { area ->
-            editingArea = area
-            formError = null
-            showAreaForm = true
-        },
-        onLongPressLocation = { location ->
-            editingLocation = location
-            formError = null
-            showLocationForm = true
-        },
-        onEditItem = { item ->
-            editingItem = item
-            editingDraftId = null
-            formError = null
-            showItemForm = true
-        },
-        onPhotoClick = { item ->
-            previewItem = item
-        },
-        onAddPhoto = { item ->
-            val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-            val file = File(dir, "item_${System.currentTimeMillis()}.jpg")
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file,
-            )
-            pendingPhotoItem = item
-            itemCameraFile.value = file
-            itemCameraLauncher.launch(uri)
-        },
-        onLocationPhotoClick = { item ->
-            if (item.locationPhotoKey != null) {
-                previewLocationPhoto = EntityPhotoPreview(
-                    entityId = item.locationId!!,
-                    photoKey = item.locationPhotoKey,
-                )
-            } else {
-                pendingPhotoEntity = PhotoEntityTarget.Location(item.locationId!!)
-                showLocationPhotoPrompt = true
-            }
-        },
-        onAreaPhotoClick = { item ->
-            if (item.areaPhotoKey != null) {
-                previewAreaPhoto = EntityPhotoPreview(
-                    entityId = item.areaId!!,
-                    photoKey = item.areaPhotoKey,
-                )
-            } else {
-                pendingPhotoEntity = PhotoEntityTarget.Area(item.areaId!!)
-                showAreaPhotoPrompt = true
-            }
-        },
-        unassignedFilter = state.unassignedFilter,
-        onToggleUnassigned = viewModel::toggleUnassignedFilter,
-        loadPhoto = viewModel::itemPhoto,
-        onRefresh = {
-            scope.launch {
-                isRefreshing = true
-                repository.syncPendingOperations()
-                repository.refreshSnapshot()
-                isRefreshing = false
-            }
-        },
-        isRefreshing = isRefreshing,
-        onBackup = {
-            scope.launch {
-                val rows = state.items.mapIndexed { index, item ->
-                    BackupRow(
-                        index = index + 1,
-                        name = item.name,
-                        locationName = item.locationName ?: "",
-                        areaName = item.areaId
-                            ?.let { areaId -> state.areas.firstOrNull { it.id == areaId }?.name }
-                            ?: "",
-                        note = item.note,
-                        expireDate = item.expireDate,
-                    )
+    Box {
+        DashboardScreen(
+            state = state,
+            households = householdsState.households,
+            currentHouseholdId = householdsState.currentHouseholdId,
+            onSwitchHousehold = {
+                showHouseholdSwitcher = true
+                viewModel.refreshHouseholds()
+            },
+            onSearchChange = viewModel::updateSearch,
+            onSelectArea = viewModel::selectArea,
+            onSelectLocation = viewModel::selectLocation,
+            onSortChange = { mode ->
+                when (mode) {
+                    ItemSortMode.ExpireSoon -> viewModel.sortByExpireSoon()
+                    ItemSortMode.ExpireLate -> viewModel.sortByExpireLate()
+                    ItemSortMode.Name -> viewModel.sortByName()
                 }
-                importExportRepository.exportBackup(rows = rows, context = context)
-                    .onSuccess { filename ->
-                        Toast.makeText(context, "已导出 $filename", Toast.LENGTH_LONG).show()
+            },
+            onAddItem = {
+                editingItem = null
+                editingDraftId = null
+                formError = null
+                showItemForm = true
+            },
+            onAddLocation = {
+                editingLocation = null
+                locationFormInitialAreaId = state.filters.areaId ?: ""
+                formError = null
+                showLocationForm = true
+            },
+            onAddArea = {
+                editingArea = null
+                formError = null
+                showAreaForm = true
+            },
+            onLongPressArea = { area ->
+                editingArea = area
+                formError = null
+                showAreaForm = true
+            },
+            onLongPressLocation = { location ->
+                editingLocation = location
+                formError = null
+                showLocationForm = true
+            },
+            onEditItem = { item ->
+                editingItem = item
+                editingDraftId = null
+                formError = null
+                showItemForm = true
+            },
+            onPhotoClick = { item ->
+                previewItem = item
+            },
+            onAddPhoto = { item ->
+                val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                val file = File(dir, "item_${System.currentTimeMillis()}.jpg")
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file,
+                )
+                pendingPhotoItem = item
+                itemCameraFile.value = file
+                itemCameraLauncher.launch(uri)
+            },
+            onLocationPhotoClick = { item ->
+                if (item.locationPhotoKey != null) {
+                    previewLocationPhoto = EntityPhotoPreview(
+                        entityId = item.locationId!!,
+                        photoKey = item.locationPhotoKey,
+                    )
+                } else {
+                    pendingPhotoEntity = PhotoEntityTarget.Location(item.locationId!!)
+                    showLocationPhotoPrompt = true
+                }
+            },
+            onAreaPhotoClick = { item ->
+                if (item.areaPhotoKey != null) {
+                    previewAreaPhoto = EntityPhotoPreview(
+                        entityId = item.areaId!!,
+                        photoKey = item.areaPhotoKey,
+                    )
+                } else {
+                    pendingPhotoEntity = PhotoEntityTarget.Area(item.areaId!!)
+                    showAreaPhotoPrompt = true
+                }
+            },
+            unassignedFilter = state.unassignedFilter,
+            onToggleUnassigned = viewModel::toggleUnassignedFilter,
+            loadPhoto = viewModel::itemPhoto,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    repository.syncPendingOperations()
+                    repository.refreshSnapshot()
+                    isRefreshing = false
+                }
+            },
+            isRefreshing = isRefreshing,
+            onBackup = {
+                scope.launch {
+                    val rows = state.items.mapIndexed { index, item ->
+                        BackupRow(
+                            index = index + 1,
+                            name = item.name,
+                            locationName = item.locationName ?: "",
+                            areaName = item.areaId
+                                ?.let { areaId -> state.areas.firstOrNull { it.id == areaId }?.name }
+                                ?: "",
+                            note = item.note,
+                            expireDate = item.expireDate,
+                        )
                     }
-                    .onFailure { error ->
-                        Toast.makeText(context, error.message ?: "导出失败", Toast.LENGTH_LONG).show()
-                    }
-            }
-        },
-        onImport = {
-            filePicker.launch(
-                arrayOf(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    "application/vnd.ms-excel",
-                    "application/octet-stream",
-                ),
+                    importExportRepository.exportBackup(rows = rows, context = context)
+                        .onSuccess { filename ->
+                            Toast.makeText(context, "已导出 $filename", Toast.LENGTH_LONG).show()
+                        }
+                        .onFailure { error ->
+                            Toast.makeText(context, error.message ?: "导出失败", Toast.LENGTH_LONG).show()
+                        }
+                }
+            },
+            onImport = {
+                filePicker.launch(
+                    arrayOf(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-excel",
+                        "application/octet-stream",
+                    ),
+                )
+            },
+            onInvite = {
+                showInviteDialog = true
+                viewModel.generateInvitationLink()
+                viewModel.refreshJoinRequests()
+                viewModel.refreshMembers()
+            },
+            onHelp = {
+                showHelpDialog = true
+            },
+            onDraftsClick = {
+                showDraftsDialog = true
+            },
+            draftCount = draftsUi.drafts.size,
+            onSignOut = {
+                scope.launch {
+                    authRepository.logout()
+                    database.clearAll()
+                    onSignedOut()
+                }
+            },
+            onAddButtonBounds = { addButtonBounds = it },
+            onDraftButtonBounds = { draftButtonBounds = it },
+        )
+        when (guideStep) {
+            0 -> GuideOverlay(
+                title = "欢迎使用家庭物品管家",
+                text = "把家里的物品按区域、位置记清楚，之后找东西、查保质期都更快。跟着下面的步骤录入第一件物品；想跳过时点右上角 X。",
+                stepNumber = 1,
+                totalSteps = 8,
+                targetBounds = null,
+                onNext = { guideStep = 1 },
+                onSkip = ::skipGuide,
+                nextLabel = "开始使用",
             )
-        },
-        onInvite = {
-            showInviteDialog = true
-            viewModel.generateInvitationLink()
-            viewModel.refreshJoinRequests()
-            viewModel.refreshMembers()
-        },
-        onHelp = {
-            showHelpDialog = true
-        },
-        onDraftsClick = {
-            showDraftsDialog = true
-        },
-        draftCount = draftsUi.drafts.size,
-        onSignOut = {
-            scope.launch {
-                authRepository.logout()
-                database.clearAll()
-                onSignedOut()
-            }
-        },
-    )
+            1 -> GuideOverlay(
+                title = "录入第一件物品",
+                text = "点右下角「+ 新增」，打开新增物品表单。",
+                stepNumber = 2,
+                totalSteps = 8,
+                targetBounds = addButtonBounds,
+                onNext = {},
+                onSkip = ::skipGuide,
+                showNext = false,
+            )
+            7 -> GuideOverlay(
+                title = "打开草稿箱",
+                text = "点顶部「草稿」查看草稿箱；在里面可以继续编辑、直接保存或删除。",
+                stepNumber = 7,
+                totalSteps = 8,
+                targetBounds = draftButtonBounds,
+                onNext = {},
+                onSkip = ::skipGuide,
+                showNext = false,
+            )
+            8 -> GuideOverlay(
+                title = "完成",
+                text = "你已经走完录入流程。以后点右上角「帮助」可以随时查看使用说明。",
+                stepNumber = 8,
+                totalSteps = 8,
+                targetBounds = null,
+                onNext = ::skipGuide,
+                onSkip = ::skipGuide,
+                nextLabel = "完成",
+            )
+        }
+    }
 
     if (showHouseholdSwitcher) {
         HouseholdSwitcherDialog(
@@ -532,6 +654,13 @@ fun DashboardHost(
                 formError = null
                 showLocationForm = true
             },
+            onQuickAddArea = { name -> quickAddArea(name) },
+            onQuickAddLocation = { areaId, name -> quickAddLocation(areaId, name) },
+            guideStep = guideStep,
+            onGuideNext = {
+                if (guideStep in 2..4) guideStep += 1
+            },
+            onGuideSkip = ::skipGuide,
             onBatchImportToDrafts = viewModel::batchImportToDrafts,
             batchProgress = if (batchState.isImporting) {
                 "${batchState.done}/${batchState.total}"
