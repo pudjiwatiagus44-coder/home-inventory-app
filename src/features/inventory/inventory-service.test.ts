@@ -1156,8 +1156,27 @@ describe("createInventoryService", () => {
     ]);
   });
 
-  it("reuses an existing location name even when the Excel row names another area", async () => {
-    const { calls, repository } = createRepository();
+  it("creates a separate location when the same name is used under another area", async () => {
+    let areaSequence = 1;
+    let locationSequence = 1;
+    const { calls, repository } = createRepository({
+      createArea: async (input) => {
+        calls.push(["createArea", input]);
+        return {
+          id: `new-area-${areaSequence++}`,
+          name: input.name.trim(),
+          color: input.color ?? "#64748b",
+        };
+      },
+      createLocation: async (input) => {
+        calls.push(["createLocation", input]);
+        return {
+          id: `new-location-${locationSequence++}`,
+          name: input.name.trim(),
+          area_id: input.areaId ?? null,
+        };
+      },
+    });
     const service = createInventoryService({ repository });
 
     await expect(
@@ -1176,6 +1195,77 @@ describe("createInventoryService", () => {
         conflictResolutions: {},
       }),
     ).resolves.toMatchObject({
+      createdAreas: 1,
+      createdLocations: 1,
+      createdItems: 1,
+      errors: [],
+    });
+
+    expect(calls).toContainEqual([
+      "createArea",
+      expect.objectContaining({
+        householdId: "household-1",
+        name: "Tools",
+      }),
+    ]);
+    expect(calls).toContainEqual([
+      "createLocation",
+      expect.objectContaining({
+        householdId: "household-1",
+        name: "Shelf",
+        areaId: "new-area-1",
+      }),
+    ]);
+    expect(calls).toContainEqual([
+      "createItem",
+      expect.objectContaining({
+        name: "Tape",
+        locationId: "new-location-1",
+      }),
+    ]);
+  });
+
+  it("reuses a location with the same name inside the same area", async () => {
+    const { calls, repository } = createRepository({
+      getDashboardForUser: async () => ({
+        household: { id: "household-1", name: "Home" },
+        areas: [
+          {
+            id: "area-1",
+            name: "Kitchen",
+            color: "#64748b",
+            updatedAt: "2026-08-04T00:00:00.000Z",
+          },
+        ],
+        locations: [
+          {
+            id: "location-1",
+            name: "Shelf",
+            area_id: "area-1",
+            updatedAt: "2026-08-04T00:00:00.000Z",
+          },
+        ],
+        items: [],
+      }),
+    });
+    const service = createInventoryService({ repository });
+
+    await expect(
+      service.commitImportForCurrentUser({
+        userId: "user-1",
+        rows: [
+          {
+            index: 10,
+            name: "Tape",
+            locationName: "Shelf",
+            areaName: "Kitchen",
+            note: "",
+            expireDate: null,
+          },
+        ],
+        conflictResolutions: {},
+      }),
+    ).resolves.toMatchObject({
       createdAreas: 0,
       createdLocations: 0,
       createdItems: 1,
@@ -1184,21 +1274,14 @@ describe("createInventoryService", () => {
 
     expect(calls).not.toContainEqual([
       "createLocation",
-      expect.objectContaining({
-        householdId: "household-1",
-        name: "Shelf",
-      }),
+      expect.anything(),
     ]);
     expect(calls).toContainEqual([
       "createItem",
-      {
-        householdId: "household-1",
-        createdBy: "user-1",
+      expect.objectContaining({
         name: "Tape",
-        note: "",
-        expireDate: null,
         locationId: "location-1",
-      },
+      }),
     ]);
   });
 

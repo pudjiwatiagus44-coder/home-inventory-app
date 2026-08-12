@@ -83,7 +83,7 @@ create table locations (
   updated_at timestamptz not null default now(),
   constraint locations_name_length check (char_length(name) between 1 and 80),
   constraint locations_id_household_unique unique (id, household_id),
-  constraint locations_unique_name_per_household unique (household_id, name),
+  constraint locations_unique_name_per_area unique nulls not distinct (household_id, area_id, name),
   constraint locations_area_same_household_fk
     foreign key (area_id, household_id)
     references areas(id, household_id)

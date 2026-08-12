@@ -1047,3 +1047,10 @@
 - 模拟器验证：已跳过引导的用户（`FirstRunStore.completed=true`）点「帮助」→「新手指导」后重新出现 `1 / 8` 欢迎卡片。
 - 服务器 latest APK 已更新为 0.5.32 / code 38（20,311,487 字节），`version.json` 与 APK 下载均返回 200。
 - 测试 APK：`android-test-build/home-inventory-internal-0.5.32-test.apk`（SHA256 `08811AFA6740CA59F2597808E80A7B76C72573164EE0356842B8695095D10F1E`）。
+
+## 2026-08-12 不同区域允许同名位置证据
+
+- 数据库：`locations` 唯一约束由「household + name」改为「household + area + name」（`NULLS NOT DISTINCT`，未分区按一组处理）；新增迁移 `dev-docs/sql/location_name_unique_per_area_self_hosted.sql`，并同步 `dev-docs/database-design.md`、`dev-docs/sql/mainland_initial_schema.sql` 和 `supabase/migrations/20260812000000_location_unique_per_area.sql`。
+- 服务端导入：`inventory-service.ts` 的位置匹配键改为「区域名:位置名」，跨区域同名会各自新建位置，同一区域内同名仍复用。
+- 测试：`inventory-service.test.ts` 新增跨区域同名创建、同区域复用两个用例；`npx vitest run --exclude ".worktrees/**"`（排除 3 个 PostgreSQL 集成文件）53 文件 / 349 测试通过；`npx eslint src`、`npm run build` 通过。
+- 线上 smoke：注册临时用户后创建 `makeup-desk` / `dining-table` 两个区域，各创建同名位置 `top` 均成功；同一区域内重复创建 `top` 返回 400；测试账号已清理。

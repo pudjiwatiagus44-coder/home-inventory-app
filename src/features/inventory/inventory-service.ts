@@ -771,8 +771,13 @@ async function commitInventoryImportRows({
   const plan = planInventoryImport({ dashboard, rows });
   const householdId = dashboard.household.id;
   const areaByName = new Map(dashboard.areas.map((area) => [area.name, area]));
+  const areaNameById = new Map(dashboard.areas.map((area) => [area.id, area.name]));
   const locationByKey = new Map(
-    dashboard.locations.map((location) => [location.name, location] as const),
+    dashboard.locations.map((location) => {
+      const areaName = location.area_id ? areaNameById.get(location.area_id) ?? "" : "";
+      const key = `${normalizeAreaName(areaName)}:${normalizeLocationName(location.name)}`;
+      return [key, location] as const;
+    }),
   );
   const summary: InventoryImportSummary = {
     createdAreas: 0,
@@ -856,7 +861,7 @@ async function createItemFromImportRow({
 }) {
   const areaName = normalizeAreaName(row.areaName);
   const locationName = normalizeLocationName(row.locationName);
-  const locationKey = locationName;
+  const locationKey = `${areaName}:${locationName}`;
   let location = locationByKey.get(locationKey);
 
   if (!location) {
