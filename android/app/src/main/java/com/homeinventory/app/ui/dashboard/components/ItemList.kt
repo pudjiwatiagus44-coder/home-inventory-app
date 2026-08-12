@@ -1,6 +1,7 @@
 package com.homeinventory.app.ui.dashboard.components
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -33,7 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -223,19 +228,25 @@ private fun ItemRow(
     } else {
         Box(
             modifier = Modifier
+                .size(28.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(SurfaceMuted)
                 .clickable {
                     onAddPhoto(item)
-                }
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                },
+            contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "拍照",
+                text = item.name.take(1).ifBlank { "物" },
                 color = Primary,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
+            )
+            CameraBadge(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(10.dp),
             )
         }
     }
@@ -303,6 +314,45 @@ private fun ItemRow(
                 color = expirationColor(item.expirationStatus),
             )
         }
+    }
+}
+
+@Composable
+private fun CameraBadge(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val stroke = 1.dp.toPx()
+        val bodyTop = size.height * 0.24f
+        drawRoundRect(
+            color = Primary,
+            topLeft = Offset(size.width * 0.08f, bodyTop),
+            size = Size(size.width * 0.84f, size.height * 0.56f),
+            cornerRadius = CornerRadius(2.dp.toPx()),
+            style = Stroke(stroke),
+        )
+        drawLine(
+            color = Primary,
+            start = Offset(size.width * 0.34f, bodyTop),
+            end = Offset(size.width * 0.42f, size.height * 0.12f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = Primary,
+            start = Offset(size.width * 0.42f, size.height * 0.12f),
+            end = Offset(size.width * 0.62f, size.height * 0.12f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = Primary,
+            start = Offset(size.width * 0.62f, size.height * 0.12f),
+            end = Offset(size.width * 0.7f, bodyTop),
+            strokeWidth = stroke,
+        )
+        drawCircle(
+            color = Primary,
+            radius = size.width * 0.15f,
+            center = Offset(size.width * 0.5f, size.height * 0.52f),
+            style = Stroke(stroke),
+        )
     }
 }
 

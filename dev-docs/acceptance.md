@@ -1135,3 +1135,10 @@
 - 模拟器验证：已跳过引导的用户（`FirstRunStore.completed=true`）点顶部「帮助」→「新手指导」后，重新出现 `1 / 8` 欢迎卡片和「开始使用」。
 - 验证：`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过。
 - 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.32-test.apk`（SHA256 `08811AFA6740CA59F2597808E80A7B76C72573164EE0356842B8695095D10F1E`），服务器 latest 已更新为 0.5.32 / code 38（20,311,487 字节）。
+
+## 2026-08-12 0.5.33 无图物品首字占位证据
+
+- 功能：物品没有照片时，左侧缩略图不再显示「拍照」，改为显示物品名称首字，并在右下角绘制小相机图标；点击仍可添加照片。
+- 模拟器验证：新建无图物品 `Milki` 后列表显示首字 `M`，列表中不再出现「拍照」文案。
+- 验证：`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过。
+- 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.33-test.apk`（SHA256 `4C0DD4484987AAD57C5B0FB5AE461673D4FC3D2EB112001F28E882C1323BB6B6`），服务器 latest 已更新为 0.5.33 / code 39（20,311,487 字节）。
