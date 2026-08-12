@@ -1128,3 +1128,10 @@
 - 模拟器验证：Android 33 模拟器安装 0.5.31 / code 37 后，点「＋ 新增区域」和「＋ 新增位置」均 `mInputShown=true`，输入框获得输入连接；实际输入 `Kitchen` / `First` 后点「添加」，新区域和新位置均立即出现并自动选中。
 - 验证：`gradle :app:testDebugUnitTest --console=plain` 通过。
 - 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.31-test.apk`（SHA256 `E542F5808AF84BD4D74025A2586EDA28E73658111B0CC3E7B04590436296AFB4`）。
+
+## 2026-08-12 0.5.32 帮助内新手指导入口证据
+
+- 功能：帮助弹窗顶部新增「新手指导」按钮，点击后关闭帮助并重新进入完整新手引导（欢迎介绍 → 新增 → 拍照 → 区域 → 位置 → 草稿），不限新用户。
+- 模拟器验证：已跳过引导的用户（`FirstRunStore.completed=true`）点顶部「帮助」→「新手指导」后，重新出现 `1 / 8` 欢迎卡片和「开始使用」。
+- 验证：`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过。
+- 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.32-test.apk`（SHA256 `08811AFA6740CA59F2597808E80A7B76C72573164EE0356842B8695095D10F1E`），服务器 latest 已更新为 0.5.32 / code 38（20,311,487 字节）。

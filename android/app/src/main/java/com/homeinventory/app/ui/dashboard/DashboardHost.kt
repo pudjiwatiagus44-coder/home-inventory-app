@@ -774,6 +774,10 @@ fun DashboardHost(
     if (showHelpDialog) {
         HelpDialog(
             onSubmitFeedback = feedbackRepository::submitFeedback,
+            onStartGuide = {
+                showHelpDialog = false
+                guideStep = OnboardingSteps.WELCOME
+            },
             onDismiss = {
                 showHelpDialog = false
             },

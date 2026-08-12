@@ -32,6 +32,7 @@ import com.homeinventory.app.ui.theme.Surface
 @Composable
 fun HelpDialog(
     onSubmitFeedback: suspend (String) -> Result<Unit>,
+    onStartGuide: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var feedback by remember { mutableStateOf("") }
@@ -52,6 +53,12 @@ fun HelpDialog(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
             )
+            Button(
+                onClick = onStartGuide,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("新手指导")
+            }
             HelpSection(
                 title = "清单管理",
                 lines = listOf(
