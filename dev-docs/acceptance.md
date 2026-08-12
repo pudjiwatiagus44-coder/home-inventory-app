@@ -1048,6 +1048,13 @@
 - 服务器 latest APK 已更新为 0.5.32 / code 38（20,311,487 字节），`version.json` 与 APK 下载均返回 200。
 - 测试 APK：`android-test-build/home-inventory-internal-0.5.32-test.apk`（SHA256 `08811AFA6740CA59F2597808E80A7B76C72573164EE0356842B8695095D10F1E`）。
 
+## 2026-08-12 0.5.33 无图物品首字占位证据
+
+- 功能：物品没有照片时，左侧缩略图显示物品名称首字，并在右下角绘制小相机图标，不再显示「拍照」；点击仍可添加照片。
+- 模拟器验证：新建无图物品后列表显示首字，列表中不再出现「拍照」文案。
+- 服务器 latest APK 已更新为 0.5.33 / code 39（20,311,487 字节），`version.json` 与 APK 下载均返回 200。
+- 测试 APK：`android-test-build/home-inventory-internal-0.5.33-test.apk`（SHA256 `4C0DD4484987AAD57C5B0FB5AE461673D4FC3D2EB112001F28E882C1323BB6B6`）。
+
 ## 2026-08-12 不同区域允许同名位置证据
 
 - 数据库：`locations` 唯一约束由「household + name」改为「household + area + name」（`NULLS NOT DISTINCT`，未分区按一组处理）；新增迁移 `dev-docs/sql/location_name_unique_per_area_self_hosted.sql`，并同步 `dev-docs/database-design.md`、`dev-docs/sql/mainland_initial_schema.sql` 和 `supabase/migrations/20260812000000_location_unique_per_area.sql`。
