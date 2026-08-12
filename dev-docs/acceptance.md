@@ -1033,3 +1033,10 @@
 - APK 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.25 / code 31 APK（20,292,584 字节）到 `/opt/home-inventory-app/public/apk/`，重启服务后 `https://homestorag.xyz/apk/version.json` 显示 v0.5.25 / code 31 / size 20,292,584，APK URL 返回 200。
 - 测试账号清理：验收创建的 5 个 `codex.*@example.com` 测试账号已从服务器测试数据库删除，剩余 0。
 - 待办：按 `dev-docs/android-first-run-device-acceptance.md` 执行真机验收引导箭头定位、内联新增区域/位置自动刷新、识别中存草稿与草稿箱跳转。
+
+## 2026-08-12 0.5.31 测试包发布与手机传输工具证据
+
+- 服务器 latest APK 已更新为 0.5.31 / code 37（20,490,876 字节），`https://homestorag.xyz/apk/version.json` 返回 versionName 0.5.31 / versionCode 37，APK 下载返回 200。
+- 修复：内联“新增区域 / 新增位置”输入框从 `ExposedDropdownMenu` 弹层移到主弹窗内，自动聚焦并弹出输入法；Android 模拟器验证 `mInputShown=true`，输入 `Kitchen` / `First` 后新增并自动选中成功。
+- 新增 CLI 工具 `scripts/send-test-apk-to-phone.ps1`：复制下载链接、生成二维码 PNG 并打开；手机扫码或通过 QQ/微信分享链接即可安装。
+- 测试账号清理：本轮验收创建的 `codex.*@example.com` 测试账号已从服务器测试数据库删除，剩余 0。

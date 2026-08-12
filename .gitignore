@@ -8,6 +8,7 @@ build/
 out/
 .worktrees/
 .superpowers/
+android-test-build/
 
 # Environment and secrets
 .env
