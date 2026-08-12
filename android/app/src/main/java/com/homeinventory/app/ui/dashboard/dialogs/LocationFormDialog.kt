@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,9 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -130,11 +134,19 @@ fun AreaDropdown(
     var quickAddError by remember { mutableStateOf<String?>(null) }
     var quickAdding by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier,
-    ) {
+    val quickAddFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(quickAddMode) {
+        if (quickAddMode) {
+            quickAddFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+    Column(modifier = modifier) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+        ) {
         val selectedName = when {
             selectedAreaId == UNASSIGNED_MARKER -> "未分区"
             else -> areas.firstOrNull { it.id == selectedAreaId }?.name ?: "请选择区域"
@@ -150,114 +162,109 @@ fun AreaDropdown(
                 .fillMaxWidth()
                 .onGloballyPositioned { onFieldBounds(it.boundsInRoot()) },
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = {
-                expanded = false
-                if (quickAddMode) {
-                    quickAddMode = false
-                    quickAddName = ""
-                    quickAddError = null
-                    onQuickAddModeChange(false)
-                    onQuickAddBounds(null)
-                }
-            },
-        ) {
-            if (onQuickAdd != null || onAddArea != null) {
-                DropdownMenuItem(
-                    text = { Text("＋ 新增区域") },
-                    onClick = {
-                        if (onQuickAdd != null) {
-                            quickAddMode = true
-                            quickAddName = ""
-                            quickAddError = null
-                            onQuickAddModeChange(true)
-                        } else {
-                            expanded = false
-                            onAddArea?.invoke()
-                        }
-                    },
-                )
-            }
-            if (quickAddMode && onQuickAdd != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .onGloballyPositioned { onQuickAddBounds(it.boundsInRoot()) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = quickAddName,
-                        onValueChange = { quickAddName = it },
-                        placeholder = { Text("区域名，如厨房") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                if (onQuickAdd != null || onAddArea != null) {
+                    DropdownMenuItem(
+                        text = { Text("＋ 新增区域") },
                         onClick = {
-                            val name = quickAddName.trim()
-                            if (name.isNotEmpty() && !quickAdding) {
+                            if (onQuickAdd != null) {
+                                quickAddMode = true
+                                quickAddName = ""
                                 quickAddError = null
-                                quickAdding = true
-                                scope.launch {
-                                    onQuickAdd(name)
-                                        .onSuccess { newId ->
-                                            onSelect(newId)
-                                            quickAdding = false
-                                            quickAddMode = false
-                                            quickAddName = ""
-                                            onQuickAddModeChange(false)
-                                            onQuickAddBounds(null)
-                                        }
-                                        .onFailure { error ->
-                                            quickAdding = false
-                                            quickAddError = error.message ?: "新增区域失败"
-                                        }
-                                }
+                                expanded = false
+                                onQuickAddModeChange(true)
+                            } else {
+                                expanded = false
+                                onAddArea?.invoke()
                             }
                         },
-                        enabled = !quickAdding,
-                        modifier = Modifier.padding(start = 8.dp),
-                    ) {
-                        Text("添加")
-                    }
+                    )
                 }
-                quickAddError?.let {
-                    Text(
-                        text = it,
-                        color = Danger,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                if (includeUnassigned) {
+                    DropdownMenuItem(
+                        text = { Text("未分区") },
+                        onClick = {
+                            onSelect(UNASSIGNED_MARKER)
+                            expanded = false
+                            if (quickAddMode) {
+                                quickAddMode = false
+                                onQuickAddModeChange(false)
+                                onQuickAddBounds(null)
+                            }
+                        },
+                    )
+                }
+                areas.forEach { area ->
+                    DropdownMenuItem(
+                        text = { Text(area.name) },
+                        onClick = {
+                            onSelect(area.id)
+                            expanded = false
+                            if (quickAddMode) {
+                                quickAddMode = false
+                                onQuickAddModeChange(false)
+                                onQuickAddBounds(null)
+                            }
+                        },
                     )
                 }
             }
-            if (includeUnassigned) {
-                DropdownMenuItem(
-                    text = { Text("未分区") },
-                    onClick = {
-                        onSelect(UNASSIGNED_MARKER)
-                        expanded = false
-                        if (quickAddMode) {
-                            quickAddMode = false
-                            onQuickAddModeChange(false)
-                            onQuickAddBounds(null)
-                        }
-                    },
+        }
+        if (quickAddMode && onQuickAdd != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .onGloballyPositioned { onQuickAddBounds(it.boundsInRoot()) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = quickAddName,
+                    onValueChange = { quickAddName = it },
+                    placeholder = { Text("区域名，如厨房") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(quickAddFocusRequester),
                 )
-            }
-            areas.forEach { area ->
-                DropdownMenuItem(
-                    text = { Text(area.name) },
+                Button(
                     onClick = {
-                        onSelect(area.id)
-                        expanded = false
-                        if (quickAddMode) {
-                            quickAddMode = false
-                            onQuickAddModeChange(false)
-                            onQuickAddBounds(null)
+                        val name = quickAddName.trim()
+                        if (name.isNotEmpty() && !quickAdding) {
+                            quickAddError = null
+                            quickAdding = true
+                            scope.launch {
+                                onQuickAdd(name)
+                                    .onSuccess { newId ->
+                                        onSelect(newId)
+                                        quickAdding = false
+                                        quickAddMode = false
+                                        quickAddName = ""
+                                        onQuickAddModeChange(false)
+                                        onQuickAddBounds(null)
+                                    }
+                                    .onFailure { error ->
+                                        quickAdding = false
+                                        quickAddError = error.message ?: "新增区域失败"
+                                    }
+                            }
                         }
                     },
+                    enabled = !quickAdding,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Text("添加")
+                }
+            }
+            quickAddError?.let {
+                Text(
+                    text = it,
+                    color = Danger,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }

@@ -1120,3 +1120,11 @@
 - 基线：在 `codex/area-location-photos-deploy`（0.5.29 / code 35）上合并 `main` 的新用户引导与内联新增区域/位置，版本升至 0.5.30 / code 36。
 - 验证：`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过。
 - 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.30-test.apk`（SHA256 `B677935B148E7117881D7078332BA3CF7BEFDAA9083DE51E2333061D24D377E2`）。
+
+## 2026-08-12 0.5.31 内联新增键盘弹出修复证据
+
+- 问题：真机在“新增物品”弹窗点「＋ 新增区域 / ＋ 新增位置」后，输入框在 `ExposedDropdownMenu` 弹层内无法获得焦点，输入法不弹出。
+- 修复：把内联新增输入框从 `ExposedDropdownMenu` 弹层移到主弹窗内（区域/位置字段下方），并用 `FocusRequester` + `LocalSoftwareKeyboardController.show()` 在进入新增模式时自动聚焦并弹出输入法。
+- 模拟器验证：Android 33 模拟器安装 0.5.31 / code 37 后，点「＋ 新增区域」和「＋ 新增位置」均 `mInputShown=true`，输入框获得输入连接；实际输入 `Kitchen` / `First` 后点「添加」，新区域和新位置均立即出现并自动选中。
+- 验证：`gradle :app:testDebugUnitTest --console=plain` 通过。
+- 产物：测试 APK 位于 `android-test-build/home-inventory-internal-0.5.31-test.apk`（SHA256 `E542F5808AF84BD4D74025A2586EDA28E73658111B0CC3E7B04590436296AFB4`）。

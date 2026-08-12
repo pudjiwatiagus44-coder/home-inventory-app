@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -49,6 +51,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -124,6 +127,14 @@ fun ItemFormDialog(
     var quickAddLocationName by remember { mutableStateOf("") }
     var quickAddLocationError by remember { mutableStateOf<String?>(null) }
     var quickAddingLocation by remember { mutableStateOf(false) }
+    val quickAddLocationFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(locationQuickAddMode) {
+        if (locationQuickAddMode) {
+            quickAddLocationFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
     LaunchedEffect(initial.photoKey) {
         currentPhoto = loadCurrentPhoto().getOrNull()
     }
@@ -344,11 +355,11 @@ fun ItemFormDialog(
                 else -> "请选择位置"
             }
             var locationExpanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = locationExpanded,
-                onExpandedChange = { if (areaId.isNotEmpty()) locationExpanded = it },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ExposedDropdownMenuBox(
+                    expanded = locationExpanded,
+                    onExpandedChange = { if (areaId.isNotEmpty()) locationExpanded = it },
+                ) {
                 val selectedLocation = locations.firstOrNull { it.id == locationId }
                 OutlinedTextField(
                     value = selectedLocation?.name ?: locationLabel,
@@ -364,12 +375,7 @@ fun ItemFormDialog(
                 )
                 ExposedDropdownMenu(
                     expanded = locationExpanded,
-                    onDismissRequest = {
-                        locationExpanded = false
-                        locationQuickAddMode = false
-                        locationQuickAddBounds = null
-                        quickAddLocationError = null
-                    },
+                    onDismissRequest = { locationExpanded = false },
                 ) {
                     if ((onAddLocation != null || onQuickAddLocation != null) && areaId.isNotEmpty()) {
                         DropdownMenuItem(
@@ -379,67 +385,13 @@ fun ItemFormDialog(
                                     locationQuickAddMode = true
                                     quickAddLocationName = ""
                                     quickAddLocationError = null
+                                    locationExpanded = false
                                 } else {
                                     locationExpanded = false
                                     onAddLocation?.invoke(areaId)
                                 }
                             },
                         )
-                    }
-                    if (locationQuickAddMode && onQuickAddLocation != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .onGloballyPositioned {
-                                    locationQuickAddBounds = it.boundsInRoot()
-                                },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            OutlinedTextField(
-                                value = quickAddLocationName,
-                                onValueChange = { quickAddLocationName = it },
-                                placeholder = { Text("位置名，如第一层") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Button(
-                                onClick = {
-                                    val name = quickAddLocationName.trim()
-                                    if (name.isNotEmpty() && !quickAddingLocation) {
-                                        quickAddLocationError = null
-                                        quickAddingLocation = true
-                                        scope.launch {
-                                            onQuickAddLocation(areaId, name)
-                                                .onSuccess { newId ->
-                                                    locationId = newId
-                                                    quickAddingLocation = false
-                                                    locationQuickAddMode = false
-                                                    quickAddLocationName = ""
-                                                    locationQuickAddBounds = null
-                                                }
-                                                .onFailure { error ->
-                                                    quickAddingLocation = false
-                                                    quickAddLocationError =
-                                                        error.message ?: "新增位置失败"
-                                                }
-                                        }
-                                    }
-                                },
-                                enabled = !quickAddingLocation,
-                                modifier = Modifier.padding(start = 8.dp),
-                            ) {
-                                Text("添加")
-                            }
-                        }
-                        quickAddLocationError?.let {
-                            Text(
-                                text = it,
-                                color = Danger,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            )
-                        }
                     }
                     filteredLocations.forEach { location ->
                         DropdownMenuItem(
@@ -451,6 +403,64 @@ fun ItemFormDialog(
                                 locationQuickAddBounds = null
                                 quickAddLocationError = null
                             },
+                        )
+                    }
+                }
+                }
+                if (locationQuickAddMode && onQuickAddLocation != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .onGloballyPositioned {
+                                locationQuickAddBounds = it.boundsInRoot()
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = quickAddLocationName,
+                            onValueChange = { quickAddLocationName = it },
+                            placeholder = { Text("位置名，如第一层") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(quickAddLocationFocusRequester),
+                        )
+                        Button(
+                            onClick = {
+                                val name = quickAddLocationName.trim()
+                                if (name.isNotEmpty() && !quickAddingLocation) {
+                                    quickAddLocationError = null
+                                    quickAddingLocation = true
+                                    scope.launch {
+                                        onQuickAddLocation(areaId, name)
+                                            .onSuccess { newId ->
+                                                locationId = newId
+                                                quickAddingLocation = false
+                                                locationQuickAddMode = false
+                                                quickAddLocationName = ""
+                                                locationQuickAddBounds = null
+                                            }
+                                            .onFailure { error ->
+                                                quickAddingLocation = false
+                                                quickAddLocationError =
+                                                    error.message ?: "新增位置失败"
+                                            }
+                                    }
+                                }
+                            },
+                            enabled = !quickAddingLocation,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) {
+                            Text("添加")
+                        }
+                    }
+                    quickAddLocationError?.let {
+                        Text(
+                            text = it,
+                            color = Danger,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
