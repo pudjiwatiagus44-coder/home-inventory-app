@@ -763,6 +763,32 @@ class InventoryRepository(
         },
     )
 
+    suspend fun createAreaOnlineWithId(name: String, color: String?): Result<String> =
+        runOnlineMutationData<RemoteAreaDto>(
+            request = {
+                api.createArea(
+                    AreaCreateRequest(
+                        householdId = currentHouseholdId,
+                        name = name,
+                        color = color,
+                    ),
+                )
+            },
+            onSuccess = { remoteArea ->
+                areaDao.upsert(
+                    AreaEntity(
+                        id = remoteArea.id,
+                        serverId = remoteArea.id,
+                        name = remoteArea.name,
+                        color = remoteArea.color,
+                        serverUpdatedAt = remoteArea.updatedAt,
+                        localUpdatedAt = System.currentTimeMillis(),
+                        syncStatus = SyncStatus.Synced,
+                    ),
+                )
+            },
+        ).map { it.id }
+
     suspend fun updateAreaOnline(serverId: String, name: String, color: String?): Result<Unit> = runOnlineMutation<RemoteAreaDto>(
         request = {
             api.updateArea(
@@ -819,6 +845,32 @@ class InventoryRepository(
             )
         },
     )
+
+    suspend fun createLocationOnlineWithId(name: String, areaId: String?): Result<String> =
+        runOnlineMutationData<RemoteLocationDto>(
+            request = {
+                api.createLocation(
+                    LocationCreateRequest(
+                        householdId = currentHouseholdId,
+                        name = name,
+                        areaId = areaId,
+                    ),
+                )
+            },
+            onSuccess = { remoteLocation ->
+                locationDao.upsert(
+                    LocationEntity(
+                        id = remoteLocation.id,
+                        serverId = remoteLocation.id,
+                        areaId = remoteLocation.areaId,
+                        name = remoteLocation.name,
+                        serverUpdatedAt = remoteLocation.updatedAt,
+                        localUpdatedAt = System.currentTimeMillis(),
+                        syncStatus = SyncStatus.Synced,
+                    ),
+                )
+            },
+        ).map { it.id }
 
     suspend fun updateLocationOnline(serverId: String, name: String, areaId: String?): Result<Unit> = runOnlineMutation<RemoteLocationDto>(
         request = {
@@ -1020,7 +1072,13 @@ class InventoryRepository(
         request: () -> retrofit2.Response<ApiEnvelope<T>>,
         requireData: Boolean = true,
         onSuccess: (T) -> Unit,
-    ): Result<Unit> {
+    ): Result<Unit> = runOnlineMutationData(request, requireData, onSuccess).map { Unit }
+
+    private suspend inline fun <T> runOnlineMutationData(
+        request: () -> retrofit2.Response<ApiEnvelope<T>>,
+        requireData: Boolean = true,
+        onSuccess: (T) -> Unit,
+    ): Result<T> {
         val response = try {
             request()
         } catch (_: Exception) {
@@ -1037,7 +1095,7 @@ class InventoryRepository(
         @Suppress("UNCHECKED_CAST")
         val successValue: T = if (requireData) data as T else Unit as T
         onSuccess(successValue)
-        return Result.success(Unit)
+        return Result.success(successValue)
     }
 
     private suspend fun replaceServerData(dashboard: RemoteDashboardDto) {

@@ -239,6 +239,31 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    fun createAreaOnlineWithIdReturnsServerIdAndWritesToRoom() = runTest {
+        val repository = repositoryWith(api = object : TestApiStub() {})
+
+        val result = repository.createAreaOnlineWithId("厨房", null)
+
+        assertTrue(result.isSuccess)
+        assertEquals("area-1", result.getOrNull())
+        val snapshot = repository.observeInventory().first()
+        assertEquals(listOf("厨房"), snapshot.areas.map { it.name })
+    }
+
+    @Test
+    fun createLocationOnlineWithIdReturnsServerIdAndWritesToRoom() = runTest {
+        val repository = repositoryWith(api = object : TestApiStub() {})
+
+        val result = repository.createLocationOnlineWithId("第一层", "area-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals("location-1", result.getOrNull())
+        val snapshot = repository.observeInventory().first()
+        assertEquals(listOf("第一层"), snapshot.locations.map { it.name })
+        assertEquals("area-1", snapshot.locations[0].areaId)
+    }
+
+    @Test
     fun refreshSnapshotReturnsFailureWithServerMessageWhenResponseFails() = runTest {
         val repository = repositoryWith(
             api = FakeSnapshotApi(

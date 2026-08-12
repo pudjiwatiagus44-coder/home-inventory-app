@@ -19,10 +19,15 @@
 - `acceptance.md` - 阶段验收门槛、证据记录、停止条件。
 - `user-manual.md` - 用户使用说明书（随功能迭代更新；App 内帮助入口已实现）。
 - `archive/` - 历史资料归档区；默认开发、搜索、计划和实现不要进入。
+- `android-first-run-device-acceptance.md` - Android 新用户引导真机验收清单。
 - `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md` - 登录页增强与密码重置设计（2026-08-08，设计已确认，实施中）。
 - `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md` - 登录页增强与密码重置实施计划。
 - `docs/superpowers/specs/2026-08-11-area-location-photos-design.md` - 区域/位置照片设计（2026-08-11，本地实现完成，待部署验收）。
 - `docs/superpowers/plans/2026-08-11-area-location-photos.md` - 区域/位置照片实施计划。
+
+## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，已部署阿里云测试环境）
+
+用户确认 Android 内测版新增新用户使用引导：新注册用户首次进入清单页看到欢迎介绍语，随后按步骤点击「+ 新增」→「识别名称 / 拍照」→ 选择或新增区域 → 选择或新增位置 → 存入草稿箱或直接保存 → 打开草稿箱；右上角 X 可随时跳过。物品表单内新增区域/位置支持直接输入名称即时创建并自动选中，新增位置默认匹配刚选的区域。本地实现已完成并部署阿里云测试环境（Android 0.5.25 / code 31），已通过 Android 模拟器完整引导流程验收。说明同步到 `dev-docs/user-manual.md`，验收证据见 `dev-docs/acceptance.md`。
 
 ## 2026-08-08 登录页增强与密码重置（设计已确认，实施中）
 

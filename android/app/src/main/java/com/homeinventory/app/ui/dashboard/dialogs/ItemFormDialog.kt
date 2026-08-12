@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,9 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +57,7 @@ import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.repository.InventorySnapshot
 import com.homeinventory.app.data.repository.RecognitionDraft
+import com.homeinventory.app.ui.dashboard.onboarding.GuideOverlay
 import com.homeinventory.app.ui.theme.Border
 import com.homeinventory.app.ui.theme.Danger
 import com.homeinventory.app.ui.theme.Foreground
@@ -80,6 +85,11 @@ fun ItemFormDialog(
     showDraftButton: Boolean = true,
     onAddArea: (() -> Unit)? = null,
     onAddLocation: ((String) -> Unit)? = null,
+    onQuickAddArea: (suspend (String) -> Result<String>)? = null,
+    onQuickAddLocation: (suspend (String, String) -> Result<String>)? = null,
+    guideStep: Int = -1,
+    onGuideNext: () -> Unit = {},
+    onGuideSkip: () -> Unit = {},
     onBatchImportToDrafts: (String?, String?, List<ByteArray>) -> Unit = { _, _, _ -> },
     batchProgress: String? = null,
     loadCurrentPhoto: suspend () -> Result<Bitmap> = {
@@ -102,6 +112,18 @@ fun ItemFormDialog(
     var sourceDialogVisible by remember { mutableStateOf(false) }
     var currentPhoto by remember { mutableStateOf<Bitmap?>(null) }
     var lastPhotoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var recognizeBounds by remember { mutableStateOf<Rect?>(null) }
+    var sourcePhotoBounds by remember { mutableStateOf<Rect?>(null) }
+    var areaFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var areaQuickAddBounds by remember { mutableStateOf<Rect?>(null) }
+    var locationFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var locationQuickAddBounds by remember { mutableStateOf<Rect?>(null) }
+    var saveToDraftBounds by remember { mutableStateOf<Rect?>(null) }
+    var saveBounds by remember { mutableStateOf<Rect?>(null) }
+    var locationQuickAddMode by remember { mutableStateOf(false) }
+    var quickAddLocationName by remember { mutableStateOf("") }
+    var quickAddLocationError by remember { mutableStateOf<String?>(null) }
+    var quickAddingLocation by remember { mutableStateOf(false) }
     LaunchedEffect(initial.photoKey) {
         currentPhoto = loadCurrentPhoto().getOrNull()
     }
@@ -229,14 +251,50 @@ fun ItemFormDialog(
         }
     }
 
+    val guideTitle = when (guideStep) {
+        2 -> "拍一张物品正面照"
+        3 -> "选择或新增区域"
+        4 -> "选择或新增位置"
+        5 -> "保存或先存草稿"
+        else -> ""
+    }
+    val guideText = when (guideStep) {
+        2 -> "点「识别名称」后选「拍照」；名称和备注会自动识别填入。"
+        3 -> "点「所属区域」选择已有区域；没有时选「＋ 新增区域」，在输入框填名称并点「添加」，新区域会立即出现并自动选中。"
+        4 -> "点「位置」选择或新增位置，比如第一层、顶部；新增位置会自动匹配刚选的区域。"
+        5 -> "识别中也可以先点「存入草稿箱」，后台会继续识别；等识别完成再点「保存」直接建档也可以。"
+        else -> ""
+    }
+    val guideTarget = when (guideStep) {
+        2 -> if (sourceDialogVisible) sourcePhotoBounds ?: recognizeBounds else recognizeBounds
+        3 -> areaQuickAddBounds ?: areaFieldBounds
+        4 -> locationQuickAddBounds ?: locationFieldBounds
+        5 -> {
+            val draft = saveToDraftBounds
+            val save = saveBounds
+            when {
+                draft != null && save != null -> Rect(
+                    left = minOf(draft.left, save.left),
+                    top = minOf(draft.top, save.top),
+                    right = maxOf(draft.right, save.right),
+                    bottom = maxOf(draft.bottom, save.bottom),
+                )
+                draft != null -> draft
+                else -> save
+            }
+        }
+        else -> null
+    }
+
     Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(Surface)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        Box {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Surface)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -273,6 +331,12 @@ fun ItemFormDialog(
                 },
                 includeUnassigned = false,
                 onAddArea = onAddArea,
+                onQuickAdd = onQuickAddArea,
+                onFieldBounds = { areaFieldBounds = it },
+                onQuickAddBounds = { areaQuickAddBounds = it },
+                onQuickAddModeChange = { active ->
+                    if (!active) areaQuickAddBounds = null
+                },
             )
             val locationLabel = when {
                 areaId == "" -> "请先选择区域"
@@ -295,20 +359,87 @@ fun ItemFormDialog(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = locationExpanded) },
                     modifier = Modifier
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .onGloballyPositioned { locationFieldBounds = it.boundsInRoot() },
                 )
                 ExposedDropdownMenu(
                     expanded = locationExpanded,
-                    onDismissRequest = { locationExpanded = false },
+                    onDismissRequest = {
+                        locationExpanded = false
+                        locationQuickAddMode = false
+                        locationQuickAddBounds = null
+                        quickAddLocationError = null
+                    },
                 ) {
-                    if (onAddLocation != null && areaId.isNotEmpty()) {
+                    if ((onAddLocation != null || onQuickAddLocation != null) && areaId.isNotEmpty()) {
                         DropdownMenuItem(
-                            text = { Text("＋ 新增格子") },
+                            text = { Text("＋ 新增位置") },
                             onClick = {
-                                locationExpanded = false
-                                onAddLocation(areaId)
+                                if (onQuickAddLocation != null) {
+                                    locationQuickAddMode = true
+                                    quickAddLocationName = ""
+                                    quickAddLocationError = null
+                                } else {
+                                    locationExpanded = false
+                                    onAddLocation?.invoke(areaId)
+                                }
                             },
                         )
+                    }
+                    if (locationQuickAddMode && onQuickAddLocation != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .onGloballyPositioned {
+                                    locationQuickAddBounds = it.boundsInRoot()
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = quickAddLocationName,
+                                onValueChange = { quickAddLocationName = it },
+                                placeholder = { Text("位置名，如第一层") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Button(
+                                onClick = {
+                                    val name = quickAddLocationName.trim()
+                                    if (name.isNotEmpty() && !quickAddingLocation) {
+                                        quickAddLocationError = null
+                                        quickAddingLocation = true
+                                        scope.launch {
+                                            onQuickAddLocation(areaId, name)
+                                                .onSuccess { newId ->
+                                                    locationId = newId
+                                                    quickAddingLocation = false
+                                                    locationQuickAddMode = false
+                                                    quickAddLocationName = ""
+                                                    locationQuickAddBounds = null
+                                                }
+                                                .onFailure { error ->
+                                                    quickAddingLocation = false
+                                                    quickAddLocationError =
+                                                        error.message ?: "新增位置失败"
+                                                }
+                                        }
+                                    }
+                                },
+                                enabled = !quickAddingLocation,
+                                modifier = Modifier.padding(start = 8.dp),
+                            ) {
+                                Text("添加")
+                            }
+                        }
+                        quickAddLocationError?.let {
+                            Text(
+                                text = it,
+                                color = Danger,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                        }
                     }
                     filteredLocations.forEach { location ->
                         DropdownMenuItem(
@@ -316,6 +447,9 @@ fun ItemFormDialog(
                             onClick = {
                                 locationId = location.id
                                 locationExpanded = false
+                                locationQuickAddMode = false
+                                locationQuickAddBounds = null
+                                quickAddLocationError = null
                             },
                         )
                     }
@@ -338,6 +472,9 @@ fun ItemFormDialog(
                         sourceDialogVisible = true
                     },
                     enabled = recognizing == null,
+                    modifier = Modifier.onGloballyPositioned {
+                        recognizeBounds = it.boundsInRoot()
+                    },
                 ) {
                     Text(if (recognizing == "name") "识别中..." else "识别名称")
                 }
@@ -395,26 +532,43 @@ fun ItemFormDialog(
                         )
                     },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = {
-                                    sourceDialogVisible = false
-                                    cameraLauncher.launch(cameraUri)
-                                },
-                            ) {
-                                Text("拍照")
+                        Box(Modifier.fillMaxWidth()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        sourceDialogVisible = false
+                                        cameraLauncher.launch(cameraUri)
+                                    },
+                                    modifier = Modifier.onGloballyPositioned {
+                                        sourcePhotoBounds = it.boundsInRoot()
+                                    },
+                                ) {
+                                    Text("拍照")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        sourceDialogVisible = false
+                                        galleryLauncher.launch(
+                                            PickVisualMediaRequest(
+                                                ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                            ),
+                                        )
+                                    },
+                                ) {
+                                    Text("从相册选择")
+                                }
                             }
-                            TextButton(
-                                onClick = {
-                                    sourceDialogVisible = false
-                                    galleryLauncher.launch(
-                                        PickVisualMediaRequest(
-                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                        ),
-                                    )
-                                },
-                            ) {
-                                Text("从相册选择")
+                            if (guideStep == 2) {
+                                GuideOverlay(
+                                    title = "拍一张物品正面照",
+                                    text = "现在点「拍照」；识别完成后名称和备注会自动填入。",
+                                    stepNumber = 3,
+                                    totalSteps = 8,
+                                    targetBounds = sourcePhotoBounds,
+                                    onNext = onGuideNext,
+                                    onSkip = onGuideSkip,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                             }
                         }
                     },
@@ -464,6 +618,9 @@ fun ItemFormDialog(
                             )
                         },
                         enabled = !isSaving,
+                        modifier = Modifier.onGloballyPositioned {
+                            saveToDraftBounds = it.boundsInRoot()
+                        },
                     ) {
                         Text("存入草稿箱")
                     }
@@ -482,9 +639,31 @@ fun ItemFormDialog(
                         )
                     },
                     enabled = !isSaving,
+                    modifier = Modifier.onGloballyPositioned {
+                        saveBounds = it.boundsInRoot()
+                    },
                 ) {
                     Text(if (isSaving) "保存中..." else "保存")
                 }
+            }
+            }
+            if (guideStep in 2..6 && !sourceDialogVisible) {
+                GuideOverlay(
+                    title = guideTitle,
+                    text = guideText,
+                    stepNumber = when (guideStep) {
+                        2 -> 3
+                        3 -> 4
+                        4 -> 5
+                        else -> 6
+                    },
+                    totalSteps = 8,
+                    targetBounds = guideTarget,
+                    onNext = onGuideNext,
+                    onSkip = onGuideSkip,
+                    showNext = guideStep in 2..4,
+                    modifier = Modifier.matchParentSize(),
+                )
             }
         }
     }

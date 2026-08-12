@@ -33,6 +33,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +66,7 @@ fun TopBar(
     onHelp: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    onDraftBounds: (Rect) -> Unit = {},
 ) {
     var householdMenuExpanded by remember { mutableStateOf(false) }
     var settingsExpanded by remember { mutableStateOf(false) }
@@ -131,7 +136,10 @@ fun TopBar(
                 )
             }
         }
-        TextButton(onClick = onDraftsClick) {
+        TextButton(
+            onClick = onDraftsClick,
+            modifier = Modifier.onGloballyPositioned { onDraftBounds(it.boundsInRoot()) },
+        ) {
             Text("草稿")
             if (draftCount > 0) {
                 Spacer(modifier = Modifier.width(3.dp))
