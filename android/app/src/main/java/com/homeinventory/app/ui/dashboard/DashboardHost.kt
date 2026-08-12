@@ -54,6 +54,7 @@ import com.homeinventory.app.ui.dashboard.dialogs.LocationFormValues
 import com.homeinventory.app.ui.dashboard.dialogs.PhotoPreviewDialog
 import com.homeinventory.app.ui.dashboard.dialogs.UNASSIGNED_MARKER
 import com.homeinventory.app.ui.dashboard.onboarding.GuideOverlay
+import com.homeinventory.app.ui.dashboard.onboarding.OnboardingSteps
 import kotlinx.coroutines.launch
 
 private sealed interface PhotoEntityTarget {
@@ -108,13 +109,17 @@ fun DashboardHost(
     var isRefreshing by remember { mutableStateOf(false) }
     val conflictResolutions = remember { mutableStateMapOf<String, String>() }
     val firstRunStore = remember { SharedPreferencesFirstRunStore(context.applicationContext) }
-    var guideStep by remember { mutableStateOf(if (firstRunStore.shouldShow()) 0 else -1) }
+    var guideStep by remember {
+        mutableStateOf(
+            if (firstRunStore.shouldShow()) OnboardingSteps.WELCOME else OnboardingSteps.HIDDEN,
+        )
+    }
     var addButtonBounds by remember { mutableStateOf<Rect?>(null) }
     var draftButtonBounds by remember { mutableStateOf<Rect?>(null) }
 
     fun skipGuide() {
         firstRunStore.markCompleted()
-        guideStep = -1
+        guideStep = OnboardingSteps.HIDDEN
     }
 
     suspend fun quickAddArea(name: String): Result<String> {
@@ -202,14 +207,12 @@ fun DashboardHost(
             editingDraftId = null
         }
     }
-    LaunchedEffect(guideStep, showItemForm) {
-        when (guideStep) {
-            1 -> if (showItemForm) guideStep = 2
-            in 2..6 -> if (!showItemForm) guideStep = 7
-        }
-    }
-    LaunchedEffect(guideStep, showDraftsDialog) {
-        if (guideStep == 7 && showDraftsDialog) guideStep = 8
+    LaunchedEffect(guideStep, showItemForm, showDraftsDialog) {
+        guideStep = OnboardingSteps.advance(
+            current = guideStep,
+            showItemForm = showItemForm,
+            showDraftsDialog = showDraftsDialog,
+        )
     }
     var pendingPhotoItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     val itemCameraFile = remember { mutableStateOf<File?>(null) }
@@ -529,17 +532,17 @@ fun DashboardHost(
             onDraftButtonBounds = { draftButtonBounds = it },
         )
         when (guideStep) {
-            0 -> GuideOverlay(
+            OnboardingSteps.WELCOME -> GuideOverlay(
                 title = "欢迎使用家庭物品管家",
                 text = "把家里的物品按区域、位置记清楚，之后找东西、查保质期都更快。跟着下面的步骤录入第一件物品；想跳过时点右上角 X。",
                 stepNumber = 1,
                 totalSteps = 8,
                 targetBounds = null,
-                onNext = { guideStep = 1 },
+                onNext = { guideStep = OnboardingSteps.ADD_ITEM },
                 onSkip = ::skipGuide,
                 nextLabel = "开始使用",
             )
-            1 -> GuideOverlay(
+            OnboardingSteps.ADD_ITEM -> GuideOverlay(
                 title = "录入第一件物品",
                 text = "点右下角「+ 新增」，打开新增物品表单。",
                 stepNumber = 2,
@@ -549,7 +552,7 @@ fun DashboardHost(
                 onSkip = ::skipGuide,
                 showNext = false,
             )
-            7 -> GuideOverlay(
+            OnboardingSteps.DRAFT_BOX -> GuideOverlay(
                 title = "打开草稿箱",
                 text = "点顶部「草稿」查看草稿箱；在里面可以继续编辑、直接保存或删除。",
                 stepNumber = 7,
@@ -559,7 +562,7 @@ fun DashboardHost(
                 onSkip = ::skipGuide,
                 showNext = false,
             )
-            8 -> GuideOverlay(
+            OnboardingSteps.DONE -> GuideOverlay(
                 title = "完成",
                 text = "你已经走完录入流程。以后点右上角「帮助」可以随时查看使用说明。",
                 stepNumber = 8,
@@ -658,7 +661,9 @@ fun DashboardHost(
             onQuickAddLocation = { areaId, name -> quickAddLocation(areaId, name) },
             guideStep = guideStep,
             onGuideNext = {
-                if (guideStep in 2..4) guideStep += 1
+                if (guideStep in OnboardingSteps.PHOTO..OnboardingSteps.LOCATION) {
+                    guideStep += 1
+                }
             },
             onGuideSkip = ::skipGuide,
             onBatchImportToDrafts = viewModel::batchImportToDrafts,

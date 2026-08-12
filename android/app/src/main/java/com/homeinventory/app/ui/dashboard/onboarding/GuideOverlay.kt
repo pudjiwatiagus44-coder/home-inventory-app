@@ -2,6 +2,8 @@ package com.homeinventory.app.ui.dashboard.onboarding
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -55,6 +59,7 @@ fun GuideOverlay(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .onGloballyPositioned { overlayBounds = it.boundsInRoot() },
     ) {
         val density = LocalDensity.current
@@ -114,6 +119,7 @@ fun GuideOverlay(
                 .padding(16.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Surface)
+                .heightIn(max = maxHeight * 0.62f)
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -133,7 +139,14 @@ fun GuideOverlay(
                 }
             }
             Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(text = text, fontSize = 14.sp, color = MutedForeground)
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(text = text, fontSize = 14.sp, color = MutedForeground)
+            }
             if (showNext) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

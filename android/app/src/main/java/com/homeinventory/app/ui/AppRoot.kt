@@ -211,7 +211,6 @@ fun AppRoot() {
                                 password = ""
                                 persistRememberedEmail()
                                 isLoggedIn = true
-                                app.firstRunStore.markPending()
                                 scope.launch {
                                     repository.loadHouseholds()
                                     repository.refreshSnapshot()
@@ -233,6 +232,7 @@ fun AppRoot() {
                                 password = ""
                                 persistRememberedEmail()
                                 isLoggedIn = true
+                                app.firstRunStore.markPending()
                                 scope.launch {
                                     repository.loadHouseholds()
                                     repository.refreshSnapshot()

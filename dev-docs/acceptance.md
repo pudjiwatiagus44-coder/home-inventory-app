@@ -1019,13 +1019,17 @@
 
 ## 2026-08-12 新用户引导与内联新增区域/位置验收证据
 
-状态：Android 本地实现、自动化验证与阿里云测试环境部署完成；真机验收待进行。
+状态：Android 本地实现、自动化验证、模拟器引导流程验收与阿里云测试环境部署完成；真机确认仍可补充。
 
 - 实现：新增 `SharedPreferencesFirstRunStore`（注册成功后 `markPending()`，跳过/完成后 `markCompleted()`）；新增 `GuideOverlay` 遮罩组件，用箭头和高亮框引导点击目标按钮，右上角 X 可随时跳过；引导步骤覆盖欢迎介绍、右下角「+ 新增」、「识别名称 / 拍照」、选择或新增区域、选择或新增位置、存入草稿箱或直接保存、打开顶部「草稿」、完成。
 - 内联新增：物品表单的「＋ 新增区域 / ＋ 新增位置」改为在输入框内直接填名称并点「添加」，新增后立即出现在列表并自动选中；新增位置自动匹配当前所选区域；原「＋ 新增格子」文案统一为「＋ 新增位置」。
 - 数据层：`InventoryRepository` 新增 `createAreaOnlineWithId` / `createLocationOnlineWithId`，沿用 `runOnlineMutationData` 返回新记录 id；离线兜底仍走 `createAreaOffline` / `createLocationOffline` 并返回本地 id。
 - 验证：`gradle :app:compileDebugKotlin --console=plain` 通过；`gradle :app:testDebugUnitTest :app:assembleDebug --console=plain` 通过（现有 Android 单测全通过，并新增 `createAreaOnlineWithId` / `createLocationOnlineWithId` 两个仓库单测，Debug APK 构建成功）。
 - 真源同步：`dev-docs/README.md`、`dev-docs/user-manual.md` 已更新新用户引导与内联新增说明。
+- 自动化补充：引导步骤状态机抽为 `OnboardingSteps` 并新增 4 个 JVM 单测；真机验收步骤见 `dev-docs/android-first-run-device-acceptance.md`。
+- 模拟器验收：安装 Android 33 x86_64 AVD（WHPX 加速）并安装 0.5.25 / code 31，注册新账号走完整流程：欢迎卡片可见且「开始使用」不超出屏幕；点「+ 新增」自动进入下一步；「识别名称」及拍照来源弹窗内均显示引导；内联新增区域 `Kitchen` 后立即出现并自动选中；内联新增位置 `First` 后自动匹配刚选的区域；点「存入草稿箱」后草稿角标为 1，打开草稿箱看到草稿；点「完成」后引导隐藏且 `FirstRunStore.completed=true`；另用新账号验证「✕」跳过同样写 `completed=true`。
+- 修复：`markPending()` 从登录分支移到注册分支（此前新注册用户不会触发引导）；欢迎卡片加 `navigationBarsPadding` 并限制高度，避免「开始使用」被系统导航栏遮挡；拍照来源弹窗内引导由 `matchParentSize` 改为 `fillMaxSize`，确保弹窗内引导正常显示。
 - 部署：本地提交 `15f9436`（含版本 0.5.24 / code 30）已推送 GitHub `origin/main`；通过 git bundle 传输到服务器，在 `/opt/home-inventory-app-new` 执行 `npm ci` + `npm run build`，备份旧目录为 `/opt/home-inventory-app.bak.20260812_072527`，切换后 `home-inventory-app.service` active，`https://homestorag.xyz/login` 返回 200。
-- APK 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.24 / code 30 APK（20,262,335 字节）到 `/opt/home-inventory-app/public/apk/`，重启服务后 `https://homestorag.xyz/apk/version.json` 显示 v0.5.24 / code 30 / size 20,262,335，APK URL 返回 200。
-- 待办：真机验收引导箭头定位、内联新增区域/位置自动刷新、识别中存草稿与草稿箱跳转。
+- APK 发布：`scripts/upload-apk.ps1` 构建并上传 0.5.25 / code 31 APK（20,292,584 字节）到 `/opt/home-inventory-app/public/apk/`，重启服务后 `https://homestorag.xyz/apk/version.json` 显示 v0.5.25 / code 31 / size 20,292,584，APK URL 返回 200。
+- 测试账号清理：验收创建的 5 个 `codex.*@example.com` 测试账号已从服务器测试数据库删除，剩余 0。
+- 待办：按 `dev-docs/android-first-run-device-acceptance.md` 执行真机验收引导箭头定位、内联新增区域/位置自动刷新、识别中存草稿与草稿箱跳转。
