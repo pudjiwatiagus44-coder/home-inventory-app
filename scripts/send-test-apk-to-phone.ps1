@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 if (-not $ApkPath) {
-    $ApkPath = Join-Path $repoRoot "android-test-build\home-inventory-internal-0.5.31-test.apk"
+    $ApkPath = Join-Path $repoRoot "android-test-build\home-inventory-internal-0.5.32-test.apk"
 } elseif (-not [System.IO.Path]::IsPathRooted($ApkPath)) {
     $ApkPath = Join-Path $repoRoot $ApkPath
 }

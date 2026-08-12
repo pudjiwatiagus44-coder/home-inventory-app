@@ -1040,3 +1040,10 @@
 - 修复：内联“新增区域 / 新增位置”输入框从 `ExposedDropdownMenu` 弹层移到主弹窗内，自动聚焦并弹出输入法；Android 模拟器验证 `mInputShown=true`，输入 `Kitchen` / `First` 后新增并自动选中成功。
 - 新增 CLI 工具 `scripts/send-test-apk-to-phone.ps1`：复制下载链接、生成二维码 PNG 并打开；手机扫码或通过 QQ/微信分享链接即可安装。
 - 测试账号清理：本轮验收创建的 `codex.*@example.com` 测试账号已从服务器测试数据库删除，剩余 0。
+
+## 2026-08-12 0.5.32 帮助内新手指导入口证据
+
+- 功能：帮助弹窗顶部新增「新手指导」按钮，点击后重新进入完整新手引导，不限新用户。
+- 模拟器验证：已跳过引导的用户（`FirstRunStore.completed=true`）点「帮助」→「新手指导」后重新出现 `1 / 8` 欢迎卡片。
+- 服务器 latest APK 已更新为 0.5.32 / code 38（20,311,487 字节），`version.json` 与 APK 下载均返回 200。
+- 测试 APK：`android-test-build/home-inventory-internal-0.5.32-test.apk`（SHA256 `08811AFA6740CA59F2597808E80A7B76C72573164EE0356842B8695095D10F1E`）。
