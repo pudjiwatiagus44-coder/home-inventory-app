@@ -82,6 +82,40 @@ describe("doubao bookkeeping client", () => {
     expect(result.ok && result.value[0]?.dateTime).toBe("2026-08-10 22:56");
   });
 
+  it("instructs model to recognize income (收款/到账/红包 etc.) instead of defaulting to 支出", async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const systemPrompt = String(body.messages[0].content);
+      expect(systemPrompt).toContain("资金流入");
+      expect(systemPrompt).toContain("收款");
+      expect(systemPrompt).toContain("到账");
+      expect(systemPrompt).toContain("红包");
+      expect(systemPrompt).toContain("不要判成支出");
+      return jsonResponse(200, {
+        choices: [{ message: { content: JSON.stringify([{
+          dateTime: "2026-08-21 12:30", type: "收入", category: "其他", amount: "50.00",
+          currency: "人民币", payerPayee: "张三", account: "微信(1234)", participant: "自己",
+          tag: "", merchant: "张三", property: "", note: "收款",
+        }]) } }],
+      });
+    });
+    const client = createDoubaoBookkeepingClient({ apiKey: "key", fetchImpl: fetchImpl as typeof fetch });
+
+    const result = await client.understandOcrText(
+      "微信到账\n张三\n收款 ¥50.00\n余额: ¥680.50",
+      "2026-08-21T12:30:00+08:00",
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: [{
+        dateTime: "2026-08-21 12:30", type: "收入", category: "其他", amount: "50.00",
+        currency: "人民币", payerPayee: "张三", account: "微信(1234)", participant: "自己",
+        tag: "", merchant: "张三", property: "", note: "收款",
+      }],
+    });
+  });
+
   it("instructs model to take paid amount and separate shop name from item name", async () => {
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
