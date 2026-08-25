@@ -47,8 +47,9 @@ dateTime,type,category,amount,currency,payerPayee,account,participant,tag,mercha
 
 export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
   const apiKey = deps.apiKey ?? process.env.DOUBAO_API_KEY?.trim() ?? "";
-  const model = deps.model ?? process.env.DOUBAO_VISION_MODEL?.trim() ?? "doubao-seed-2-0-mini-260428";
-  const baseUrl = deps.baseUrl ?? process.env.DOUBAO_VISION_BASE_URL?.trim() ??
+  // 记账（文本理解）使用独立的文本模型变量，与家庭物品（视觉识别）的 DOUBAO_VISION_MODEL 分开，避免互相影响。
+  const model = deps.model ?? process.env.DOUBAO_TEXT_MODEL?.trim() ?? "doubao-seed-2-0-mini-260428";
+  const baseUrl = deps.baseUrl ?? process.env.DOUBAO_TEXT_BASE_URL?.trim() ??
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
 
