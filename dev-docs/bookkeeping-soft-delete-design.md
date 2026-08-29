@@ -1,6 +1,6 @@
 # 一键记账软删除与同步墓碑契约
 
-日期：2026-08-29  
+日期：2026-08-29
 状态：P0-T0 服务器契约真源；仅供测试设计与后续实现使用，未授权生产执行。
 
 ## 1. 范围与不变量
@@ -15,17 +15,41 @@
 
 ### 新增、修改与删除
 
-`UPSERT` 新增可无 `serverId`，客户端必须在重试前分配稳定 UUID；修改必须携带稳定 `serverId`、`baseUpdatedAt` 和 `localUpdatedAt`。基线过期返回 `conflict`，不得伪造 `applied`。
+新增 `UPSERT` 由客户端先生成稳定 UUID 并作为 `serverId` 发送；服务端不得依赖随机生成 ID。这样请求超时后的重试仍指向同一实体，不会产生重复账目。修改也必须携带稳定 `serverId`、`baseUpdatedAt` 和 `localUpdatedAt`。基线过期返回 `conflict`，不得伪造 `applied`。
+
+新增成功响应：
+
+```json
+{"ok":true,"data":{"cursor":"2026-08-29T08:00:00Z","changes":[],"conflicts":[],"results":[{"localId":"local-1","serverId":"11111111-1111-4111-8111-111111111111","entityType":"transaction","status":"applied"}]}}
+```
 
 `DELETE` 必须携带 `op`、`entityType`、`localId`、稳定 `serverId`、`baseUpdatedAt` 和 `localUpdatedAt`，不携带交易 payload。首次删除写入 `deleted_at` 和新的服务端 `updated_at`，返回 `applied`；同一 UUID 重复 DELETE 必须幂等返回 `applied`，不得生成新记录。不存在、归属不符或实体类型不符返回 `rejected/not_found`，不得静默成功。
+
+删除成功响应：
+
+```json
+{"ok":true,"data":{"cursor":"2026-08-29T08:01:00Z","changes":[],"conflicts":[],"results":[{"localId":"local-1","serverId":"11111111-1111-4111-8111-111111111111","entityType":"transaction","status":"applied"}]}}
+```
 
 ### 恢复
 
 恢复使用带稳定 UUID 的完整脱敏 `UPSERT`。服务端读取当前墓碑的 `deleted_at`，使用服务端 UTC 时间判定：删除未满 30 天才允许清空 `deleted_at` 并返回 `applied`；恰好 30 天、超过 30 天、未来时间或不存在时分别返回 `rejected/restore_window_expired`、`rejected/invalid_deleted_at` 或 `rejected/not_found`。恢复必须经过冲突检查。
 
+过期恢复响应：
+
+```json
+{"ok":true,"data":{"cursor":"2026-08-29T08:02:00Z","changes":[],"conflicts":[],"results":[{"localId":"local-1","serverId":"11111111-1111-4111-8111-111111111111","entityType":"transaction","status":"rejected","reason":"restore_window_expired"}]}}
+```
+
 ### 拉取墓碑、结果与隔离
 
 `since` 增量必须返回墓碑：`deleted: true`、稳定 `serverId` 和 `serverUpdatedAt`，不得被 `deleted_at is null` 过滤；客户端只更新本地软删除状态，不物理删除。
+
+墓碑拉取响应：
+
+```json
+{"ok":true,"data":{"cursor":"2026-08-29T08:03:00Z","changes":[{"entityType":"transaction","serverId":"11111111-1111-4111-8111-111111111111","deleted":true,"payload":null,"serverUpdatedAt":"2026-08-29T08:01:00Z"}],"conflicts":[],"results":[]}}
+```
 
 每个操作必须有结果。只有身份匹配的 `applied` 才能标记本地同步完成；`conflict`、`rejected` 或缺失结果继续待同步。相同 DELETE 重试使用相同 UUID。
 
@@ -51,7 +75,9 @@
 
 ## 4. 迁移、回滚与发布门
 
-迁移只允许新增或校正 `bookkeeping_transactions.deleted_at timestamptz` 及增量查询所需索引；必须使用幂等 DDL，不得修改库存表。执行前在 `home_inventory_test` 做备份/快照并记录 schema 检查结果；失败时仅回滚本次 `bookkeeping_*` 迁移，不删除已有账目。
+迁移只允许新增或校正 `bookkeeping_transactions.deleted_at timestamptz` 及增量查询所需索引；必须使用幂等 DDL，不得修改库存表。测试库执行前使用 `pg_dump --format=custom --file=home_inventory_test-before-bookkeeping.dump home_inventory_test`，随后用 `pg_restore --list home_inventory_test-before-bookkeeping.dump` 验证备份可读，并记录迁移前 schema 快照。新增列/索引的回滚必须使用经审核的 `alter table bookkeeping_transactions drop column if exists deleted_at;` 与对应 `drop index if exists ...`；若该列已被实现或数据写入，先停止并改走数据保留/人工审核，不得直接回滚丢失数据。
+
+测试库迁移失败时，停止后仅恢复本次 `bookkeeping_*` 变更；若需要恢复备份，必须先另行复制测试库并验证 dump，再在隔离测试库执行恢复。禁止用回滚或恢复操作删除已有账目。
 
 服务器实现前必须在测试库验证账号隔离、上述矩阵和迁移升级路径。生产发布前必须有备份、可执行回滚方案、构建/类型检查/测试库集成测试证据和停机窗口；未获用户确认不得连接生产库、执行迁移、部署或重启服务。
 
