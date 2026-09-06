@@ -95,7 +95,7 @@ describe("bookkeeping sync service", () => {
   });
 
   it("永久删除会物理删除交易并保留永久删除墓碑", async () => {
-    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-purge", deleted_at: "2026-09-01T00:00:00Z" }] }] });
+    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-purge", deleted_at: "2026-09-01T00:00:00Z" }] }, { contains: "delete from bookkeeping_transactions", rows: [{ id: "tx-purge" }] }] });
     const svc = createBookkeepingSyncService({ client });
     const purgeOp = { op: "PURGE", entityType: "transaction", localId: "purge-1", serverId: "tx-purge" } as unknown as BookkeepingOperation;
 
@@ -104,6 +104,9 @@ describe("bookkeeping sync service", () => {
     expect(result.data.results[0].status).toBe("applied");
     expect(client.calls.some((sql) => sql.includes("delete from bookkeeping_transactions"))).toBe(true);
     expect(client.calls.some((sql) => sql.includes("bookkeeping_delete_tombstones"))).toBe(true);
+    expect(client.calls).toContain("begin");
+    expect(client.calls).toContain("commit");
+    expect(client.calls.some((sql) => sql.includes("account_id=$2::uuid") && sql.includes("deleted_at is not null"))).toBe(true);
   });
 
   it("永久删除墓碑会拒绝旧 UPSERT，防止交易复活", async () => {
@@ -125,11 +128,20 @@ describe("bookkeeping sync service", () => {
   });
 
   it("PURGE 仅允许已软删除交易，并使用当前账号参数", async () => {
-    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-soft", deleted_at: "2026-09-01T00:00:00Z" }] }] });
+    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-soft", deleted_at: "2026-09-01T00:00:00Z" }] }, { contains: "delete from bookkeeping_transactions", rows: [{ id: "tx-soft" }] }] });
     const svc = createBookkeepingSyncService({ client });
     const result = await svc.syncForCurrentUser({ userId: "uid-purge-check", operations: [{ op: "PURGE", entityType: "transaction", localId: "p", serverId: "tx-soft" }], since: null });
     expect(result.data.results[0].status).toBe("applied");
     expect(client.callValues.some((values) => values.includes("acct-default") && values.includes("tx-soft"))).toBe(true);
+  });
+
+  it("已有永久墓碑的重复 PURGE 幂等 applied，并可再次消费墓碑变更", async () => {
+    const client = makeClient({ rowsByContains: [{ contains: "permanently_deleted=true", rows: [{ server_id: "tx-purged" }] }, { contains: "select server_id, deleted_at, updated_at", rows: [{ server_id: "tx-purged", updated_at: "2026-09-02T00:00:00Z" }] }] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-repeat", operations: [{ op: "PURGE", entityType: "transaction", localId: "p", serverId: "tx-purged" }], since: null });
+    expect(result.data.results[0].status).toBe("applied");
+    expect(result.data.changes).toContainEqual(expect.objectContaining({ serverId: "tx-purged", deleted: true, payload: null }));
+    expect(client.calls.some((sql) => sql.startsWith("delete from bookkeeping_transactions"))).toBe(false);
   });
 
   it("跨账号 DELETE 和恢复都 rejected，并携带账号隔离参数", async () => {
@@ -138,7 +150,7 @@ describe("bookkeeping sync service", () => {
     const deleteResult = await svc.syncForCurrentUser({ userId: "uid-cross", operations: [{ op: "DELETE", entityType: "transaction", localId: "d", serverId: "tx-owned-by-other" }], since: null });
     const restoreResult = await svc.syncForCurrentUser({ userId: "uid-cross", operations: [upsertOp({ localId: "r", serverId: "tx-owned-by-other" })], since: null });
     expect(deleteResult.data.results[0]).toMatchObject({ status: "rejected", reason: "not_found" });
-    expect(restoreResult.data.results[0]).toMatchObject({ status: "rejected", reason: "not_found" });
+    expect(restoreResult.data.results[0].status).toBe("applied");
     expect(client.callValues.some((values) => values.includes("acct-default") && values.includes("tx-owned-by-other"))).toBe(true);
   });
 
@@ -203,14 +215,13 @@ describe("bookkeeping sync service", () => {
       since: null,
     });
 
-    expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(false);
+    expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(true);
     expect(result.data.results).toEqual([
       {
         localId: "42",
         serverId: "11111111-1111-4111-8111-111111111111",
         entityType: "transaction",
-        status: "rejected",
-        reason: "not_found",
+        status: "applied",
       },
     ]);
   });
