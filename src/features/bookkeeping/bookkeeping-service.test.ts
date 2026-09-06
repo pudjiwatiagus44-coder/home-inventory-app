@@ -8,12 +8,15 @@ import type { BookkeepingOperation } from "./bookkeeping-types";
  */
 function makeClient(config: {
   rowsByContains: Array<{ contains: string; rows: Record<string, unknown>[] }>;
-}): PostgresQueryClient & { calls: string[] } {
+}): PostgresQueryClient & { calls: string[]; callValues: unknown[][] } {
   const calls: string[] = [];
+  const callValues: unknown[][] = [];
   return {
     calls,
+    callValues,
     async query<Row>(text: string, values?: unknown[]): Promise<{ rows: Row[] }> {
       calls.push(text);
+      callValues.push(values ?? []);
       // 默认处理"查找/创建账本"，返回固定 account，避免插入路径依赖
       if (text.includes("select id from bookkeeping_accounts where user_id")) {
         return { rows: [{ id: "acct-default" }] as Row[] };
@@ -92,7 +95,7 @@ describe("bookkeeping sync service", () => {
   });
 
   it("永久删除会物理删除交易并保留永久删除墓碑", async () => {
-    const client = makeClient({ rowsByContains: [{ contains: "bookkeeping_transactions", rows: [{ id: "tx-purge" }] }] });
+    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-purge", deleted_at: "2026-09-01T00:00:00Z" }] }] });
     const svc = createBookkeepingSyncService({ client });
     const purgeOp = { op: "PURGE", entityType: "transaction", localId: "purge-1", serverId: "tx-purge" } as unknown as BookkeepingOperation;
 
@@ -111,6 +114,39 @@ describe("bookkeeping sync service", () => {
 
     expect(result.data.results[0]).toMatchObject({ status: "rejected", reason: "permanently_deleted" });
     expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(false);
+  });
+
+  it("PURGE 找不到当前账号的交易时 rejected，且不执行物理删除", async () => {
+    const client = makeClient({ rowsByContains: [] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-other", operations: [{ op: "PURGE", entityType: "transaction", localId: "p", serverId: "tx-other" }], since: null });
+    expect(result.data.results[0]).toMatchObject({ status: "rejected", reason: "not_found_or_not_deleted" });
+    expect(client.calls.some((sql) => sql.startsWith("delete from bookkeeping_transactions"))).toBe(false);
+  });
+
+  it("PURGE 仅允许已软删除交易，并使用当前账号参数", async () => {
+    const client = makeClient({ rowsByContains: [{ contains: "select id, deleted_at", rows: [{ id: "tx-soft", deleted_at: "2026-09-01T00:00:00Z" }] }] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-purge-check", operations: [{ op: "PURGE", entityType: "transaction", localId: "p", serverId: "tx-soft" }], since: null });
+    expect(result.data.results[0].status).toBe("applied");
+    expect(client.callValues.some((values) => values.includes("acct-default") && values.includes("tx-soft"))).toBe(true);
+  });
+
+  it("跨账号 DELETE 和恢复都 rejected，并携带账号隔离参数", async () => {
+    const client = makeClient({ rowsByContains: [] });
+    const svc = createBookkeepingSyncService({ client });
+    const deleteResult = await svc.syncForCurrentUser({ userId: "uid-cross", operations: [{ op: "DELETE", entityType: "transaction", localId: "d", serverId: "tx-owned-by-other" }], since: null });
+    const restoreResult = await svc.syncForCurrentUser({ userId: "uid-cross", operations: [upsertOp({ localId: "r", serverId: "tx-owned-by-other" })], since: null });
+    expect(deleteResult.data.results[0]).toMatchObject({ status: "rejected", reason: "not_found" });
+    expect(restoreResult.data.results[0]).toMatchObject({ status: "rejected", reason: "not_found" });
+    expect(client.callValues.some((values) => values.includes("acct-default") && values.includes("tx-owned-by-other"))).toBe(true);
+  });
+
+  it("永久删除墓碑出现在 pullChanges 增量中且不包含账单正文", async () => {
+    const client = makeClient({ rowsByContains: [{ contains: "select server_id, deleted_at, updated_at", rows: [{ server_id: "tx-purged", updated_at: "2026-09-01T00:00:00Z" }] }] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-pull", operations: [], since: null });
+    expect(result.data.changes).toContainEqual({ entityType: "transaction", serverId: "tx-purged", deleted: true, payload: null, serverUpdatedAt: "2026-09-01T00:00:00Z" });
   });
 
   it("accountBelongsToUser 在账号归属当前用户时返回 true", async () => {
@@ -153,7 +189,7 @@ describe("bookkeeping sync service", () => {
     expect(selectCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("客户端提供的新交易 UUID 不存在时按该 UUID 插入并返回 applied", async () => {
+  it("客户端提供的不存在 serverId 不得被当作新交易插入", async () => {
     const client = makeClient({ rowsByContains: [] });
     const svc = createBookkeepingSyncService({ client });
 
@@ -167,19 +203,14 @@ describe("bookkeeping sync service", () => {
       since: null,
     });
 
-    expect(
-      client.calls.some(
-        (sql) =>
-          sql.includes("insert into bookkeeping_transactions") &&
-          sql.includes("id, account_id"),
-      ),
-    ).toBe(true);
+    expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(false);
     expect(result.data.results).toEqual([
       {
         localId: "42",
         serverId: "11111111-1111-4111-8111-111111111111",
         entityType: "transaction",
-        status: "applied",
+        status: "rejected",
+        reason: "not_found",
       },
     ]);
   });

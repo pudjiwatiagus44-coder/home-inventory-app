@@ -109,7 +109,18 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
         return operationResult(op, "applied", op.serverId ?? "");
       }
       if (op.op === "PURGE") {
-        const tombstone = await client.query(
+        const existing = await client.query<{ id: string; deleted_at?: unknown }>(
+          `select id, deleted_at from bookkeeping_transactions where id=$1::uuid and account_id=$2::uuid limit 1`,
+          [op.serverId, accountId],
+        );
+        const ordinaryTombstone = await client.query(
+          `select server_id from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid and permanently_deleted=false`,
+          [accountId, op.serverId],
+        );
+        if (!existing.rows[0] || (!existing.rows[0].deleted_at && ordinaryTombstone.rows.length === 0)) {
+          return operationResult(op, "rejected", op.serverId ?? "", "not_found_or_not_deleted");
+        }
+        await client.query(
           `insert into bookkeeping_delete_tombstones (account_id, entity_type, server_id, deleted_at, updated_at, permanently_deleted)
            values ($1::uuid, 'transaction', $2::uuid, $3, $3, true)
            on conflict (account_id, entity_type, server_id) do update set updated_at=excluded.updated_at, permanently_deleted=true`,
@@ -119,7 +130,6 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           `delete from bookkeeping_transactions where id = $1::uuid and account_id = $2::uuid`,
           [op.serverId, accountId],
         );
-        void tombstone;
         return operationResult(op, "applied", op.serverId ?? "");
       }
       const p = op.payload as BookkeepingTransactionPayload | undefined;
@@ -140,6 +150,9 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           [op.serverId, accountId],
         );
         const serverUpdatedAt = serverRow.rows[0];
+        if (!serverUpdatedAt && op.serverId) {
+          return operationResult(op, "rejected", op.serverId, "not_found");
+        }
         if (
           serverUpdatedAt &&
           op.baseUpdatedAt &&
@@ -391,6 +404,24 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           updatedAt: row.updated_at ? String(row.updated_at) : undefined,
         },
         serverUpdatedAt: row.updated_at ? String(row.updated_at) : undefined,
+      });
+    }
+
+    const tombstones = await client.query<Record<string, unknown>>(
+      `select server_id, deleted_at, updated_at
+         from bookkeeping_delete_tombstones
+        where account_id=$1::uuid and entity_type='transaction' and permanently_deleted=true
+          and ($2::timestamptz is null or updated_at > $2::timestamptz)
+        order by updated_at asc`,
+      [accountId, since],
+    );
+    for (const row of tombstones.rows) {
+      changes.push({
+        entityType: "transaction",
+        serverId: String(row.server_id),
+        deleted: true,
+        payload: null,
+        serverUpdatedAt: row.updated_at ? String(row.updated_at) : null,
       });
     }
 

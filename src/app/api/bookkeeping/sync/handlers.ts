@@ -70,6 +70,7 @@ export function createBookkeepingSyncHandlers(
             cursor: result.data.cursor,
             changes: result.data.changes,
             conflicts: result.data.conflicts,
+            results: result.data.results,
           },
         });
       } catch (error) {
@@ -79,7 +80,7 @@ export function createBookkeepingSyncHandlers(
   };
 }
 
-function createBookkeepingSyncErrorResponse(error: unknown) {
+export function createBookkeepingSyncErrorResponse(error: unknown) {
   if (error instanceof PostgresDatabaseNotConfiguredError) {
     return NextResponse.json(
       { ok: false, message: "DATABASE_URL is required for bookkeeping sync" },
@@ -100,8 +101,8 @@ function createBookkeepingSyncErrorResponse(error: unknown) {
   }
   if (error instanceof Error) {
     return NextResponse.json(
-      { ok: false, message: error.message },
-      { status: 400 },
+      { ok: false, message: "Bookkeeping sync failed" },
+      { status: 500 },
     );
   }
   return NextResponse.json(
