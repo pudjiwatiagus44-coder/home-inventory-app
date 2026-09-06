@@ -157,6 +157,13 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
         return operationResult(op, "rejected", op.serverId ?? "", "missing_payload");
       }
       if (op.serverId) {
+        const globalRow = await client.query<{ id: string; account_id: string }>(
+          `select id, account_id from bookkeeping_transactions where id = $1::uuid limit 1`,
+          [op.serverId],
+        );
+        if (globalRow.rows[0] && globalRow.rows[0].account_id !== accountId) {
+          return operationResult(op, "rejected", op.serverId, "server_id_owned_by_other_account");
+        }
         const permanent = await client.query(
           `select server_id from bookkeeping_delete_tombstones
             where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid and permanently_deleted=true`,

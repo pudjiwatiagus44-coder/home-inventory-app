@@ -226,6 +226,25 @@ describe("bookkeeping sync service", () => {
     ]);
   });
 
+  it("已属于其他账号的 serverId 在 UPSERT/恢复时 rejected 且不插入", async () => {
+    const client = makeClient({ rowsByContains: [{ contains: "select id, account_id from bookkeeping_transactions", rows: [{ id: "tx-owned", account_id: "acct-other" }] }] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-current", operations: [upsertOp({ localId: "u", serverId: "tx-owned" }), upsertOp({ localId: "r", serverId: "tx-owned" })], since: null });
+    expect(result.data.results).toEqual([
+      expect.objectContaining({ localId: "u", status: "rejected", reason: "server_id_owned_by_other_account" }),
+      expect.objectContaining({ localId: "r", status: "rejected", reason: "server_id_owned_by_other_account" }),
+    ]);
+    expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(false);
+  });
+
+  it("全新 serverId 仍能插入并 applied", async () => {
+    const client = makeClient({ rowsByContains: [] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-new", operations: [upsertOp({ serverId: "tx-new" })], since: null });
+    expect(result.data.results[0].status).toBe("applied");
+    expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions") && sql.includes("id, account_id"))).toBe(true);
+  });
+
   it("服务器更新于本地时返回 conflict", async () => {
     const client = makeClient({
       rowsByContains: [
