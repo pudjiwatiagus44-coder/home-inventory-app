@@ -10,6 +10,7 @@ import type {
   BookkeepingChange,
   BookkeepingConflict,
   BookkeepingOperation,
+  BookkeepingOperationResult,
   BookkeepingSyncData,
   BookkeepingSyncRequest,
   BookkeepingTransactionPayload,
@@ -74,12 +75,13 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
     const now = new Date().toISOString();
     const conflicts: BookkeepingConflict[] = [];
 
+    const results: BookkeepingOperationResult[] = [];
     for (const op of input.operations) {
-      await applyOperation(accountId, op, now, conflicts);
+      results.push(await applyOperation(accountId, op, now, conflicts));
     }
 
     const changes: BookkeepingChange[] = await pullChanges(accountId, input.since ?? null);
-    return { accountId, data: { cursor: now, changes, conflicts } };
+    return { accountId, data: { cursor: now, changes, conflicts, results } };
   }
 
   async function applyOperation(
@@ -87,22 +89,52 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
     op: BookkeepingOperation,
     now: string,
     conflicts: BookkeepingConflict[],
-  ): Promise<void> {
+  ): Promise<BookkeepingOperationResult> {
     if (op.entityType === "transaction") {
       if (op.op === "DELETE") {
-        await client.query(
+        const deleted = await client.query<{ id: string }>(
           `update bookkeeping_transactions
              set deleted_at = coalesce(deleted_at, $3), updated_at = $2
-             where id = $1::uuid and account_id = $4::uuid and deleted_at is null`,
+             where id = $1::uuid and account_id = $4::uuid
+             returning id`,
           [op.serverId, now, now, accountId],
         );
-        return;
+        if (!deleted.rows[0]) return operationResult(op, "rejected", op.serverId ?? "", "not_found");
+        await client.query(
+          `insert into bookkeeping_delete_tombstones (account_id, entity_type, server_id, deleted_at, updated_at, permanently_deleted)
+           values ($1::uuid, 'transaction', $2::uuid, $3, $3, false)
+           on conflict (account_id, entity_type, server_id) do update set deleted_at=excluded.deleted_at, updated_at=excluded.updated_at, permanently_deleted=false`,
+          [accountId, op.serverId, now],
+        );
+        return operationResult(op, "applied", op.serverId ?? "");
+      }
+      if (op.op === "PURGE") {
+        const tombstone = await client.query(
+          `insert into bookkeeping_delete_tombstones (account_id, entity_type, server_id, deleted_at, updated_at, permanently_deleted)
+           values ($1::uuid, 'transaction', $2::uuid, $3, $3, true)
+           on conflict (account_id, entity_type, server_id) do update set updated_at=excluded.updated_at, permanently_deleted=true`,
+          [accountId, op.serverId, now],
+        );
+        await client.query(
+          `delete from bookkeeping_transactions where id = $1::uuid and account_id = $2::uuid`,
+          [op.serverId, accountId],
+        );
+        void tombstone;
+        return operationResult(op, "applied", op.serverId ?? "");
       }
       const p = op.payload as BookkeepingTransactionPayload | undefined;
       if (!p) {
-        return;
+        return operationResult(op, "rejected", op.serverId ?? "", "missing_payload");
       }
       if (op.serverId) {
+        const permanent = await client.query(
+          `select server_id from bookkeeping_delete_tombstones
+            where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid and permanently_deleted=true`,
+          [accountId, op.serverId],
+        );
+        if (permanent.rows.length > 0) {
+          return operationResult(op, "rejected", op.serverId, "permanently_deleted");
+        }
         const serverRow = await client.query<{ updated_at?: unknown }>(
           `select updated_at from bookkeeping_transactions where id = $1::uuid and account_id = $2::uuid`,
           [op.serverId, accountId],
@@ -138,60 +170,116 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
             },
             baseServerUpdatedAt: String(serverUpdatedAt.updated_at),
           });
-          return;
+          return operationResult(op, "conflict", op.serverId);
         }
+        if (serverUpdatedAt) {
+          await client.query(
+            `update bookkeeping_transactions set
+               amount=$2, direction=$3, currency=$4, merchant=$5, description=$6,
+               transaction_time=$7, source=$8, status=$9, payer_payee=$10, account_label=$11,
+               participant=$12, tag=$13, property=$14, category_name=$15,
+               deleted_at=null, updated_at=$1
+             where id = $16::uuid and account_id = $17::uuid`,
+            [
+              now, p.amount, p.direction, p.currency, p.merchant, p.description,
+              p.transactionTime, p.source, p.status, p.payerPayee, p.account,
+              p.participant, p.tag, p.property, p.categoryName, op.serverId, accountId,
+            ],
+          );
+          await client.query(
+            `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid`,
+            [accountId, op.serverId],
+          );
+        } else {
+          await client.query(
+            `insert into bookkeeping_transactions (
+               id, account_id, amount, direction, currency, merchant, description,
+               transaction_time, source, status, payer_payee, account_label,
+               participant, tag, property, category_name, updated_at, created_at
+             ) values (
+               $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17
+             )`,
+            [
+              op.serverId, accountId, p.amount, p.direction, p.currency, p.merchant,
+              p.description, p.transactionTime, p.source, p.status, p.payerPayee,
+              p.account, p.participant, p.tag, p.property, p.categoryName, now,
+            ],
+          );
+        }
+        return operationResult(op, "applied", op.serverId);
+      }
+      // 内容去重（兜底）：同账号存在相同内容(金额/方向/时间/商户/描述)未软删记录时，复用更新，避免累积重复。
+      const existing = await client.query<{ id: string }>(
+        `select id from bookkeeping_transactions
+          where account_id=$1::uuid and amount=$2 and direction=$3 and transaction_time=$4
+            and coalesce(merchant,'')=$5 and coalesce(description,'')=$6 and deleted_at is null
+          order by id limit 1`,
+        [accountId, p.amount, p.direction, p.transactionTime, p.merchant, p.description],
+      );
+      if (existing.rows[0]) {
+        const eid = existing.rows[0].id;
         await client.query(
           `update bookkeeping_transactions set
-             amount=$2, direction=$3, currency=$4, merchant=$5, description=$6,
-             transaction_time=$7, source=$8, status=$9, payer_payee=$10, account_label=$11,
-             participant=$12, tag=$13, property=$14, category_name=$15,
-             deleted_at=null, updated_at=$1
-           where id = $16::uuid and account_id = $17::uuid`,
-          [
-            now, p.amount, p.direction, p.currency, p.merchant, p.description,
-            p.transactionTime, p.source, p.status, p.payerPayee, p.account,
-            p.participant, p.tag, p.property, p.categoryName, op.serverId, accountId,
-          ],
+             currency=$2, merchant=$3, description=$4, source=$5, status=$6,
+             payer_payee=$7, account_label=$8, participant=$9, tag=$10, property=$11,
+             category_name=$12, deleted_at=null, updated_at=$1
+           where id = $13::uuid and account_id = $14::uuid`,
+          [now, p.currency, p.merchant, p.description, p.source, p.status,
+           p.payerPayee, p.account, p.participant, p.tag, p.property, p.categoryName, eid, accountId],
         );
-        return;
+        return operationResult(op, "applied", eid);
       }
-      await client.query(
+      const inserted = await client.query<{ id: string }>(
         `insert into bookkeeping_transactions (
            account_id, amount, direction, currency, merchant, description,
            transaction_time, source, status, payer_payee, account_label,
            participant, tag, property, category_name, updated_at, created_at
          ) values (
            $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16
-         )`,
+         ) returning id`,
         [
           accountId, p.amount, p.direction, p.currency, p.merchant, p.description,
           p.transactionTime, p.source, p.status, p.payerPayee, p.account,
           p.participant, p.tag, p.property, p.categoryName, now,
         ],
       );
-      return;
+      return operationResult(op, "applied", inserted.rows[0]?.id ?? "");
     }
 
     // category
     if (op.op === "DELETE") {
-      await client.query(
+      const deleted = await client.query<{ id: string }>(
         `update bookkeeping_categories
            set deleted_at = coalesce(deleted_at, $3), updated_at = $2
-           where id = $1::uuid and account_id = $4::uuid and deleted_at is null`,
+           where id = $1::uuid and account_id = $4::uuid and deleted_at is null
+           returning id`,
         [op.serverId, now, now, accountId],
       );
-      return;
+      return operationResult(op, deleted.rows[0] ? "applied" : "rejected", op.serverId ?? "", "not_found");
     }
     const cp = op.categoryPayload;
     if (!cp) {
-      return;
+      return operationResult(op, "rejected", op.serverId ?? "", "missing_payload");
     }
     if (op.serverId) {
-      const serverRow = await client.query<{ updated_at?: unknown }>(
+      const serverRow = await client.query<{ id?: string; updated_at?: unknown }>(
         `select updated_at from bookkeeping_categories where id = $1::uuid and account_id = $2::uuid`,
         [op.serverId, accountId],
       );
-      const serverUpdatedAt = serverRow.rows[0];
+      let effectiveServerId = op.serverId;
+      let serverUpdatedAt = serverRow.rows[0];
+      if (!serverUpdatedAt) {
+        const sameNameRow = await client.query<{ id: string; updated_at?: unknown }>(
+          `select id, updated_at from bookkeeping_categories
+             where account_id = $1::uuid and name = $2
+             limit 1`,
+          [accountId, cp.name],
+        );
+        if (sameNameRow.rows[0]) {
+          effectiveServerId = sameNameRow.rows[0].id;
+          serverUpdatedAt = sameNameRow.rows[0];
+        }
+      }
       if (
         serverUpdatedAt &&
         op.baseUpdatedAt &&
@@ -200,10 +288,10 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
       ) {
         conflicts.push({
           localId: op.localId,
-          serverId: op.serverId,
+          serverId: effectiveServerId,
           entityType: "category",
           serverCategory: {
-            categoryId: op.serverId,
+            categoryId: effectiveServerId,
             name: cp.name,
             type: cp.type,
             keywords: cp.keywords,
@@ -213,23 +301,54 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           },
           baseServerUpdatedAt: String(serverUpdatedAt.updated_at),
         });
-        return;
+        return operationResult(op, "conflict", effectiveServerId);
       }
-      await client.query(
-        `update bookkeeping_categories set
-           name=$2, type=$3, keywords=$4, is_builtin=$5, is_active=$6,
-           deleted_at=null, updated_at=$1
-         where id = $7::uuid and account_id = $8::uuid`,
-        [now, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive, op.serverId, accountId],
-      );
-      return;
+      if (serverUpdatedAt) {
+        await client.query(
+          `update bookkeeping_categories set
+             name=$2, type=$3, keywords=$4, is_builtin=$5, is_active=$6,
+             parent_category_id=$7::uuid, description=$8, icon=$9, color=$10, sort_order=$11,
+             deleted_at=null, updated_at=$1
+           where id = $12::uuid and account_id = $13::uuid`,
+          [now, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive, cp.parentCategoryId ?? null,
+           cp.description ?? "", cp.icon ?? "", cp.color ?? "", cp.sortOrder ?? 0, effectiveServerId, accountId],
+        );
+      } else {
+        await client.query(
+          `insert into bookkeeping_categories (
+             id, account_id, name, type, keywords, is_builtin, is_active,
+             parent_category_id, description, icon, color, sort_order, updated_at, created_at
+           ) values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::uuid, $9, $10, $11, $12, $13, $13)`,
+          [op.serverId, accountId, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive,
+           cp.parentCategoryId ?? null, cp.description ?? "", cp.icon ?? "", cp.color ?? "", cp.sortOrder ?? 0, now],
+        );
+      }
+      return operationResult(op, "applied", effectiveServerId);
     }
-    await client.query(
+    const inserted = await client.query<{ id: string }>(
       `insert into bookkeeping_categories (
-         account_id, name, type, keywords, is_builtin, is_active, updated_at, created_at
-       ) values ($1::uuid, $2, $3, $4, $5, $6, $7, $7)`,
-      [accountId, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive, now],
+         account_id, name, type, keywords, is_builtin, is_active,
+         parent_category_id, description, icon, color, sort_order, updated_at, created_at
+       ) values ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8, $9, $10, $11, $12, $12) returning id`,
+      [accountId, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive,
+       cp.parentCategoryId ?? null, cp.description ?? "", cp.icon ?? "", cp.color ?? "", cp.sortOrder ?? 0, now],
     );
+    return operationResult(op, "applied", inserted.rows[0]?.id ?? "");
+  }
+
+  function operationResult(
+    op: BookkeepingOperation,
+    status: BookkeepingOperationResult["status"],
+    serverId: string,
+    reason?: string,
+  ): BookkeepingOperationResult {
+    return {
+      localId: op.localId,
+      serverId,
+      entityType: op.entityType,
+      status,
+      ...(status === "rejected" && reason ? { reason } : {}),
+    };
   }
 
   async function pullChanges(
@@ -276,7 +395,8 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
     }
 
     const catRows = await client.query<Record<string, unknown>>(
-      `select id, name, type, keywords, is_builtin, is_active, deleted_at, updated_at
+      `select id, name, type, keywords, is_builtin, is_active, parent_category_id,
+              description, icon, color, sort_order, deleted_at, updated_at
          from bookkeeping_categories
         where account_id = $1::uuid
           and ($2::timestamptz is null or updated_at > $2::timestamptz)
@@ -295,6 +415,11 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           keywords: String(row.keywords ?? ""),
           isBuiltin: !!row.is_builtin,
           isActive: !!row.is_active,
+          parentCategoryId: row.parent_category_id ? String(row.parent_category_id) : null,
+          description: String(row.description ?? ""),
+          icon: String(row.icon ?? ""),
+          color: String(row.color ?? ""),
+          sortOrder: Number(row.sort_order ?? 0),
           updatedAt: row.updated_at ? String(row.updated_at) : undefined,
         },
         serverUpdatedAt: row.updated_at ? String(row.updated_at) : undefined,

@@ -4,7 +4,7 @@
  * 原则：只处理 bookkeeping_* 数据；不含 rawOcrText/confidence（脱敏红线在本项目 Android 端保证）。
  */
 export type BookkeepingEntity = "transaction" | "category";
-export type BookkeepingOp = "UPSERT" | "DELETE";
+export type BookkeepingOp = "UPSERT" | "DELETE" | "PURGE";
 
 export type BookkeepingTransactionPayload = {
   transactionId?: string | null;
@@ -32,6 +32,11 @@ export type BookkeepingCategoryPayload = {
   keywords: string;
   isBuiltin: boolean;
   isActive: boolean;
+  parentCategoryId?: string | null;
+  description?: string;
+  icon?: string;
+  color?: string;
+  sortOrder?: number;
   updatedAt?: string | null;
 };
 
@@ -74,10 +79,19 @@ export type BookkeepingConflict = {
   baseServerUpdatedAt?: string | null;
 };
 
+export type BookkeepingOperationResult = {
+  localId: string;
+  serverId: string;
+  entityType: BookkeepingEntity;
+  status: "applied" | "conflict" | "rejected";
+  reason?: string;
+};
+
 export type BookkeepingSyncData = {
   cursor: string | null;
   changes: BookkeepingChange[];
   conflicts: BookkeepingConflict[];
+  results: BookkeepingOperationResult[];
 };
 
 export type BookkeepingSyncResponse = {
@@ -129,18 +143,18 @@ function parseOperation(input: unknown): BookkeepingOperation {
   }
 
   // DELETE：必须带 serverId
-  if (op === "DELETE" && !operation.serverId) {
-    throw new Error("serverId is required for DELETE");
+  if ((op === "DELETE" || op === "PURGE") && !operation.serverId) {
+    throw new Error(`serverId is required for ${op}`);
   }
 
   return removeUndefinedValues(operation);
 }
 
 function readOp(value: unknown): BookkeepingOp {
-  if (value === "UPSERT" || value === "DELETE") {
+  if (value === "UPSERT" || value === "DELETE" || value === "PURGE") {
     return value;
   }
-  throw new Error("op must be UPSERT or DELETE");
+  throw new Error("op must be UPSERT, DELETE or PURGE");
 }
 
 function readEntityType(value: unknown): BookkeepingEntity {
@@ -185,8 +199,25 @@ function readCategoryPayload(value: unknown): BookkeepingCategoryPayload {
     keywords: readPayloadString(value, "keywords"),
     isBuiltin: readBoolean(value, "isBuiltin"),
     isActive: readBoolean(value, "isActive"),
+    parentCategoryId: readOptionalString(value, "parentCategoryId"),
+    description: readOptionalPayloadString(value, "description"),
+    icon: readOptionalPayloadString(value, "icon"),
+    color: readOptionalPayloadString(value, "color"),
+    sortOrder: readOptionalNumber(value, "sortOrder"),
     updatedAt: readOptionalString(value, "updatedAt"),
   };
+}
+
+function readOptionalPayloadString(record: Record<string, unknown>, key: string): string | undefined {
+  if (!(key in record) || record[key] === undefined || record[key] === null) return undefined;
+  if (typeof record[key] !== "string") throw new Error(`payload ${key} must be a string`);
+  return record[key] as string;
+}
+
+function readOptionalNumber(record: Record<string, unknown>, key: string): number | undefined {
+  if (!(key in record) || record[key] === undefined || record[key] === null) return undefined;
+  if (typeof record[key] !== "number" || !Number.isInteger(record[key])) throw new Error(`payload ${key} must be an integer`);
+  return record[key] as number;
 }
 
 function readRequiredString(record: Record<string, unknown>, key: string): string {
