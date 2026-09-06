@@ -127,7 +127,7 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           `select server_id from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid and permanently_deleted=false`,
           [accountId, op.serverId],
           );
-          if (!existing.rows[0] || (!existing.rows[0].deleted_at && ordinaryTombstone.rows.length === 0)) {
+          if (!existing.rows[0] || !existing.rows[0].deleted_at || ordinaryTombstone.rows.length === 0) {
             await client.query("commit");
             return operationResult(op, "rejected", op.serverId ?? "", "not_found_or_not_deleted");
           }
@@ -162,6 +162,13 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           [op.serverId],
         );
         if (globalRow.rows[0] && globalRow.rows[0].account_id !== accountId) {
+          return operationResult(op, "rejected", op.serverId, "server_id_owned_by_other_account");
+        }
+        const globalPermanentTombstone = await client.query<{ account_id: string }>(
+          `select account_id from bookkeeping_delete_tombstones where entity_type='transaction' and server_id=$1::uuid and permanently_deleted=true limit 1`,
+          [op.serverId],
+        );
+        if (globalPermanentTombstone.rows[0]?.account_id && globalPermanentTombstone.rows[0].account_id !== accountId) {
           return operationResult(op, "rejected", op.serverId, "server_id_owned_by_other_account");
         }
         const permanent = await client.query(
