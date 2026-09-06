@@ -2,6 +2,7 @@ import { normalizeAuthEmail, type AuthRepository } from "./auth-service";
 
 type QueryResult<Row> = {
   rows: Row[];
+  rowCount?: number | null;
 };
 
 export type PostgresQueryClient = {

@@ -184,8 +184,8 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
         if (permanent.rows.length > 0) {
           return operationResult(op, "rejected", op.serverId, "permanently_deleted");
         }
-        const serverRow = await client.query<{ updated_at?: unknown }>(
-          `select updated_at from bookkeeping_transactions where id = $1::uuid and account_id = $2::uuid`,
+        const serverRow = await client.query<{ updated_at?: unknown; deleted_at?: unknown }>(
+          `select updated_at, deleted_at from bookkeeping_transactions where id = $1::uuid and account_id = $2::uuid`,
           [op.serverId, accountId],
         );
         const serverUpdatedAt = serverRow.rows[0];
@@ -223,6 +223,8 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
         }
         if (serverUpdatedAt) {
           await client.query("begin");
+          let committed = false;
+          try {
           const restored = await client.query<{ id: string }>(
             `update bookkeeping_transactions set
                amount=$2, direction=$3, currency=$4, merchant=$5, description=$6,
@@ -236,12 +238,15 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
               p.participant, p.tag, p.property, p.categoryName, op.serverId, accountId,
             ],
           );
-          if (!restored.rows[0]) { await client.query("rollback"); return operationResult(op, "rejected", op.serverId, "not_found"); }
-          await client.query(
-            `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid`,
+          if (!restored.rows[0]) return operationResult(op, "rejected", op.serverId, "not_found");
+          const tombstone = await client.query<{ id: string }>(
+            `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid returning id`,
             [accountId, op.serverId],
           );
+          if ((tombstone.rowCount ?? tombstone.rows.length) !== 1 && serverUpdatedAt.deleted_at) return operationResult(op, "rejected", op.serverId, "tombstone_not_deleted");
           await client.query("commit");
+          committed = true;
+          } catch (error) { throw error; } finally { if (!committed) await client.query("rollback"); }
         } else {
           await client.query(
             `insert into bookkeeping_transactions (
@@ -270,15 +275,16 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
       );
       if (existing.rows[0]) {
         const eid = existing.rows[0].id;
-        await client.query(
+        const updated = await client.query<{ id: string }>(
           `update bookkeeping_transactions set
              currency=$2, merchant=$3, description=$4, source=$5, status=$6,
              payer_payee=$7, account_label=$8, participant=$9, tag=$10, property=$11,
              category_name=$12, deleted_at=null, updated_at=$1
-           where id = $13::uuid and account_id = $14::uuid`,
+           where id = $13::uuid and account_id = $14::uuid returning id`,
           [now, p.currency, p.merchant, p.description, p.source, p.status,
            p.payerPayee, p.account, p.participant, p.tag, p.property, p.categoryName, eid, accountId],
         );
+        if ((updated.rowCount ?? updated.rows.length) !== 1 || !updated.rows[0]) return operationResult(op, "rejected", eid, "not_found");
         return operationResult(op, "applied", eid);
       }
       const inserted = await client.query<{ id: string }>(

@@ -24,7 +24,6 @@ update bookkeeping_delete_tombstones
 
 alter table bookkeeping_delete_tombstones
   alter column entity_type set not null,
-  alter column server_id set not null,
   alter column deleted_at set not null,
   alter column updated_at set not null;
 
