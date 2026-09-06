@@ -92,6 +92,8 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
   ): Promise<BookkeepingOperationResult> {
     if (op.entityType === "transaction") {
       if (op.op === "DELETE") {
+        await client.query("begin");
+        try {
         const deleted = await client.query<{ id: string }>(
           `update bookkeeping_transactions
              set deleted_at = coalesce(deleted_at, $3), updated_at = $2
@@ -99,14 +101,17 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
              returning id`,
           [op.serverId, now, now, accountId],
         );
-        if (!deleted.rows[0]) return operationResult(op, "rejected", op.serverId ?? "", "not_found");
-        await client.query(
+        if (!deleted.rows[0]) { await client.query("rollback"); return operationResult(op, "rejected", op.serverId ?? "", "not_found"); }
+        const tombstone = await client.query<{ server_id: string }>(
           `insert into bookkeeping_delete_tombstones (account_id, entity_type, server_id, deleted_at, updated_at, permanently_deleted)
            values ($1::uuid, 'transaction', $2::uuid, $3, $3, false)
-           on conflict (account_id, entity_type, server_id) do update set deleted_at=excluded.deleted_at, updated_at=excluded.updated_at, permanently_deleted=false`,
+           on conflict (account_id, entity_type, server_id) do update set deleted_at=excluded.deleted_at, updated_at=excluded.updated_at, permanently_deleted=false returning server_id`,
           [accountId, op.serverId, now],
         );
+        if (!tombstone.rows[0]) { await client.query("rollback"); return operationResult(op, "rejected", op.serverId ?? "", "tombstone_not_written"); }
+        await client.query("commit");
         return operationResult(op, "applied", op.serverId ?? "");
+        } catch (error) { await client.query("rollback"); throw error; }
       }
       if (op.op === "PURGE") {
         await client.query("begin");
@@ -139,7 +144,7 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
             await client.query("commit");
             return operationResult(op, "rejected", op.serverId ?? "", "not_found_or_not_deleted");
           }
-          await client.query(
+          const restored = await client.query<{ id: string }>(
           `insert into bookkeeping_delete_tombstones (account_id, entity_type, server_id, deleted_at, updated_at, permanently_deleted)
            values ($1::uuid, 'transaction', $2::uuid, $3, $3, true)
            on conflict (account_id, entity_type, server_id) do update set updated_at=excluded.updated_at, permanently_deleted=true`,
@@ -217,23 +222,26 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
           return operationResult(op, "conflict", op.serverId);
         }
         if (serverUpdatedAt) {
-          await client.query(
+          await client.query("begin");
+          const restored = await client.query<{ id: string }>(
             `update bookkeeping_transactions set
                amount=$2, direction=$3, currency=$4, merchant=$5, description=$6,
                transaction_time=$7, source=$8, status=$9, payer_payee=$10, account_label=$11,
                participant=$12, tag=$13, property=$14, category_name=$15,
                deleted_at=null, updated_at=$1
-             where id = $16::uuid and account_id = $17::uuid`,
+             where id = $16::uuid and account_id = $17::uuid returning id`,
             [
               now, p.amount, p.direction, p.currency, p.merchant, p.description,
               p.transactionTime, p.source, p.status, p.payerPayee, p.account,
               p.participant, p.tag, p.property, p.categoryName, op.serverId, accountId,
             ],
           );
+          if (!restored.rows[0]) { await client.query("rollback"); return operationResult(op, "rejected", op.serverId, "not_found"); }
           await client.query(
             `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid`,
             [accountId, op.serverId],
           );
+          await client.query("commit");
         } else {
           await client.query(
             `insert into bookkeeping_transactions (
@@ -291,6 +299,9 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
     }
 
     // category
+    if (op.op === "PURGE") {
+      return operationResult(op, "rejected", op.serverId ?? "", "unsupported_operation");
+    }
     if (op.op === "DELETE") {
       const deleted = await client.query<{ id: string }>(
         `update bookkeeping_categories
@@ -348,15 +359,16 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
         return operationResult(op, "conflict", effectiveServerId);
       }
       if (serverUpdatedAt) {
-        await client.query(
+        const updated = await client.query<{ id: string }>(
           `update bookkeeping_categories set
              name=$2, type=$3, keywords=$4, is_builtin=$5, is_active=$6,
              parent_category_id=$7::uuid, description=$8, icon=$9, color=$10, sort_order=$11,
              deleted_at=null, updated_at=$1
-           where id = $12::uuid and account_id = $13::uuid`,
+             where id = $12::uuid and account_id = $13::uuid returning id`,
           [now, cp.name, cp.type, cp.keywords, cp.isBuiltin, cp.isActive, cp.parentCategoryId ?? null,
            cp.description ?? "", cp.icon ?? "", cp.color ?? "", cp.sortOrder ?? 0, effectiveServerId, accountId],
         );
+        if (!updated.rows[0]) return operationResult(op, "rejected", effectiveServerId, "not_found");
       } else {
         await client.query(
           `insert into bookkeeping_categories (
@@ -367,7 +379,7 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
            cp.parentCategoryId ?? null, cp.description ?? "", cp.icon ?? "", cp.color ?? "", cp.sortOrder ?? 0, now],
         );
       }
-      return operationResult(op, "applied", effectiveServerId);
+        return operationResult(op, "applied", effectiveServerId);
     }
     const inserted = await client.query<{ id: string }>(
       `insert into bookkeeping_categories (

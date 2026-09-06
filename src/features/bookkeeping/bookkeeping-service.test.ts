@@ -75,7 +75,7 @@ const categoryUpsertOp = (overrides: Partial<BookkeepingOperation> = {}): Bookke
 
 describe("bookkeeping sync service", () => {
   it("当前账号 DELETE 会软删并写入删除墓碑，重复 DELETE 仍幂等 applied", async () => {
-    const client = makeClient({ rowsByContains: [{ contains: "returning id", rows: [{ id: "tx-delete" }] }] });
+    const client = makeClient({ rowsByContains: [{ contains: "returning id", rows: [{ id: "tx-delete" }] }, { contains: "insert into bookkeeping_delete_tombstones", rows: [{ server_id: "tx-delete" }] }] });
     const svc = createBookkeepingSyncService({ client });
     const deleteOp = { op: "DELETE", entityType: "transaction", localId: "delete-1", serverId: "tx-delete" } as BookkeepingOperation;
 
@@ -86,7 +86,7 @@ describe("bookkeeping sync service", () => {
   });
 
   it("UPSERT 恢复已删除交易时会清除墓碑并清除 deleted_at", async () => {
-    const client = makeClient({ rowsByContains: [{ contains: "select updated_at from bookkeeping_transactions", rows: [{ updated_at: "2026-09-01T00:00:00Z" }] }] });
+    const client = makeClient({ rowsByContains: [{ contains: "select updated_at from bookkeeping_transactions", rows: [{ updated_at: "2026-09-01T00:00:00Z" }] }, { contains: "update bookkeeping_transactions set", rows: [{ id: "tx-restore" }] }, { contains: "delete from bookkeeping_delete_tombstones", rows: [{ server_id: "tx-restore" }] }] });
     const svc = createBookkeepingSyncService({ client });
 
     await svc.syncForCurrentUser({ userId: "uid-restore", operations: [upsertOp({ serverId: "tx-restore" })], since: null });
@@ -260,6 +260,22 @@ describe("bookkeeping sync service", () => {
     expect(client.calls.some((sql) => sql.includes("insert into bookkeeping_transactions"))).toBe(false);
   });
 
+  it("分类 PURGE 明确 rejected", async () => {
+    const client = makeClient({ rowsByContains: [] });
+    const svc = createBookkeepingSyncService({ client });
+    const result = await svc.syncForCurrentUser({ userId: "uid-category-purge", operations: [{ op: "PURGE", entityType: "category", localId: "p", serverId: "cat-1" } as unknown as BookkeepingOperation], since: null });
+    expect(result.data.results[0]).toMatchObject({ status: "rejected", reason: "unsupported_operation" });
+  });
+
+  it("交易和分类 UPDATE 未返回行时不得 applied", async () => {
+    const txClient = makeClient({ rowsByContains: [{ contains: "select updated_at from bookkeeping_transactions", rows: [{ updated_at: "2026-09-01T00:00:00Z" }] }] });
+    const txResult = await createBookkeepingSyncService({ client: txClient }).syncForCurrentUser({ userId: "uid-update", operations: [upsertOp({ serverId: "tx-update" })], since: null });
+    expect(txResult.data.results[0].status).toBe("rejected");
+    const catClient = makeClient({ rowsByContains: [{ contains: "select updated_at from bookkeeping_categories", rows: [{ updated_at: "2026-09-01T00:00:00Z" }] }] });
+    const catResult = await createBookkeepingSyncService({ client: catClient }).syncForCurrentUser({ userId: "uid-update", operations: [categoryUpsertOp()], since: null });
+    expect(catResult.data.results[0].status).toBe("rejected");
+  });
+
   it("服务器更新于本地时返回 conflict", async () => {
     const client = makeClient({
       rowsByContains: [
@@ -293,6 +309,7 @@ describe("bookkeeping sync service", () => {
           contains: "select updated_at from bookkeeping_transactions",
           rows: [{ updated_at: "2026-08-22T08:00:00Z" }],
         },
+        { contains: "update bookkeeping_transactions set", rows: [{ id: "tx-server-2" }] },
       ],
     });
     const svc = createBookkeepingSyncService({ client });
@@ -364,6 +381,7 @@ describe("bookkeeping sync service", () => {
           contains: "where account_id = $1::uuid and name = $2",
           rows: [{ id: existingServerId, updated_at: "2026-08-30T10:00:00Z" }],
         },
+        { contains: "update bookkeeping_categories set", rows: [{ id: existingServerId }] },
       ],
     });
     const svc = createBookkeepingSyncService({ client });
