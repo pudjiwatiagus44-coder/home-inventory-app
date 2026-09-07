@@ -73,6 +73,7 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
   }> {
     const accountId = await ensureAccountId(input.userId);
     const now = new Date().toISOString();
+    const cursor = new Date(Math.max(Date.now(), Date.parse(now) + 1)).toISOString();
     const conflicts: BookkeepingConflict[] = [];
 
     const results: BookkeepingOperationResult[] = [];
@@ -81,7 +82,7 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
     }
 
     const changes: BookkeepingChange[] = await pullChanges(accountId, input.since ?? null);
-    return { accountId, data: { cursor: now, changes, conflicts, results } };
+    return { accountId, data: { cursor, changes, conflicts, results } };
   }
 
   async function applyOperation(

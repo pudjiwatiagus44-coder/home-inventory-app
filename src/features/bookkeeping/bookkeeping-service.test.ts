@@ -76,6 +76,36 @@ const categoryUpsertOp = (overrides: Partial<BookkeepingOperation> = {}): Bookke
 });
 
 describe("bookkeeping sync service", () => {
+  it("返回的 cursor 严格晚于本轮写入的 updated_at，避免下次增量漏掉该写入", async () => {
+    const client = makeClient({
+      rowsByContains: [
+        { contains: "returning id", rows: [{ id: "tx-cursor" }] },
+        {
+          contains: "insert into bookkeeping_delete_tombstones",
+          rows: [{ server_id: "tx-cursor" }],
+        },
+      ],
+    });
+    const result = await createBookkeepingSyncService({ client }).syncForCurrentUser({
+      userId: "uid-cursor",
+      operations: [
+        {
+          op: "DELETE",
+          entityType: "transaction",
+          localId: "delete-cursor",
+          serverId: "tx-cursor",
+        } as BookkeepingOperation,
+      ],
+      since: null,
+    });
+
+    const writeValues = client.callValues.find((values) => values.includes("tx-cursor"));
+    expect(writeValues).toBeDefined();
+    expect(new Date(result.data.cursor ?? "").getTime()).toBeGreaterThan(
+      new Date(String(writeValues?.[1])).getTime(),
+    );
+  });
+
   it("当前账号 DELETE 会软删并写入删除墓碑，重复 DELETE 仍幂等 applied", async () => {
     const client = makeClient({ rowsByContains: [{ contains: "returning id", rows: [{ id: "tx-delete" }] }, { contains: "insert into bookkeeping_delete_tombstones", rows: [{ server_id: "tx-delete" }] }] });
     const svc = createBookkeepingSyncService({ client });
