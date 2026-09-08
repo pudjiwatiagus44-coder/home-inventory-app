@@ -240,8 +240,8 @@ export function createBookkeepingSyncService({ client }: BookkeepingServiceDeps)
             ],
           );
           if (!restored.rows[0]) return operationResult(op, "rejected", op.serverId, "not_found");
-          const tombstone = await client.query<{ id: string }>(
-            `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid returning id`,
+          const tombstone = await client.query<{ server_id: string }>(
+            `delete from bookkeeping_delete_tombstones where account_id=$1::uuid and entity_type='transaction' and server_id=$2::uuid returning server_id`,
             [accountId, op.serverId],
           );
           if ((tombstone.rowCount ?? tombstone.rows.length) !== 1 && serverUpdatedAt.deleted_at) return operationResult(op, "rejected", op.serverId, "tombstone_not_deleted");

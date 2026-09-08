@@ -321,6 +321,17 @@ describe("bookkeeping sync service", () => {
     expect(client.calls).toContain("rollback");
   });
 
+  it("恢复交易时从墓碑表返回 server_id 而非不存在的 id 列", async () => {
+    const client = makeClient({ rowsByContains: [
+      { contains: "select updated_at, deleted_at", rows: [{ updated_at: "2026-09-01T00:00:00Z", deleted_at: "2026-09-01T00:00:00Z" }] },
+      { contains: "update bookkeeping_transactions set", rows: [{ id: "tx-restore-column" }] },
+      { contains: "delete from bookkeeping_delete_tombstones", rows: [{ server_id: "tx-restore-column" }] },
+    ] });
+    const result = await createBookkeepingSyncService({ client }).syncForCurrentUser({ userId: "uid-restore-column", operations: [upsertOp({ serverId: "tx-restore-column" })], since: null });
+    expect(result.data.results[0].status).toBe("applied");
+    expect(client.calls.some((sql) => sql.includes("delete from bookkeeping_delete_tombstones") && sql.includes("returning server_id"))).toBe(true);
+  });
+
   it("恢复异常 rollback 后 rethrow", async () => {
     const client = makeClient({ rowsByContains: [{ contains: "select updated_at, deleted_at", rows: [{ updated_at: "2026-09-01T00:00:00Z", deleted_at: "2026-09-01T00:00:00Z" }] }, { contains: "update bookkeeping_transactions set", rows: [{ id: "tx-restore" }] }], throwOnContains: "delete from bookkeeping_delete_tombstones" });
     await expect(createBookkeepingSyncService({ client }).syncForCurrentUser({ userId: "uid-restore-throw", operations: [upsertOp({ serverId: "tx-restore" })], since: null })).rejects.toThrow("db failure");
