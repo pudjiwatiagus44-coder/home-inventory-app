@@ -166,6 +166,37 @@ describe("bookkeeping error report service", () => {
     expect(client.query.mock.calls.some(([sql]) => sql.includes("for update skip locked"))).toBe(true);
   });
 
+  it("attempts a persistently failing cleanup task only once per retry call", async () => {
+    let available = true;
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("for update skip locked")) {
+          if (!available) return { rows: [] };
+          available = false;
+          return { rows: [{ account_id: "account-a", image_object_key: "orphan.jpg", claim_token: "claim-1" }] };
+        }
+        if (sql.includes("set last_error_code = 'delete_failed'")) {
+          if (sql.includes("claim_until = null")) available = true;
+          return { rows: [] };
+        }
+        if (sql.includes("select count(*)::text")) return { rows: [{ count: "1" }] };
+        throw new Error("unexpected query");
+      }),
+    };
+    const queue = createPostgresBookkeepingErrorReportFileCleanupQueue({
+      client,
+      createClaimToken: () => "claim-1",
+    });
+    const deleteImage = vi.fn(async () => { throw new Error("still locked"); });
+
+    await expect(queue.retry(deleteImage)).resolves.toEqual({ deleted: 0, pending: 1 });
+
+    expect(deleteImage).toHaveBeenCalledTimes(1);
+    expect(client.query.mock.calls.some(([sql]) =>
+      sql.includes("last_error_code = 'delete_failed'") && !sql.includes("claim_until = null"),
+    )).toBe(true);
+  });
+
   it("retains the database failure and emits a fixed safe audit event when cleanup enqueue fails", async () => {
     const store = {
       save: vi.fn(), read: vi.fn(), delete: vi.fn().mockRejectedValue(new Error("file locked")),

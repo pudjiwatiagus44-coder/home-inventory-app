@@ -94,7 +94,7 @@ export function createPostgresBookkeepingErrorReportFileCleanupQueue({
         } catch {
           await client.query(
             `update bookkeeping_error_report_file_cleanup
-                set last_error_code = 'delete_failed', claim_token = null, claim_until = null
+                set last_error_code = 'delete_failed'
               where account_id = $1::uuid and image_object_key = $2 and claim_token = $3::uuid`,
             [entry.account_id, entry.image_object_key, entry.claim_token],
           );
