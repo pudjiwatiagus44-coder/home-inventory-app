@@ -25,7 +25,7 @@
 - `docs/superpowers/plans/2026-08-11-area-location-photos.md` - 区域/位置照片实施计划。
 - `bookkeeping-text-category-design.md` - Android 文字批量记账、分类上下文和父子分类同步协议真源（本地开发阶段）。
 - `bookkeeping-recognition-feedback-design.md` - Android 识别纠错反馈、账号隔离、隐私边界和服务器接口真源（本地实现已确认，生产部署待确认）。
-- `bookkeeping-error-report-design.md` - 回收站错误订单上报、账号隔离、图片存储与维护删除真源（设计已确认，未实现/未迁移/未部署）。
+- `bookkeeping-error-report-design.md` - 回收站错误订单上报、账号隔离、图片存储与维护删除真源（服务端本地实现已完成；迁移、服务器目录、反代限额、部署和生产验证均未执行）。
 
 ## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，已部署阿里云测试环境）
 

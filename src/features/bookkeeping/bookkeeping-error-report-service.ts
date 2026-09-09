@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import type { PostgresQueryClient } from "../../server/auth/postgres-auth-repository";
 import type { PhotoStore } from "../../server/photos/photo-store";
@@ -7,12 +9,88 @@ import type { BookkeepingErrorReportRequest } from "./bookkeeping-error-report-t
 type BookkeepingErrorReportServiceDeps = {
   client: PostgresQueryClient;
   store: Pick<PhotoStore, "save" | "delete">;
+  cleanupQueue: ErrorReportOrphanCleanupQueue;
   createImageKey?: () => string;
 };
+
+export type ErrorReportOrphanCleanupEntry = {
+  imageObjectKey: string;
+  reason: "database_insert_failed" | "duplicate_conflict";
+  queuedAt: string;
+};
+
+export type ErrorReportOrphanCleanupQueue = {
+  enqueue: (entry: ErrorReportOrphanCleanupEntry) => Promise<void>;
+  retry: (deleteImage: (imageObjectKey: string) => Promise<void>) => Promise<{
+    deleted: number;
+    pending: number;
+  }>;
+};
+
+const ORPHAN_CLEANUP_FILE = ".bookkeeping-error-report-orphans.json";
+
+export function createFileBackedErrorReportOrphanCleanupQueue(
+  baseDir: string,
+  fsImpl: typeof fs = fs,
+): ErrorReportOrphanCleanupQueue {
+  const queueFile = path.join(baseDir, ORPHAN_CLEANUP_FILE);
+
+  async function readEntries(): Promise<ErrorReportOrphanCleanupEntry[]> {
+    try {
+      const value = JSON.parse(await fsImpl.readFile(queueFile, "utf8")) as unknown;
+      if (!Array.isArray(value) || value.some((entry) => !isCleanupEntry(entry))) {
+        throw new Error("invalid error report orphan cleanup queue");
+      }
+      return value;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
+  async function writeEntries(entries: ErrorReportOrphanCleanupEntry[]) {
+    if (entries.length === 0) {
+      try {
+        await fsImpl.unlink(queueFile);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      return;
+    }
+    await fsImpl.mkdir(baseDir, { recursive: true });
+    await fsImpl.writeFile(queueFile, JSON.stringify(entries), "utf8");
+  }
+
+  return {
+    async enqueue(entry) {
+      const entries = await readEntries();
+      if (!entries.some((existing) => existing.imageObjectKey === entry.imageObjectKey)) {
+        entries.push(entry);
+        await writeEntries(entries);
+      }
+    },
+    async retry(deleteImage) {
+      const entries = await readEntries();
+      const remaining: ErrorReportOrphanCleanupEntry[] = [];
+      let deleted = 0;
+      for (const entry of entries) {
+        try {
+          await deleteImage(entry.imageObjectKey);
+          deleted += 1;
+        } catch {
+          remaining.push(entry);
+        }
+      }
+      await writeEntries(remaining);
+      return { deleted, pending: remaining.length };
+    },
+  };
+}
 
 export function createBookkeepingErrorReportService({
   client,
   store,
+  cleanupQueue,
   createImageKey = () => `${randomUUID()}.jpg`,
 }: BookkeepingErrorReportServiceDeps) {
   async function accountIdForUser(userId: string) {
@@ -25,6 +103,10 @@ export function createBookkeepingErrorReportService({
   }
 
   return {
+    async retryPendingFileCleanup() {
+      return cleanupQueue.retry(store.delete);
+    },
+
     async saveForCurrentUser(userId: string, report: BookkeepingErrorReportRequest, image: Buffer) {
       const accountId = await accountIdForUser(userId);
       const existing = await client.query<{ report_id: string }>(
@@ -58,14 +140,37 @@ export function createBookkeepingErrorReportService({
           ],
         );
         if (!inserted.rows[0]) {
-          await store.delete(imageObjectKey);
+          await deleteOrQueue(imageObjectKey, "duplicate_conflict");
           return { reportId: report.reportId, duplicate: true };
         }
         return { reportId: report.reportId, duplicate: false };
       } catch (error) {
-        await store.delete(imageObjectKey);
+        await deleteOrQueue(imageObjectKey, "database_insert_failed");
         throw error;
       }
     },
   };
+
+  async function deleteOrQueue(
+    imageObjectKey: string,
+    reason: ErrorReportOrphanCleanupEntry["reason"],
+  ) {
+    try {
+      await store.delete(imageObjectKey);
+    } catch {
+      await cleanupQueue.enqueue({
+        imageObjectKey,
+        reason,
+        queuedAt: new Date().toISOString(),
+      }).catch(() => undefined);
+    }
+  }
+}
+
+function isCleanupEntry(value: unknown): value is ErrorReportOrphanCleanupEntry {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.imageObjectKey === "string" &&
+    (entry.reason === "database_insert_failed" || entry.reason === "duplicate_conflict") &&
+    typeof entry.queuedAt === "string";
 }

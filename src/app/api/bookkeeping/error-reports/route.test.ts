@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { createBookkeepingErrorReportHandlers } from "./handlers";
+import {
+  BOOKKEEPING_ERROR_REPORT_MAX_MULTIPART_BODY_BYTES,
+  createBookkeepingErrorReportHandlers,
+} from "./handlers";
 
 const report = {
   reportId: "11111111-1111-4111-8111-111111111111",
@@ -40,6 +43,46 @@ describe("/api/bookkeeping/error-reports", () => {
     expect(JSON.stringify(await response.json())).not.toContain(privateValue);
   });
 
+  it("rejects an over-limit Content-Length before multipart parsing", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.POST(new NextRequest("http://localhost/api/bookkeeping/error-reports", {
+      method: "POST",
+      headers: {
+        Cookie: "home_inventory_session=session-token",
+        "Content-Type": "multipart/form-data; boundary=unused",
+        "Content-Length": String(BOOKKEEPING_ERROR_REPORT_MAX_MULTIPART_BODY_BYTES + 1),
+      },
+      body: "not parsed",
+    }));
+
+    expect(response.status).toBe(413);
+    expect(service.saveForCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("stops a chunked multipart body once its bounded stream exceeds the limit", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(BOOKKEEPING_ERROR_REPORT_MAX_MULTIPART_BODY_BYTES + 1));
+        controller.close();
+      },
+    });
+    const response = await handlers.POST(new NextRequest("http://localhost/api/bookkeeping/error-reports", {
+      method: "POST",
+      headers: {
+        Cookie: "home_inventory_session=session-token",
+        "Content-Type": "multipart/form-data; boundary=unused",
+      },
+      body: stream,
+      duplex: "half",
+    } as unknown as RequestInit));
+
+    expect(response.status).toBe(413);
+    expect(service.saveForCurrentUser).not.toHaveBeenCalled();
+  });
+
   it("passes only a parsed report and JPEG buffer to the current-user service", async () => {
     const service = serviceStub();
     const handlers = authenticatedHandlers(service);
@@ -48,6 +91,7 @@ describe("/api/bookkeeping/error-reports", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, data: { reportId: report.reportId, duplicate: false } });
+    expect(service.retryPendingFileCleanup).toHaveBeenCalledOnce();
     expect(service.saveForCurrentUser).toHaveBeenCalledWith("user-a", report, expect.any(Buffer));
   });
 
@@ -72,6 +116,7 @@ function authenticatedHandlers(service: ReturnType<typeof serviceStub>) {
 
 function serviceStub() {
   return {
+    retryPendingFileCleanup: vi.fn(async () => ({ deleted: 0, pending: 0 })),
     saveForCurrentUser: vi.fn(async (_userId: string, input: typeof report, _image: Buffer) => ({
       reportId: input.reportId,
       duplicate: false,
