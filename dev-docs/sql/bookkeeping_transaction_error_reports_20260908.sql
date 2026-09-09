@@ -53,3 +53,8 @@ create table if not exists bookkeeping_error_report_file_cleanup (
 
 create index if not exists bookkeeping_error_report_file_cleanup_claim_idx
   on bookkeeping_error_report_file_cleanup(claim_until, created_at);
+
+-- 生产迁移由 postgres 执行时，新表不会自动继承应用角色权限。
+-- 报告表仅需运行时查询和插入；补偿队列还需要 claim、更新及成功后的删除。
+grant select, insert on bookkeeping_transaction_error_reports to home_inventory_app;
+grant select, insert, update, delete on bookkeeping_error_report_file_cleanup to home_inventory_app;
