@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createBookkeepingErrorReportService } from "./bookkeeping-error-report-service";
+import {
+  createBookkeepingErrorReportService,
+  createPostgresBookkeepingErrorReportFileCleanupQueue,
+} from "./bookkeeping-error-report-service";
 import type { BookkeepingErrorReportRequest } from "./bookkeeping-error-report-types";
 
 const report: BookkeepingErrorReportRequest = {
@@ -79,8 +82,9 @@ describe("bookkeeping error report service", () => {
       .rejects.toThrow("database secret");
 
     expect(cleanupQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: "account-a",
       imageObjectKey: "report-image.jpg",
-      reason: "database_insert_failed",
+      errorCode: "delete_after_database_insert_failed",
     }));
   });
 
@@ -124,5 +128,72 @@ describe("bookkeeping error report service", () => {
     expect(results.filter((result) => result.duplicate)).toHaveLength(1);
     expect(files.size).toBe(1);
     expect(store.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses conflict-safe PostgreSQL enqueue and atomically claims one retry across workers", async () => {
+    let claimed = false;
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes("insert into bookkeeping_error_report_file_cleanup")) return { rows: [] };
+        if (sql.includes("for update skip locked")) {
+          if (claimed) return { rows: [] };
+          claimed = true;
+          return { rows: [{ account_id: "account-a", image_object_key: "orphan.jpg", claim_token: "claim-1" }] };
+        }
+        if (sql.includes("delete from bookkeeping_error_report_file_cleanup")) return { rows: [] };
+        if (sql.includes("select count(*)::text")) return { rows: [{ count: "0" }] };
+        throw new Error("unexpected query");
+      }),
+    };
+    const queueA = createPostgresBookkeepingErrorReportFileCleanupQueue({
+      client,
+      createClaimToken: () => "claim-1",
+    });
+    const queueB = createPostgresBookkeepingErrorReportFileCleanupQueue({
+      client,
+      createClaimToken: () => "claim-2",
+    });
+    const deleteImage = vi.fn(async () => undefined);
+
+    await Promise.all([
+      queueA.enqueue({ accountId: "account-a", imageObjectKey: "orphan.jpg", errorCode: "delete_failed" }),
+      queueB.enqueue({ accountId: "account-a", imageObjectKey: "orphan.jpg", errorCode: "delete_failed" }),
+    ]);
+    await Promise.all([queueA.retry(deleteImage), queueB.retry(deleteImage)]);
+
+    expect(client.query.mock.calls.filter(([sql]) => sql.includes("on conflict (image_object_key)"))).toHaveLength(2);
+    expect(deleteImage).toHaveBeenCalledTimes(1);
+    expect(client.query.mock.calls.some(([sql]) => sql.includes("for update skip locked"))).toBe(true);
+  });
+
+  it("retains the database failure and emits a fixed safe audit event when cleanup enqueue fails", async () => {
+    const store = {
+      save: vi.fn(), read: vi.fn(), delete: vi.fn().mockRejectedValue(new Error("file locked")),
+    };
+    const cleanupQueue = { enqueue: vi.fn().mockRejectedValue(new Error("queue database failed")), retry: vi.fn() };
+    const audit = vi.fn();
+    const client = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [{ id: "account-a" }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockRejectedValueOnce(new Error("database secret OCR 6222020202020202")),
+    };
+    const service = createBookkeepingErrorReportService({
+      client,
+      store,
+      cleanupQueue,
+      audit,
+      createImageKey: () => "report-image.jpg",
+    });
+
+    await expect(service.saveForCurrentUser("user-a", report, Buffer.from([0xff, 0xd8, 0xff, 0xd9])))
+      .rejects.toThrow("database secret OCR 6222020202020202");
+
+    expect(audit).toHaveBeenCalledWith({
+      event: "bookkeeping_error_report_cleanup_enqueue_failed",
+      errorCode: "cleanup_queue_unavailable",
+    });
+    expect(JSON.stringify(audit.mock.calls)).not.toContain("6222020202020202");
+    expect(JSON.stringify(audit.mock.calls)).not.toContain("report-image.jpg");
   });
 });

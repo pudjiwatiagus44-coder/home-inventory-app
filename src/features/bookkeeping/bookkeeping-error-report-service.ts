@@ -1,6 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 
 import type { PostgresQueryClient } from "../../server/auth/postgres-auth-repository";
 import type { PhotoStore } from "../../server/photos/photo-store";
@@ -9,80 +7,103 @@ import type { BookkeepingErrorReportRequest } from "./bookkeeping-error-report-t
 type BookkeepingErrorReportServiceDeps = {
   client: PostgresQueryClient;
   store: Pick<PhotoStore, "save" | "delete">;
-  cleanupQueue: ErrorReportOrphanCleanupQueue;
+  cleanupQueue?: ErrorReportFileCleanupQueue;
+  audit?: (event: ErrorReportCleanupAuditEvent) => void;
   createImageKey?: () => string;
 };
 
-export type ErrorReportOrphanCleanupEntry = {
+export type ErrorReportFileCleanupEntry = {
+  accountId: string;
   imageObjectKey: string;
-  reason: "database_insert_failed" | "duplicate_conflict";
-  queuedAt: string;
+  errorCode: ErrorReportFileCleanupErrorCode;
 };
 
-export type ErrorReportOrphanCleanupQueue = {
-  enqueue: (entry: ErrorReportOrphanCleanupEntry) => Promise<void>;
+export type ErrorReportFileCleanupErrorCode =
+  | "delete_after_database_insert_failed"
+  | "delete_after_duplicate_conflict"
+  | "delete_failed";
+
+export type ErrorReportFileCleanupQueue = {
+  enqueue: (entry: ErrorReportFileCleanupEntry) => Promise<void>;
   retry: (deleteImage: (imageObjectKey: string) => Promise<void>) => Promise<{
     deleted: number;
     pending: number;
   }>;
 };
 
-const ORPHAN_CLEANUP_FILE = ".bookkeeping-error-report-orphans.json";
+export type ErrorReportCleanupAuditEvent = {
+  event: "bookkeeping_error_report_cleanup_enqueue_failed";
+  errorCode: "cleanup_queue_unavailable";
+};
 
-export function createFileBackedErrorReportOrphanCleanupQueue(
-  baseDir: string,
-  fsImpl: typeof fs = fs,
-): ErrorReportOrphanCleanupQueue {
-  const queueFile = path.join(baseDir, ORPHAN_CLEANUP_FILE);
-
-  async function readEntries(): Promise<ErrorReportOrphanCleanupEntry[]> {
-    try {
-      const value = JSON.parse(await fsImpl.readFile(queueFile, "utf8")) as unknown;
-      if (!Array.isArray(value) || value.some((entry) => !isCleanupEntry(entry))) {
-        throw new Error("invalid error report orphan cleanup queue");
-      }
-      return value;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
-  }
-
-  async function writeEntries(entries: ErrorReportOrphanCleanupEntry[]) {
-    if (entries.length === 0) {
-      try {
-        await fsImpl.unlink(queueFile);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
-      return;
-    }
-    await fsImpl.mkdir(baseDir, { recursive: true });
-    await fsImpl.writeFile(queueFile, JSON.stringify(entries), "utf8");
-  }
-
+export function createPostgresBookkeepingErrorReportFileCleanupQueue({
+  client,
+  createClaimToken = randomUUID,
+}: {
+  client: PostgresQueryClient;
+  createClaimToken?: () => string;
+}): ErrorReportFileCleanupQueue {
   return {
     async enqueue(entry) {
-      const entries = await readEntries();
-      if (!entries.some((existing) => existing.imageObjectKey === entry.imageObjectKey)) {
-        entries.push(entry);
-        await writeEntries(entries);
-      }
+      await client.query(
+        `insert into bookkeeping_error_report_file_cleanup (
+           account_id, image_object_key, last_error_code
+         ) values ($1::uuid, $2, $3)
+         on conflict (image_object_key) do update
+           set last_error_code = excluded.last_error_code`,
+        [entry.accountId, entry.imageObjectKey, entry.errorCode],
+      );
     },
     async retry(deleteImage) {
-      const entries = await readEntries();
-      const remaining: ErrorReportOrphanCleanupEntry[] = [];
       let deleted = 0;
-      for (const entry of entries) {
+      for (let claims = 0; claims < 20; claims += 1) {
+        const claim = await client.query<{
+          account_id: string;
+          image_object_key: string;
+          claim_token: string;
+        }>(
+          `with candidate as (
+             select account_id, image_object_key
+               from bookkeeping_error_report_file_cleanup
+              where claim_until is null or claim_until < now()
+              order by created_at
+              for update skip locked
+              limit 1
+           )
+           update bookkeeping_error_report_file_cleanup queue
+              set claim_token = $1::uuid,
+                  claim_until = now() + interval '5 minutes',
+                  last_attempt_at = now(),
+                  attempt_count = queue.attempt_count + 1
+             from candidate
+            where queue.account_id = candidate.account_id
+              and queue.image_object_key = candidate.image_object_key
+           returning queue.account_id, queue.image_object_key, queue.claim_token`,
+          [createClaimToken()],
+        );
+        const entry = claim.rows[0];
+        if (!entry) break;
         try {
-          await deleteImage(entry.imageObjectKey);
+          await deleteImage(entry.image_object_key);
+          await client.query(
+            `delete from bookkeeping_error_report_file_cleanup
+              where account_id = $1::uuid and image_object_key = $2 and claim_token = $3::uuid`,
+            [entry.account_id, entry.image_object_key, entry.claim_token],
+          );
           deleted += 1;
         } catch {
-          remaining.push(entry);
+          await client.query(
+            `update bookkeeping_error_report_file_cleanup
+                set last_error_code = 'delete_failed', claim_token = null, claim_until = null
+              where account_id = $1::uuid and image_object_key = $2 and claim_token = $3::uuid`,
+            [entry.account_id, entry.image_object_key, entry.claim_token],
+          );
         }
       }
-      await writeEntries(remaining);
-      return { deleted, pending: remaining.length };
+      const remaining = await client.query<{ count: string }>(
+        "select count(*)::text as count from bookkeeping_error_report_file_cleanup",
+      );
+      return { deleted, pending: Number(remaining.rows[0]?.count ?? 0) };
     },
   };
 }
@@ -90,7 +111,8 @@ export function createFileBackedErrorReportOrphanCleanupQueue(
 export function createBookkeepingErrorReportService({
   client,
   store,
-  cleanupQueue,
+  cleanupQueue = createPostgresBookkeepingErrorReportFileCleanupQueue({ client }),
+  audit = (event) => console.error(JSON.stringify(event)),
   createImageKey = () => `${randomUUID()}.jpg`,
 }: BookkeepingErrorReportServiceDeps) {
   async function accountIdForUser(userId: string) {
@@ -140,37 +162,33 @@ export function createBookkeepingErrorReportService({
           ],
         );
         if (!inserted.rows[0]) {
-          await deleteOrQueue(imageObjectKey, "duplicate_conflict");
+          await deleteOrQueue(accountId, imageObjectKey, "delete_after_duplicate_conflict");
           return { reportId: report.reportId, duplicate: true };
         }
         return { reportId: report.reportId, duplicate: false };
       } catch (error) {
-        await deleteOrQueue(imageObjectKey, "database_insert_failed");
+        await deleteOrQueue(accountId, imageObjectKey, "delete_after_database_insert_failed");
         throw error;
       }
     },
   };
 
   async function deleteOrQueue(
+    accountId: string,
     imageObjectKey: string,
-    reason: ErrorReportOrphanCleanupEntry["reason"],
+    errorCode: ErrorReportFileCleanupErrorCode,
   ) {
     try {
       await store.delete(imageObjectKey);
     } catch {
       await cleanupQueue.enqueue({
+        accountId,
         imageObjectKey,
-        reason,
-        queuedAt: new Date().toISOString(),
-      }).catch(() => undefined);
+        errorCode,
+      }).catch(() => audit({
+        event: "bookkeeping_error_report_cleanup_enqueue_failed",
+        errorCode: "cleanup_queue_unavailable",
+      }));
     }
   }
-}
-
-function isCleanupEntry(value: unknown): value is ErrorReportOrphanCleanupEntry {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const entry = value as Record<string, unknown>;
-  return typeof entry.imageObjectKey === "string" &&
-    (entry.reason === "database_insert_failed" || entry.reason === "duplicate_conflict") &&
-    typeof entry.queuedAt === "string";
 }

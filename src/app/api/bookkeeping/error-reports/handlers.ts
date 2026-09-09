@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUserFromRequest } from "../../auth/route-helpers";
 import {
-  createFileBackedErrorReportOrphanCleanupQueue,
   createBookkeepingErrorReportService,
 } from "../../../../features/bookkeeping/bookkeeping-error-report-service";
 import {
@@ -61,7 +60,6 @@ export function createBookkeepingErrorReportHandlers(
     const service = dependencies.service ?? createBookkeepingErrorReportService({
       client: createPostgresQueryClientFromEnv(env),
       store: createLocalPhotoStore(directory!),
-      cleanupQueue: createFileBackedErrorReportOrphanCleanupQueue(directory!),
     });
     await service.retryPendingFileCleanup();
     return { userId: currentUser.userId, service };
