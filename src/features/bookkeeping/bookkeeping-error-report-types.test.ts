@@ -25,6 +25,38 @@ const report = {
 };
 
 describe("bookkeeping error report contract", () => {
+  it("accepts private rerecognition evidence only for a replaced order report", () => {
+    const parsed = parseBookkeepingErrorReportRequest({
+      ...report,
+      reason: "rerecognition_replaced",
+      ocrText: "付款 18 元",
+      provider: "QWEN",
+      model: "qwen3.5-ocr",
+      rerecognitionRequestId: "22222222-2222-4222-8222-222222222222",
+    });
+
+    expect(parsed).toMatchObject({
+      reason: "rerecognition_replaced",
+      provider: "QWEN",
+      model: "qwen3.5-ocr",
+    });
+  });
+
+  it("rejects rerecognition-only evidence on a manual report", () => {
+    expect(() => parseBookkeepingErrorReportRequest({ ...report, ocrText: "private" }))
+      .toThrow("unexpected field");
+  });
+
+  it("accepts empty serialized defaults from older manual-report clients", () => {
+    expect(parseBookkeepingErrorReportRequest({
+      ...report,
+      ocrText: "",
+      provider: "",
+      model: "",
+      rerecognitionRequestId: "",
+    })).toEqual(report);
+  });
+
   it("accepts only the approved report fields", () => {
     expect(parseBookkeepingErrorReportRequest(report)).toEqual(report);
   });

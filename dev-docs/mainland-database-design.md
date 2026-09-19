@@ -63,3 +63,6 @@
 3. 测试阶段先不做邮箱验证和密码重置；正式公开前必须补齐。
 4. 在本地 PostgreSQL 或阿里云测试 PostgreSQL 中演练 migration。
 5. 家庭共享相关表与权限随 `dev-docs/database-design.md` 同步进正式版 schema 草案（当前尚未写入 `sql/mainland_initial_schema.sql`）。
+## 2026-09-01 记账识别纠错反馈增量（本地设计，生产未执行）
+
+记账服务增加 `bookkeeping_recognition_feedback`，以 `(account_id, id)` 为复合主键，保存脱敏原文、固定字段原结果/修正结果、差异枚举、实际模型和授权时间；`account_id` 外键级联删除，并建立 `(account_id, created_at desc)` 索引。所有查询、写入和物理删除必须从当前登录用户解析 `bookkeeping_accounts.id`，不得信任客户端传入的账号标识。具体合同与验收见 `dev-docs/bookkeeping-recognition-feedback-design.md`。生产 migration 尚未执行，执行前必须备份并再次确认。

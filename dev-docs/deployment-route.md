@@ -185,6 +185,15 @@ Vercel 只配置 public client 所需变量：
 - 当前访问地址：`https://homestorag.xyz/login`、`https://www.homestorag.xyz/login`。
 - 注意：当前仍为阿里云测试环境，正式生产级备份恢复、监控、日志和运维策略仍需补齐。
 
+## 2026-09-12 账号级豆包凭据内测部署证据
+
+- 服务端备份：`/tmp/home-inventory-app-doubao-20260912-155715.tgz`。
+- 数据库迁移：`bookkeeping_doubao_credentials` 已执行，迁移后行数为 `0`；账号级主密钥已写入服务器环境文件，值未回显。
+- 服务端构建：`npm run build` 通过，`home-inventory-app` 重启后 `systemctl is-active` 为 `active`。
+- 未登录冒烟：凭据 GET/POST 返回 `401`，响应包含 `Cache-Control: no-store, max-age=0`；`use-platform` POST 同样返回 `401`。
+- 内测 APK：`https://homestorag.xyz/apk/home-inventory-internal-latest.apk`，SHA-256 为 `3f6af79a3b4979d207541d9430c306c2ba34c33f75ef09d74aeb6062c3f44996`，大小 `155658091` 字节。
+- 个人 Key 的真实文本/视觉调用、跨账号隔离和荣耀 90 真机操作仍标记为“未验证”。
+
 ## Android 内测 APK 托管与自动更新
 
 - 内测 APK 由阿里云测试服务器静态托管（如 `https://homestorag.xyz/apk/`），下载地址为部署配置项 `NEXT_PUBLIC_APK_DOWNLOAD_URL`，默认指向最新 APK。

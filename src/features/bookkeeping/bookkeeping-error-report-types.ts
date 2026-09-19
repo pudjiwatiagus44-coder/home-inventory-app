@@ -14,6 +14,7 @@ export const BOOKKEEPING_ERROR_REPORT_REASONS = [
   "wrong_amount",
   "wrong_category",
   "other",
+  "rerecognition_replaced",
 ] as const;
 
 export type BookkeepingErrorReportReason = (typeof BOOKKEEPING_ERROR_REPORT_REASONS)[number];
@@ -30,6 +31,10 @@ export type BookkeepingErrorReportRequest = {
   reason: BookkeepingErrorReportReason;
   note: string | null;
   authorizedAt: string;
+  ocrText?: string;
+  provider?: "DOUBAO" | "QWEN" | "UNKNOWN";
+  model?: string;
+  rerecognitionRequestId?: string;
 };
 
 const REQUEST_FIELDS = [
@@ -41,12 +46,24 @@ const REQUEST_FIELDS = [
   "note",
   "authorizedAt",
 ] as const;
+const RERECOGNITION_REQUEST_FIELDS = [
+  ...REQUEST_FIELDS,
+  "ocrText",
+  "provider",
+  "model",
+  "rerecognitionRequestId",
+] as const;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const BOOKKEEPING_ERROR_REPORT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export function parseBookkeepingErrorReportRequest(input: unknown): BookkeepingErrorReportRequest {
   const record = requireRecord(input, "report");
-  rejectUnexpectedFields(record, REQUEST_FIELDS);
+  const isRerecognition = record.reason === "rerecognition_replaced";
+  rejectUnexpectedFields(record, RERECOGNITION_REQUEST_FIELDS);
+  if (!isRerecognition && [record.ocrText, record.provider, record.model, record.rerecognitionRequestId]
+    .some((value) => value !== undefined && value !== "")) {
+    throw new Error("unexpected field: rerecognition evidence");
+  }
 
   const reportId = requireString(record, "reportId");
   if (!UUID_PATTERN.test(reportId)) throw new Error("reportId must be a UUID");
@@ -72,7 +89,7 @@ export function parseBookkeepingErrorReportRequest(input: unknown): BookkeepingE
   }
 
   const authorizedAt = requireIsoTimestamp(record, "authorizedAt");
-  return {
+  const result: BookkeepingErrorReportRequest = {
     reportId,
     localTransactionId,
     serverTransactionId,
@@ -81,6 +98,21 @@ export function parseBookkeepingErrorReportRequest(input: unknown): BookkeepingE
     note,
     authorizedAt,
   };
+  if (!isRerecognition) return result;
+  const ocrText = typeof record.ocrText === "string" && record.ocrText.length <= 12_000
+    ? record.ocrText
+    : invalid("ocrText must be at most 12000 characters");
+  const provider = record.provider;
+  if (provider !== "DOUBAO" && provider !== "QWEN" && provider !== "UNKNOWN") throw new Error("provider is not supported");
+  const model = requireString(record, "model");
+  if (model.length > 100) throw new Error("model must be at most 100 characters");
+  const rerecognitionRequestId = requireString(record, "rerecognitionRequestId");
+  if (!UUID_PATTERN.test(rerecognitionRequestId)) throw new Error("rerecognitionRequestId must be a UUID");
+  return { ...result, ocrText, provider, model, rerecognitionRequestId };
+}
+
+function invalid(message: string): never {
+  throw new Error(message);
 }
 
 export function validateBookkeepingErrorReportJpeg(image: Buffer) {

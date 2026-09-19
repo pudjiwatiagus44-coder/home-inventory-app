@@ -144,8 +144,10 @@ export function createBookkeepingErrorReportService({
         const inserted = await client.query<{ report_id: string }>(
           `insert into bookkeeping_transaction_error_reports (
              account_id, report_id, local_transaction_id, server_transaction_id, snapshot,
-             reason, note, image_object_key, image_sha256, authorized_at
-           ) values ($1::uuid, $2::uuid, $3, $4::uuid, $5::jsonb, $6, $7, $8, $9, $10::timestamptz)
+             reason, note, image_object_key, image_sha256, authorized_at,
+             ocr_text, provider, model, rerecognition_request_id
+           ) values ($1::uuid, $2::uuid, $3, $4::uuid, $5::jsonb, $6, $7, $8, $9, $10::timestamptz,
+             $11, $12, $13, $14::uuid)
            on conflict (account_id, report_id) do nothing
            returning report_id`,
           [
@@ -159,6 +161,10 @@ export function createBookkeepingErrorReportService({
             imageObjectKey,
             createHash("sha256").update(image).digest("hex"),
             report.authorizedAt,
+            report.ocrText ?? null,
+            report.provider ?? null,
+            report.model ?? null,
+            report.rerecognitionRequestId ?? null,
           ],
         );
         if (!inserted.rows[0]) {

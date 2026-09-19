@@ -20,6 +20,35 @@ const report: BookkeepingErrorReportRequest = {
 };
 
 describe("bookkeeping error report service", () => {
+  it("stores rerecognition evidence in the current account row", async () => {
+    const queries: Array<{ sql: string; values: unknown[] | undefined }> = [];
+    const client = { query: vi.fn(async (sql: string, values?: unknown[]) => {
+      queries.push({ sql, values });
+      if (sql.includes("from bookkeeping_accounts")) return { rows: [{ id: "account-a" }] };
+      if (sql.includes("select report_id")) return { rows: [] };
+      return { rows: [{ report_id: report.reportId }] };
+    }) };
+    const service = createBookkeepingErrorReportService({
+      client,
+      store: { save: vi.fn(), delete: vi.fn() },
+      cleanupQueue: { enqueue: vi.fn(), retry: vi.fn() },
+    });
+    const rerecognition = {
+      ...report,
+      reason: "rerecognition_replaced" as const,
+      ocrText: "付款 18 元",
+      provider: "QWEN" as const,
+      model: "qwen3.5-ocr",
+      rerecognitionRequestId: "22222222-2222-4222-8222-222222222222",
+    };
+
+    await service.saveForCurrentUser("user-a", rerecognition, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    const insert = queries.find((query) => query.sql.includes("insert into bookkeeping_transaction_error_reports"))!;
+    expect(insert.sql).toContain("rerecognition_request_id");
+    expect(insert.values).toEqual(expect.arrayContaining(["account-a", "付款 18 元", "QWEN", "qwen3.5-ocr", rerecognition.rerecognitionRequestId]));
+  });
+
   it("does not write another image or overwrite an existing report", async () => {
     const store = { save: vi.fn(), read: vi.fn(), delete: vi.fn() };
     const cleanupQueue = { enqueue: vi.fn().mockResolvedValue(undefined), retry: vi.fn() };
