@@ -26,6 +26,7 @@
 - `bookkeeping-text-category-design.md` - Android 文字批量记账、分类上下文和父子分类同步协议真源（本地开发阶段）。
 - `bookkeeping-recognition-feedback-design.md` - Android 识别纠错反馈、账号隔离、隐私边界和服务器接口真源（本地实现已确认，生产部署待确认）。
 - `bookkeeping-error-report-design.md` - 回收站错误订单上报、账号隔离、图片存储与维护删除真源（服务端本地实现已完成；迁移、服务器目录、反代限额、部署和生产验证均未执行）。
+- `bookkeeping-deepseek-hosted-key-design.md` - 记账 DeepSeek API Key 按账号加密托管、自由细分类与单次视觉重试设计（2026-09-21 已确认范围，待实施/部署）。
 
 ## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，已部署阿里云测试环境）
 
