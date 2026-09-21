@@ -7,7 +7,7 @@ import {
 
 type PersonalDoubaoModel = "doubao-seed-2-0-mini-260428" | "doubao-seed-2-0-lite-260428";
 
-export type RerecognitionProvider = "DOUBAO" | "QWEN";
+export type RerecognitionProvider = "DOUBAO" | "QWEN" | "DEEPSEEK";
 export type RerecognitionInput = {
   requestId: string;
   ocrText: string;
@@ -26,12 +26,13 @@ type Dependencies = {
   fetchImpl?: typeof fetch;
   doubaoApiKey?: string;
   doubaoModel?: PersonalDoubaoModel;
+  deepseekApiKey?: string;
 };
 
 export function createBookkeepingVisionRerecognitionService(deps: Dependencies = {}) {
   const env = deps.env ?? process.env;
   const visionProviders = {
-    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel),
+    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel, deps.deepseekApiKey),
     ...deps.visionProviders,
   };
   return {
@@ -53,6 +54,7 @@ function createDefaultVisionProviders(
   fetchImpl?: typeof fetch,
   doubaoApiKey?: string,
   doubaoModel?: PersonalDoubaoModel,
+  deepseekApiKey?: string,
 ) {
   return {
     DOUBAO: createOpenAiVisionProvider({
@@ -67,6 +69,12 @@ function createDefaultVisionProviders(
       baseUrl: env.QWEN_VISION_BASE_URL,
       requireBeijingWorkspace: true,
       approvedModels: new Set(["qwen3.5-ocr"]),
+      fetchImpl,
+    }),
+    DEEPSEEK: createOpenAiVisionProvider({
+      apiKey: deepseekApiKey,
+      model: "deepseek-flash",
+      baseUrl: "https://api.deepseek.com/chat/completions",
       fetchImpl,
     }),
   };

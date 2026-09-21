@@ -6,7 +6,7 @@ import {
 } from "../../server/recognition/doubao-bookkeeping";
 import type { PaymentAmountCandidate } from "../../server/recognition/payment-amount-candidates";
 
-export type TextUnderstandingMode = "AUTOMATIC" | "DOUBAO_ONLY" | "QWEN_ONLY";
+export type TextUnderstandingMode = "AUTOMATIC" | "DOUBAO_ONLY" | "QWEN_ONLY" | "DEEPSEEK_ONLY";
 
 const DEFAULT_QWEN_TEXT_MODEL = "qwen3.7-flash";
 const QWEN_TEXT_TIMEOUT_MS = 45_000;
@@ -33,10 +33,12 @@ export type TextUnderstandingProvider = {
 export type TextUnderstandingProviders = {
   doubao: TextUnderstandingProvider;
   qwen: TextUnderstandingProvider;
+  deepseek: TextUnderstandingProvider;
 };
 
 export type TextUnderstandingProviderOptions = {
   doubaoApiKey?: string;
+  deepseekApiKey?: string;
 };
 
 export async function understandWithFallback(
@@ -45,6 +47,7 @@ export async function understandWithFallback(
 ): Promise<BookkeepingUnderstandingResult> {
   if (input.signal?.aborted) return { ok: false, reason: "request_aborted" };
   if (mode === "QWEN_ONLY") return providers.qwen.understand(input);
+  if (mode === "DEEPSEEK_ONLY") return providers.deepseek.understand(input);
 
   const doubaoResult = await providers.doubao.understand(input);
   if (mode !== "AUTOMATIC" || doubaoResult.ok || !isRetryableDoubaoFailure(doubaoResult.reason) || input.signal?.aborted) {
@@ -70,6 +73,12 @@ export function createTextUnderstandingProviders(
       fetchImpl,
     })),
     qwen: createQwenProvider(env, fetchImpl),
+    deepseek: toProvider(createDoubaoBookkeepingClient({
+      apiKey: options.deepseekApiKey,
+      model: "deepseek-flash",
+      baseUrl: "https://api.deepseek.com/chat/completions",
+      fetchImpl,
+    })),
   };
 }
 

@@ -12,6 +12,8 @@ import { createPostgresQueryClientFromEnv, type PostgresEnv } from "../../../../
 import { parsePaymentAmountCandidates, type PaymentAmountCandidate } from "../../../../server/recognition/payment-amount-candidates";
 import { createPostgresBookkeepingDoubaoCredentialRepository } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-repository";
 import { createBookkeepingDoubaoCredentialService } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-service";
+import { createDeepSeekCredentialService } from "../../../../features/bookkeeping/deepseek-credential-service";
+import { createPostgresDeepSeekCredentialRepository } from "../../../../features/bookkeeping/deepseek-credential-repository";
 import { detectSuspectedMultiOrder } from "../../../../server/recognition/multi-order-detection";
 import {
   understandWithFallback,
@@ -34,6 +36,7 @@ export type BookkeepingUnderstandDependencies = {
   env?: PostgresEnv;
   providers?: TextUnderstandingProviders;
   credentialService?: Pick<ReturnType<typeof createBookkeepingDoubaoCredentialService>, "resolveForUser" | "recordProviderFailure" | "recordProviderSuccess">;
+  deepseekCredentialService?: Pick<ReturnType<typeof createDeepSeekCredentialService>, "decryptForProvider">;
 };
 
 const MAX_OCR_TEXT_LENGTH = 12_000;
@@ -60,6 +63,7 @@ export function createBookkeepingUnderstandHandlers(
         categories?: unknown;
         amountCandidates?: unknown;
         modelMode?: unknown;
+        provider?: unknown;
       } | null;
       const ocrText = typeof body?.ocrText === "string" ? body.ocrText.trim() : "";
       if (!ocrText) {
@@ -98,7 +102,32 @@ export function createBookkeepingUnderstandHandlers(
       } catch {
         console.warn("bookkeeping_feedback_lookup_failed");
       }
-      const modelMode = parseModelMode(body?.modelMode);
+      const modelMode = parseModelMode(body?.modelMode, body?.provider);
+      let deepseekApiKey: string | undefined;
+      if (modelMode === "DEEPSEEK_ONLY") {
+        if (!currentUser) {
+          return NextResponse.json({ ok: false, message: "Authentication required" }, { status: 401 });
+        }
+        let deepseekCredentialService = dependencies.deepseekCredentialService;
+        if (!deepseekCredentialService) {
+          try {
+            deepseekCredentialService = createDeepSeekCredentialService({
+              database: createPostgresDeepSeekCredentialRepository(
+                createPostgresQueryClientFromEnv(dependencies.env ?? process.env),
+              ),
+              env: process.env,
+            });
+          } catch {
+            return deepseekFailure("configuration_missing");
+          }
+        }
+        try {
+          deepseekApiKey = await deepseekCredentialService.decryptForProvider(currentUser.userId) ?? undefined;
+        } catch {
+          return deepseekFailure("configuration_missing");
+        }
+        if (!deepseekApiKey) return deepseekFailure("api_key_missing");
+      }
       let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
       let credentialRevision: string | null = null;
       let credentialService = dependencies.credentialService;
@@ -110,6 +139,9 @@ export function createBookkeepingUnderstandHandlers(
         });
       }
       let providers = dependencies.providers;
+      if (modelMode === "DEEPSEEK_ONLY" && !providers) {
+        providers = createTextUnderstandingProviders(process.env, undefined, { deepseekApiKey });
+      }
       if (currentUser && modelMode !== "QWEN_ONLY" && credentialService) {
         try {
           const resolved = await credentialService.resolveForUser(currentUser.userId);
@@ -145,6 +177,7 @@ export function createBookkeepingUnderstandHandlers(
           return NextResponse.json({ ok: false, message: result.reason, errorCode: result.reason === "auth_invalid" ? "PERSONAL_AUTH_INVALID" : "PERSONAL_QUOTA_EXHAUSTED", credentialSource }, { status: result.reason === "auth_invalid" ? 401 : 403 });
         }
         console.warn("bookkeeping understanding failed", { modelMode, reason: result.reason });
+        if (modelMode === "DEEPSEEK_ONLY") return deepseekFailure(result.reason);
         const status = result.reason === "api_key_missing" ? 501 : 502;
         return NextResponse.json({ ok: false, message: result.reason }, { status });
       }
@@ -176,10 +209,21 @@ export function createBookkeepingUnderstandHandlers(
   };
 }
 
-function parseModelMode(value: unknown): TextUnderstandingMode {
+function parseModelMode(value: unknown, provider: unknown): TextUnderstandingMode {
+  if (provider === "DEEPSEEK") return "DEEPSEEK_ONLY";
   return value === "DOUBAO_ONLY" || value === "QWEN_ONLY" || value === "AUTOMATIC"
     ? value
     : "AUTOMATIC";
+}
+
+function deepseekFailure(reason: string) {
+  const errorCode = reason === "api_key_missing" ? "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" :
+    reason === "auth_invalid" ? "DEEPSEEK_AUTH_INVALID" :
+    reason === "timeout" ? "DEEPSEEK_TIMEOUT" :
+    reason === "invalid_response" ? "DEEPSEEK_INVALID_JSON" : "DEEPSEEK_REQUEST_FAILED";
+  const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
+    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 : 502;
+  return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }
 
 const INCOME_KEYWORDS = ["提现", "体现"];

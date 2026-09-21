@@ -50,6 +50,24 @@ describe("bookkeeping vision rerecognition service", () => {
     expect(vision).toHaveBeenCalledWith(expect.objectContaining({ image: jpeg(), ocrText: input.ocrText }));
   });
 
+  it("sends the hosted DeepSeek key only to deepseek-flash and strictly parses its JSON array", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.deepseek.com/chat/completions");
+      expect(init?.headers).toMatchObject({ Authorization: "Bearer sk-hosted-test-key" });
+      expect(JSON.parse(String(init?.body)).model).toBe("deepseek-flash");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify([draft]) } }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const service = createBookkeepingVisionRerecognitionService({
+      deepseekApiKey: "sk-hosted-test-key",
+      fetchImpl,
+    });
+
+    await expect(service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg())).resolves.toMatchObject({
+      ok: true, provider: "DEEPSEEK", model: "deepseek-flash", stage: "vision",
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
   it("uses the selected vision model once even when a text provider would fail", async () => {
     const vision = vi.fn(async () => ({ ok: true as const, value: [draft], model: "qwen3.5-ocr" }));
     const service = createBookkeepingVisionRerecognitionService({

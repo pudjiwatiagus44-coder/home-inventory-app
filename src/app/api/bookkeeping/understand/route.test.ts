@@ -24,6 +24,36 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(understandOcrText).toHaveBeenCalledOnce();
   });
 
+  it("uses only the current session's hosted DeepSeek key for provider=DEEPSEEK", async () => {
+    const deepseek = { decryptForProvider: vi.fn(async () => "sk-user-a-key") };
+    const deepseekProvider = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("12", "早餐")], model: "deepseek-flash" })) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+      providers: { doubao: deepseekProvider, qwen: deepseekProvider, deepseek: deepseekProvider },
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+
+    expect(response.status).toBe(200);
+    expect(deepseek.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(deepseekProvider.understand).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toMatchObject({ ok: true, model: "deepseek-flash" });
+  });
+
+  it("returns a stable code without calling a provider when DeepSeek is not configured", async () => {
+    const deepseek = { decryptForProvider: vi.fn(async () => null) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_credential_not_configured", errorCode: "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" });
+  });
+
   it("rejects blank OCR text", async () => {
     const handlers = createBookkeepingUnderstandHandlers();
     const response = await handlers.POST(request({ ocrText: "  " }));

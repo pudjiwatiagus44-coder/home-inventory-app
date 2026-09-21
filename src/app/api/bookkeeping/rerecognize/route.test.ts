@@ -44,6 +44,21 @@ describe("/api/bookkeeping/rerecognize", () => {
     );
   });
 
+  it("allows DEEPSEEK and injects only the current session's briefly decrypted key", async () => {
+    const service = serviceStub();
+    const deepseek = { decryptForProvider: vi.fn(async () => "sk-user-a-key") };
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+      serviceFactory: vi.fn(() => service),
+    });
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "DEEPSEEK" }));
+
+    expect(response.status).toBe(200);
+    expect(deepseek.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(service.rerecognize).toHaveBeenCalledWith(expect.objectContaining({ provider: "DEEPSEEK" }), expect.any(Buffer));
+  });
+
   it.each([
     ["quota_exhausted", 403],
     ["rate_limit", 429],
