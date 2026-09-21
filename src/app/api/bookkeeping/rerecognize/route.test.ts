@@ -101,7 +101,6 @@ describe("/api/bookkeeping/rerecognize", () => {
         childName: "早餐",
         description: "早上吃的",
         keywords: "早餐,早点",
-        name: "早餐",
       }],
     };
     const response = await handlers.POST(requestWithMetadata(hierarchical));
@@ -126,7 +125,6 @@ describe("/api/bookkeeping/rerecognize", () => {
       childName: `自定义分类${index}`,
       description: "",
       keywords: "",
-      name: `自定义分类${index}`,
     }));
     const response = await handlers.POST(requestWithMetadata({ ...metadata, categories }));
 

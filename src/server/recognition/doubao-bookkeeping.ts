@@ -58,13 +58,13 @@ dateTime,type,category,amount,currency,payerPayee,account,participant,tag,mercha
 规则：
 1. dateTime 输出 YYYY-MM-DD HH:mm；必须优先使用页面明确标注的支付时间、交易时间或下单时间。页面缺年份时只借用 capturedAt 的年份；capturedAt 绝不能覆盖页面已有的月、日和时分。
 2. amount 只保留十进制数字，不带货币符号，必须取最终付款价格（实付金额），禁止把商品原价或划线价当作付款金额；优先“实付/已付/合计/付款金额/订单金额”等标签旁的金额，其次取结算区（紧邻订单编号、交易状态、收货信息）的金额；商品名旁紧跟的价格通常是原价，不作为付款金额。currency 通常填人民币。
-3. type 只填支出、收入或转账，核心看资金方向：
+3. type 只填支出或收入，核心看资金方向：
    - 【最高优先级特殊规则】只要页面出现“提现/体现/提现金额/已提现/到账/收款/收到/红包/工资/转入”等任一字样，一律判为收入，绝不判为支出或转账；此规则优先于其它方向判断（含“账户互转→转账”规则）。
    - 资金流出让用户（付款、消费、扣款、支出、买单、转出、退款给他人）→ 支出。
    - 资金流入到用户（收款、收到转账、到账、入账、红包、工资、奖金、报销、退款入账、余额/零钱提示收到、还款有“+金额”、提现/体现/提取到账）→ 收入。
-   - 用户自己的账户间互转（如银行卡转余额宝、信用卡还款）→ 转账。注意：**“提现/体现”不算转账**，只要出现即按上面最高优先级规则判为收入。
+   - 用户自己的账户间互转（如银行卡转余额宝、信用卡还款）按资金实际流入或流出判定。注意：提现/体现只要出现即按上面最高优先级规则判为收入。
    - 收入页面常见特征：页面或金额附近出现“收款/转入/到账/入账/收到/红包/工资/退款/提现/体现/+¥/+X.XX”等字样，或收款方是用户本人；遇到这些一律判为收入，不要判成支出。
-   category 由你按自己的理解直接给出四个字或以下的细分分类名称（如：早餐、咖啡茶饮、网约车、停车费、房租、电费、宠物食品、火车票、提现收入）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止使用“餐饮”“购物”“交通”“娱乐”“其他支出”等一级大类或空泛词；实在无法判断时收入用“其他”、支出用“未分类”。
+   category 由你按自己的理解直接给出非空的自由细分分类名称，建议四字内但不限制长度（如：早餐、咖啡茶饮、网约车、停车费、房租、电费、宠物食品、火车票、提现收入）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止使用“餐饮”“购物”“交通”“娱乐”“其他支出”等一级大类或空泛词；实在无法判断时收入用“其他”、支出用“未分类”。
 4. account 保留支付渠道、银行和卡尾号；payerPayee 和 merchant 填写店铺名或商户名。
 5. 购物页面（淘宝、京东、拼多多、抖音等）必须区分店铺名与商品名：店铺名（常以“旗舰店、专营店、官方店、专卖店、超市、商场”等结尾）填 payerPayee 和 merchant；商品名（品牌+品类+规格，通常紧邻价格，如“小米手环9 NFC版”）填 note；禁止把店铺名当作商品名或主标题。
 6. participant 无其他证据时填自己；无法可靠推断的字段填空字符串，禁止编造。
@@ -89,6 +89,8 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
       amountCandidates: PaymentAmountCandidate[] = [],
       options: RequestOptions = {},
     ): Promise<BookkeepingUnderstandingResult> {
+      // 保留参数位置以兼容旧客户端调用；分类候选绝不进入模型请求。
+      void categories;
       if (!apiKey) return { ok: false, reason: "api_key_missing" };
       if (options.signal?.aborted) return { ok: false, reason: "request_aborted" };
 
@@ -170,6 +172,7 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
               return [field, fieldValue.trim()];
             }),
           ) as BookkeepingDraft;
+          if (!isFreeCategoryDraft(draft)) throw new Error("invalid category or type");
           draft.dateTime = deriveExplicitDateTime(ocrText, capturedAt) || draft.dateTime;
           return draft;
         });
@@ -179,6 +182,10 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
       }
     },
   };
+}
+
+function isFreeCategoryDraft(draft: BookkeepingDraft): boolean {
+  return (draft.type === "收入" || draft.type === "支出") && draft.category.trim().length > 0;
 }
 
 function isAbortError(error: unknown): boolean {

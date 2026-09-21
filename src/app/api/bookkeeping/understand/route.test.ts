@@ -95,17 +95,24 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(response.status).toBe(413);
   });
 
-  it("passes enabled category context to the recognizer", async () => {
+  it("accepts the newer hierarchy contract and normalizes childName before recognition", async () => {
     const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "doubao-test" }));
     const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
     await handlers.POST(request({
       ocrText: "早餐 12 元",
-      categories: [{ name: "餐饮/早餐", type: "Expense", keywords: "早餐" }],
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: " 早餐 ",
+        description: "早上吃的",
+        keywords: "早餐",
+      }],
     }));
     expect(understandOcrText).toHaveBeenCalledWith(
       "早餐 12 元",
       expect.any(String),
-      [{ name: "餐饮/早餐", type: "Expense", keywords: "早餐" }],
+      [{ name: "早餐", type: "Expense", keywords: "早餐" }],
       [],
       [],
       { signal: expect.any(AbortSignal) },

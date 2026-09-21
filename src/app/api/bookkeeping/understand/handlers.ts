@@ -76,14 +76,7 @@ export function createBookkeepingUnderstandHandlers(
       const capturedAt = typeof body?.capturedAt === "string" && body.capturedAt.trim()
         ? body.capturedAt.trim()
         : new Date().toISOString();
-      const categories: BookkeepingCategoryContext[] = Array.isArray(body?.categories)
-        ? body.categories.flatMap((item) => {
-            if (!item || typeof item !== "object") return [];
-            const value = item as Record<string, unknown>;
-            if (typeof value.name !== "string" || typeof value.type !== "string" || typeof value.keywords !== "string") return [];
-            return [{ name: value.name.trim(), type: value.type.trim(), keywords: value.keywords.trim() }];
-          }).filter((item) => item.name.length > 0)
-        : [];
+      const categories = normalizeCategoryContracts(body?.categories);
       let amountCandidates: PaymentAmountCandidate[];
       try {
         amountCandidates = parsePaymentAmountCandidates(body?.amountCandidates);
@@ -214,6 +207,18 @@ function parseModelMode(value: unknown, provider: unknown): TextUnderstandingMod
   return value === "DOUBAO_ONLY" || value === "QWEN_ONLY" || value === "AUTOMATIC"
     ? value
     : "AUTOMATIC";
+}
+
+function normalizeCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const category = item as Record<string, unknown>;
+    if (typeof category.type !== "string" || typeof category.keywords !== "string") return [];
+    const name = typeof category.childName === "string" ? category.childName.trim() :
+      typeof category.name === "string" ? category.name.trim() : "";
+    return name ? [{ name, type: category.type.trim(), keywords: category.keywords.trim() }] : [];
+  });
 }
 
 function deepseekFailure(reason: string) {

@@ -127,7 +127,7 @@ class BodyTooLargeError extends Error {}
 // 100 个内置子分类 + 用户自定义子分类的层级合同上限；understand 端点未设数量上限，这里保持同等宽松度。
 const MAX_CATEGORIES = 200;
 const LEGACY_CATEGORY_KEYS = "keywords,name,type";
-const HIERARCHICAL_CATEGORY_KEYS = "childName,description,keywords,name,parentName,stableKey,type";
+const HIERARCHICAL_CATEGORY_KEYS = "childName,description,keywords,parentName,stableKey,type";
 
 async function parseMultipart(request: NextRequest) {
   const contentType = request.headers.get("content-type");
@@ -198,13 +198,13 @@ function parseMetadata(value: unknown): RerecognitionInput {
           return { name: category.name, type: category.type, keywords: category.keywords };
         }
         if (keys === HIERARCHICAL_CATEGORY_KEYS) {
-          const { childName, description, keywords, name, parentName, stableKey, type } = category;
+          const { childName, description, keywords, parentName, stableKey, type } = category;
           if (typeof childName !== "string" || typeof description !== "string" || typeof keywords !== "string" ||
-              typeof name !== "string" || typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string") {
+              typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string") {
             throw new Error("invalid category");
           }
           if (childName.length > 100 || description.length > 500 || keywords.length > 500 ||
-              name.length > 100 || parentName.length > 100 || stableKey.length > 120 ||
+              parentName.length > 100 || stableKey.length > 120 ||
               type.length > 30) throw new Error("invalid category");
           const trimmedChildName = childName.trim();
           if (!trimmedChildName) throw new Error("invalid category");

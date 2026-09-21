@@ -182,7 +182,7 @@ function isCompleteDraft(draft: BookkeepingDraft) {
   const amount = Number(draft.amount);
   return Number.isFinite(amount) && amount > 0 && draft.category.trim() !== "" &&
     (draft.merchant.trim() !== "" || draft.payerPayee.trim() !== "") &&
-    ["支出", "收入", "转账"].includes(draft.type);
+    ["支出", "收入"].includes(draft.type);
 }
 
 function normalizeDraft(draft: BookkeepingDraft): BookkeepingDraft {
@@ -193,7 +193,7 @@ function normalizeDraft(draft: BookkeepingDraft): BookkeepingDraft {
 }
 
 function visionPrompt(input: RerecognitionInput) {
-  return `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出四个字或以下的细分分类名称（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”“收入”或“转账”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
+  return `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出非空的自由细分分类名称；建议四字内但不限制长度（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”或“收入”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
 }
 
 function isBeijingWorkspaceUrl(value: string) {
