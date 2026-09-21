@@ -8,7 +8,7 @@ create table if not exists bookkeeping_deepseek_credentials (
   nonce bytea not null,
   authentication_tag bytea not null,
   last_four text not null check (char_length(last_four) = 4),
-  last_verified_at timestamptz not null,
+  last_verified_at timestamptz null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
