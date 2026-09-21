@@ -11,7 +11,7 @@ export type StoredDeepSeekCredential = {
   tag: Buffer;
   keyVersion: number;
   lastFour: string;
-  lastVerifiedAt: string;
+  lastVerifiedAt: string | null;
 };
 
 export type DeepSeekCredentialStatus = {
@@ -21,12 +21,19 @@ export type DeepSeekCredentialStatus = {
 };
 
 export type DeepSeekCredentialDatabase = {
-  findForUser(userId: string): Promise<StoredDeepSeekCredential | null>;
-  saveForUser(
-    userId: string,
+  // 调用方必须从服务器会话推导此标识，绝不可传入客户端 body/query 中的 userId。
+  findForTrustedServerUser(
+    trustedServerUserId: string,
+  ): Promise<StoredDeepSeekCredential | null>;
+  saveForTrustedServerUser(
+    trustedServerUserId: string,
     credential: StoredDeepSeekCredential,
   ): Promise<StoredDeepSeekCredential>;
-  deleteForUser(userId: string): Promise<boolean>;
+  recordSuccessfulValidationForTrustedServerUser(
+    trustedServerUserId: string,
+    lastVerifiedAt: string,
+  ): Promise<StoredDeepSeekCredential | null>;
+  deleteForTrustedServerUser(trustedServerUserId: string): Promise<boolean>;
 };
 
 type Dependencies = {
@@ -43,8 +50,9 @@ export function createDeepSeekCredentialService({
   const masterKey = parseMasterKey(env.BOOKKEEPING_CREDENTIAL_MASTER_KEY);
 
   return {
+    // 此参数只能来自服务端已认证会话；路由不得接受客户端提供的 userId。
     async saveForUser(
-      userId: string,
+      trustedServerUserId: string,
       apiKey: string,
     ): Promise<DeepSeekCredentialStatus> {
       const plaintext = validateApiKey(apiKey);
@@ -57,24 +65,28 @@ export function createDeepSeekCredentialService({
         cipher.final(),
       ]);
       const lastFour = plaintext.slice(-4);
-      const saved = await database.saveForUser(userId, {
+      const saved = await database.saveForTrustedServerUser(trustedServerUserId, {
         ciphertext,
         nonce,
         tag: cipher.getAuthTag(),
         keyVersion: 1,
         lastFour,
-        lastVerifiedAt: now().toISOString(),
+        lastVerifiedAt: null,
       });
       return publicStatus(saved);
     },
 
-    async getStatusForUser(userId: string): Promise<DeepSeekCredentialStatus> {
-      return publicStatus(await database.findForUser(userId));
+    async getStatusForUser(
+      trustedServerUserId: string,
+    ): Promise<DeepSeekCredentialStatus> {
+      return publicStatus(
+        await database.findForTrustedServerUser(trustedServerUserId),
+      );
     },
 
     // 此方法仅供实际 DeepSeek provider 请求路径使用；绝不用于状态接口或日志。
-    async decryptForProvider(userId: string): Promise<string | null> {
-      const stored = await database.findForUser(userId);
+    async decryptForProvider(trustedServerUserId: string): Promise<string | null> {
+      const stored = await database.findForTrustedServerUser(trustedServerUserId);
       if (!stored) return null;
 
       const decipher = createDecipheriv(ALGORITHM, masterKey, stored.nonce, {
@@ -87,8 +99,18 @@ export function createDeepSeekCredentialService({
       ]).toString("utf8");
     },
 
-    async deleteForUser(userId: string): Promise<boolean> {
-      return database.deleteForUser(userId);
+    async recordSuccessfulValidationForUser(
+      trustedServerUserId: string,
+    ): Promise<DeepSeekCredentialStatus> {
+      const updated = await database.recordSuccessfulValidationForTrustedServerUser(
+        trustedServerUserId,
+        now().toISOString(),
+      );
+      return publicStatus(updated);
+    },
+
+    async deleteForUser(trustedServerUserId: string): Promise<boolean> {
+      return database.deleteForTrustedServerUser(trustedServerUserId);
     },
   };
 }
@@ -108,8 +130,8 @@ function publicStatus(
 
 function validateApiKey(value: string): string {
   const apiKey = value.trim();
-  if (!apiKey || apiKey.length > 512) {
-    throw new Error("DeepSeek API key must contain 1 to 512 characters");
+  if (apiKey.length < 4 || apiKey.length > 512) {
+    throw new Error("DeepSeek API key must contain 4 to 512 characters");
   }
   return apiKey;
 }

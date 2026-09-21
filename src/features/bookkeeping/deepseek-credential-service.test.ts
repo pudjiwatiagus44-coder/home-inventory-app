@@ -15,12 +15,21 @@ function database(): DeepSeekCredentialDatabase & {
   const rows = new Map<string, StoredDeepSeekCredential>();
   return {
     rows,
-    findForUser: vi.fn(async (userId: string) => rows.get(userId) ?? null),
-    saveForUser: vi.fn(async (userId: string, record: StoredDeepSeekCredential) => {
+    findForTrustedServerUser: vi.fn(async (userId: string) => rows.get(userId) ?? null),
+    saveForTrustedServerUser: vi.fn(async (userId: string, record: StoredDeepSeekCredential) => {
       rows.set(userId, record);
       return record;
     }),
-    deleteForUser: vi.fn(async (userId: string) => rows.delete(userId)),
+    recordSuccessfulValidationForTrustedServerUser: vi.fn(
+      async (userId: string, lastVerifiedAt: string) => {
+        const record = rows.get(userId);
+        if (!record) return null;
+        const updated = { ...record, lastVerifiedAt };
+        rows.set(userId, updated);
+        return updated;
+      },
+    ),
+    deleteForTrustedServerUser: vi.fn(async (userId: string) => rows.delete(userId)),
   };
 }
 
@@ -39,7 +48,7 @@ describe("DeepSeek credential service", () => {
     expect(status).toEqual({
       configured: true,
       maskedKey: "****1234",
-      lastVerifiedAt: "2026-09-21T08:00:00.000Z",
+      lastVerifiedAt: null,
     });
     expect(JSON.stringify(record)).not.toContain(API_KEY);
     expect(record).toMatchObject({ keyVersion: 1, lastFour: "1234" });
@@ -63,7 +72,7 @@ describe("DeepSeek credential service", () => {
     await expect(service.getStatusForUser("user-a")).resolves.toEqual({
       configured: true,
       maskedKey: "****1111",
-      lastVerifiedAt: "2026-09-21T08:00:00.000Z",
+      lastVerifiedAt: null,
     });
     await expect(service.decryptForProvider("user-b")).resolves.toBe("sk-user-b-2222");
     expect(await service.getStatusForUser("missing-user")).toEqual({
@@ -86,5 +95,32 @@ describe("DeepSeek credential service", () => {
     await expect(service.decryptForProvider("user-a")).resolves.toBeNull();
     await expect(service.decryptForProvider("user-b")).resolves.toBe("sk-user-b-2222");
     expect(store.rows.has("user-a")).toBe(false);
+  });
+
+  it("sets lastVerifiedAt only after a successful provider validation", async () => {
+    const store = database();
+    const service = createDeepSeekCredentialService({
+      database: store,
+      env: { BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      now: () => new Date("2026-09-21T09:00:00.000Z"),
+    });
+    await service.saveForUser("user-a", "sk-user-a-1111");
+
+    await expect(service.recordSuccessfulValidationForUser("user-a")).resolves.toEqual({
+      configured: true,
+      maskedKey: "****1111",
+      lastVerifiedAt: "2026-09-21T09:00:00.000Z",
+    });
+  });
+
+  it("rejects an API key shorter than the four-character persisted suffix", async () => {
+    const service = createDeepSeekCredentialService({
+      database: database(),
+      env: { BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+    });
+
+    await expect(service.saveForUser("user-a", "abc")).rejects.toThrow(
+      "DeepSeek API key must contain 4 to 512 characters",
+    );
   });
 });
