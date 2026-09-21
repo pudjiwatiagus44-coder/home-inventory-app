@@ -131,7 +131,7 @@ export function createBookkeepingUnderstandHandlers(
       let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
       let credentialRevision: string | null = null;
       let credentialService = dependencies.credentialService;
-      if (!credentialService && currentUser && modelMode !== "QWEN_ONLY") {
+      if (!credentialService && currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY")) {
         const client = createPostgresQueryClientFromEnv(dependencies.env ?? process.env);
         credentialService = createBookkeepingDoubaoCredentialService({
           repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
@@ -142,7 +142,7 @@ export function createBookkeepingUnderstandHandlers(
       if (modelMode === "DEEPSEEK_ONLY" && !providers) {
         providers = createTextUnderstandingProviders(process.env, undefined, { deepseekApiKey });
       }
-      if (currentUser && modelMode !== "QWEN_ONLY" && credentialService) {
+      if (currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY") && credentialService) {
         try {
           const resolved = await credentialService.resolveForUser(currentUser.userId);
           credentialSource = resolved.source;
@@ -156,7 +156,7 @@ export function createBookkeepingUnderstandHandlers(
         }
       }
       console.info("bookkeeping understanding started", { modelMode });
-      const recognize = (reviewInstruction?: string) => dependencies.client
+      const recognize = (reviewInstruction?: string) => modelMode !== "DEEPSEEK_ONLY" && dependencies.client
         ? dependencies.client.understandOcrText(
           ocrText,
           capturedAt,
@@ -222,7 +222,8 @@ function deepseekFailure(reason: string) {
     reason === "timeout" ? "DEEPSEEK_TIMEOUT" :
     reason === "invalid_response" ? "DEEPSEEK_INVALID_JSON" : "DEEPSEEK_REQUEST_FAILED";
   const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
-    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 : 502;
+    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 :
+      errorCode === "DEEPSEEK_TIMEOUT" ? 504 : 502;
   return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }
 

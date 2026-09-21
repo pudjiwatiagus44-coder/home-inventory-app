@@ -222,6 +222,7 @@ function deepseekFailure(reason: string) {
     reason === "timeout" ? "DEEPSEEK_TIMEOUT" :
     reason === "invalid_response" ? "DEEPSEEK_INVALID_JSON" : "DEEPSEEK_REQUEST_FAILED";
   const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
-    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 : 502;
+    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 :
+      errorCode === "DEEPSEEK_TIMEOUT" ? 504 : 502;
   return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }

@@ -70,7 +70,7 @@ describe("/api/bookkeeping/rerecognize", () => {
 
     const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "DEEPSEEK" }));
 
-    expect(response.status).toBe(502);
+    expect(response.status).toBe(504);
     await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_timeout", errorCode: "DEEPSEEK_TIMEOUT" });
   });
 
