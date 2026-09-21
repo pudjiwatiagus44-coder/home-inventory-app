@@ -9,7 +9,7 @@ import { createPostgresQueryClientFromEnv, PostgresDatabaseNotConfiguredError, t
 type AuthService = Pick<ReturnType<typeof createAuthService>, "getCurrentUser">;
 type CredentialService = Pick<
   ReturnType<typeof createDeepSeekCredentialService>,
-  "getStatusForUser" | "saveForUser" | "deleteForUser"
+  "getStatusForUser" | "saveForUser" | "deleteForUser" | "validateConnectivityForUser"
 >;
 
 export type DeepSeekCredentialHandlerDependencies = {
@@ -85,12 +85,26 @@ export function createDeepSeekCredentialHandlers(
       try {
         const context = await authenticated(request);
         if (!context) return unauthorized();
-        return NextResponse.json({ ok: false, message: "DeepSeek validation is not implemented" }, { status: 501 });
+        const result = await context.service.validateConnectivityForUser(context.userId);
+        if (result.ok) {
+          return NextResponse.json({ ok: true, data: { status: result.status, elapsedMs: result.elapsedMs } });
+        }
+        return NextResponse.json(
+          { ok: false, code: result.code },
+          { status: validationStatus(result.code) },
+        );
       } catch (error) {
         return credentialError(error);
       }
     },
   };
+}
+
+function validationStatus(code: string): number {
+  if (code === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED") return 404;
+  if (code === "DEEPSEEK_AUTH_INVALID") return 401;
+  if (code === "DEEPSEEK_TIMEOUT") return 504;
+  return 502;
 }
 
 function unauthorized() {

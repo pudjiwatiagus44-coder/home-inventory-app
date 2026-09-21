@@ -46,10 +46,31 @@ describe("/api/bookkeeping/deepseek-credential", () => {
     expect(service.deleteForUser).toHaveBeenCalledWith("user-a");
   });
 
-  it("keeps POST protected while provider validation remains unimplemented", async () => {
-    const handlers = authenticatedHandlers(serviceStub());
+  it("validates only the authenticated user's stored credential and returns a safe result", async () => {
+    const service = serviceStub();
+    service.validateConnectivityForUser.mockResolvedValue({
+      ok: true,
+      status: { configured: true, maskedKey: "****1234", lastVerifiedAt: "2026-09-21T12:00:00.000Z" },
+      elapsedMs: 42,
+    });
+    const handlers = authenticatedHandlers(service);
     const response = await handlers.POST(request("POST"));
-    expect(response.status).toBe(501);
+
+    expect(response.status).toBe(200);
+    expect(service.validateConnectivityForUser).toHaveBeenCalledWith("user-a");
+    expect(JSON.stringify(await response.json())).not.toContain("sk-");
+  });
+
+  it("returns the stable, sanitized validation code", async () => {
+    const service = serviceStub();
+    service.validateConnectivityForUser.mockResolvedValue({
+      ok: false, code: "DEEPSEEK_TIMEOUT", elapsedMs: 10_000,
+    });
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.POST(request("POST"));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ ok: false, code: "DEEPSEEK_TIMEOUT" });
   });
 });
 
@@ -66,6 +87,9 @@ function serviceStub() {
     getStatusForUser: vi.fn(async () => status),
     saveForUser: vi.fn(async () => status),
     deleteForUser: vi.fn(async () => true),
+    validateConnectivityForUser: vi.fn(async () => ({
+      ok: false as const, code: "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED", elapsedMs: 0,
+    })),
   };
 }
 

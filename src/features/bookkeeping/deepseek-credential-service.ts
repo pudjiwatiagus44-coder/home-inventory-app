@@ -40,12 +40,27 @@ type Dependencies = {
   database: DeepSeekCredentialDatabase;
   env?: NodeJS.ProcessEnv;
   now?: () => Date;
+  fetchImpl?: typeof fetch;
+  validationTimeoutMs?: number;
 };
+
+export type DeepSeekValidationResult =
+  | { ok: true; status: DeepSeekCredentialStatus; elapsedMs: number }
+  | { ok: false; code: DeepSeekValidationCode; elapsedMs: number };
+
+export type DeepSeekValidationCode =
+  | "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED"
+  | "DEEPSEEK_AUTH_INVALID"
+  | "DEEPSEEK_TIMEOUT"
+  | "DEEPSEEK_INVALID_JSON"
+  | "DEEPSEEK_VALIDATION_FAILED";
 
 export function createDeepSeekCredentialService({
   database,
   env = process.env,
   now = () => new Date(),
+  fetchImpl = globalThis.fetch,
+  validationTimeoutMs = 10_000,
 }: Dependencies) {
   const masterKey = parseMasterKey(env.BOOKKEEPING_CREDENTIAL_MASTER_KEY);
 
@@ -109,10 +124,109 @@ export function createDeepSeekCredentialService({
       return publicStatus(updated);
     },
 
+    async validateConnectivityForUser(
+      trustedServerUserId: string,
+    ): Promise<DeepSeekValidationResult> {
+      const startedAt = Date.now();
+      const stored = await database.findForTrustedServerUser(trustedServerUserId);
+      if (!stored) {
+        return validationFailure("DEEPSEEK_CREDENTIAL_NOT_CONFIGURED", startedAt);
+      }
+
+      let apiKey: string;
+      try {
+        apiKey = decrypt(masterKey, stored);
+      } catch {
+        return validationFailure("DEEPSEEK_VALIDATION_FAILED", startedAt);
+      }
+
+      const controller = new AbortController();
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const response = await Promise.race([
+          fetchImpl("https://api.deepseek.com/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "deepseek-flash",
+              thinking: { type: "disabled" },
+              temperature: 0,
+              stream: false,
+              response_format: { type: "json_object" },
+              messages: [{ role: "user", content: "Return exactly the JSON object {\"ok\":true}." }],
+            }),
+            signal: controller.signal,
+          }),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => {
+              controller.abort();
+              reject(new Error("timeout"));
+            }, validationTimeoutMs);
+          }),
+        ]);
+        if (response.status === 401) {
+          return validationFailure("DEEPSEEK_AUTH_INVALID", startedAt);
+        }
+        if (!response.ok) {
+          return validationFailure("DEEPSEEK_VALIDATION_FAILED", startedAt);
+        }
+        const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
+        const content = payload.choices?.[0]?.message?.content;
+        if (typeof content !== "string" || !isValidationJson(content)) {
+          return validationFailure("DEEPSEEK_INVALID_JSON", startedAt);
+        }
+        const updated = await database.recordSuccessfulValidationForTrustedServerUser(
+          trustedServerUserId,
+          now().toISOString(),
+        );
+        if (!updated) return validationFailure("DEEPSEEK_CREDENTIAL_NOT_CONFIGURED", startedAt);
+        return { ok: true, status: publicStatus(updated), elapsedMs: Date.now() - startedAt };
+      } catch (error) {
+        return validationFailure(
+          controller.signal.aborted || error instanceof Error && error.message === "timeout"
+            ? "DEEPSEEK_TIMEOUT"
+            : "DEEPSEEK_INVALID_JSON",
+          startedAt,
+        );
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
+    },
+
     async deleteForUser(trustedServerUserId: string): Promise<boolean> {
       return database.deleteForTrustedServerUser(trustedServerUserId);
     },
   };
+}
+
+function decrypt(masterKey: Buffer, stored: StoredDeepSeekCredential): string {
+  const decipher = createDecipheriv(ALGORITHM, masterKey, stored.nonce, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
+  decipher.setAuthTag(stored.tag);
+  return Buffer.concat([
+    decipher.update(stored.ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function isValidationJson(content: string): boolean {
+  try {
+    const value = JSON.parse(content) as { ok?: unknown };
+    return value.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+function validationFailure(
+  code: DeepSeekValidationCode,
+  startedAt: number,
+): DeepSeekValidationResult {
+  return { ok: false, code, elapsedMs: Date.now() - startedAt };
 }
 
 function publicStatus(

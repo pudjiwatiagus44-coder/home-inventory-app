@@ -123,4 +123,67 @@ describe("DeepSeek credential service", () => {
       "DeepSeek API key must contain 4 to 512 characters",
     );
   });
+
+  it("decrypts only for a minimal DeepSeek JSON validation and records success", async () => {
+    const store = database();
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: '{"ok":true}' } }],
+    }), { status: 200 }));
+    const service = createDeepSeekCredentialService({
+      database: store,
+      env: { BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => new Date("2026-09-21T10:00:00.000Z"),
+    });
+    await service.saveForUser("user-a", "sk-user-a-1111");
+
+    await expect(service.validateConnectivityForUser("user-a")).resolves.toMatchObject({
+      ok: true,
+      status: { configured: true, maskedKey: "****1111", lastVerifiedAt: "2026-09-21T10:00:00.000Z" },
+    });
+    const [url, request] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.deepseek.com/chat/completions");
+    expect(request.headers.Authorization).toBe("Bearer sk-user-a-1111");
+    expect(JSON.parse(request.body).model).toBe("deepseek-flash");
+    expect(JSON.parse(request.body).thinking).toEqual({ type: "disabled" });
+    expect(JSON.stringify(request.body)).not.toContain("user-a");
+  });
+
+  it.each([
+    [null, "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED"],
+    [new Response("", { status: 401 }), "DEEPSEEK_AUTH_INVALID"],
+    [new Response("not json", { status: 200 }), "DEEPSEEK_INVALID_JSON"],
+  ] as const)("returns %s without exposing the key", async (response, code) => {
+    const store = database();
+    const fetchImpl = vi.fn(async () => response ?? new Response("", { status: 200 }));
+    const service = createDeepSeekCredentialService({
+      database: store,
+      env: { BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    if (response) await service.saveForUser("user-a", "sk-user-a-1111");
+
+    const result = await service.validateConnectivityForUser("user-a");
+    expect(result).toMatchObject({ ok: false, code });
+    expect(JSON.stringify(result)).not.toContain("sk-user-a-1111");
+  });
+
+  it("returns a stable timeout code and aborts the provider request", async () => {
+    const store = database();
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    const service = createDeepSeekCredentialService({
+      database: store,
+      env: { BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+      validationTimeoutMs: 1,
+    });
+    await service.saveForUser("user-a", "sk-user-a-1111");
+
+    await expect(service.validateConnectivityForUser("user-a")).resolves.toMatchObject({
+      ok: false,
+      code: "DEEPSEEK_TIMEOUT",
+    });
+  });
 });
