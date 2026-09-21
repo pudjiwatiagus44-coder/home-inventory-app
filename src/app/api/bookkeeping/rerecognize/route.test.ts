@@ -88,7 +88,7 @@ describe("/api/bookkeeping/rerecognize", () => {
     await expect(response.json()).resolves.toEqual({ ok: false, message: reason });
   });
 
-  it("accepts the hierarchical category contract from newer Android clients", async () => {
+  it("accepts the newer hierarchical category contract without name", async () => {
     const service = serviceStub();
     const handlers = authenticatedHandlers(service);
 
@@ -112,6 +112,48 @@ describe("/api/bookkeeping/rerecognize", () => {
       }),
       expect.any(Buffer),
     );
+  });
+
+  it("accepts the legacy hierarchical category contract with name", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.POST(requestWithMetadata({
+      ...metadata,
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: "早餐",
+        description: "早上吃的",
+        keywords: "早餐,早点",
+        name: "早餐",
+      }],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(service.rerecognize).toHaveBeenCalledWith(
+      expect.objectContaining({ categories: [{ name: "早餐", type: "Expense", keywords: "早餐,早点" }] }),
+      expect.any(Buffer),
+    );
+  });
+
+  it.each([42, 101])("rejects a present hierarchical name when it is not a string within 100 characters", async (name) => {
+    const service = serviceStub();
+    const response = await authenticatedHandlers(service).POST(requestWithMetadata({
+      ...metadata,
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: "早餐",
+        description: "早上吃的",
+        keywords: "早餐",
+        name: typeof name === "number" ? name : "x".repeat(name),
+      }],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(service.rerecognize).not.toHaveBeenCalled();
   });
 
   it("accepts up to 200 hierarchical categories (100 builtin plus custom children)", async () => {

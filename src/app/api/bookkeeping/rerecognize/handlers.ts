@@ -128,6 +128,7 @@ class BodyTooLargeError extends Error {}
 const MAX_CATEGORIES = 200;
 const LEGACY_CATEGORY_KEYS = "keywords,name,type";
 const HIERARCHICAL_CATEGORY_KEYS = "childName,description,keywords,parentName,stableKey,type";
+const HIERARCHICAL_CATEGORY_KEYS_WITH_NAME = "childName,description,keywords,name,parentName,stableKey,type";
 
 async function parseMultipart(request: NextRequest) {
   const contentType = request.headers.get("content-type");
@@ -197,8 +198,8 @@ function parseMetadata(value: unknown): RerecognitionInput {
               category.name.length > 100 || category.type.length > 30 || category.keywords.length > 500) throw new Error("invalid category");
           return { name: category.name, type: category.type, keywords: category.keywords };
         }
-        if (keys === HIERARCHICAL_CATEGORY_KEYS) {
-          const { childName, description, keywords, parentName, stableKey, type } = category;
+        if (keys === HIERARCHICAL_CATEGORY_KEYS || keys === HIERARCHICAL_CATEGORY_KEYS_WITH_NAME) {
+          const { childName, description, keywords, name, parentName, stableKey, type } = category;
           if (typeof childName !== "string" || typeof description !== "string" || typeof keywords !== "string" ||
               typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string") {
             throw new Error("invalid category");
@@ -206,6 +207,7 @@ function parseMetadata(value: unknown): RerecognitionInput {
           if (childName.length > 100 || description.length > 500 || keywords.length > 500 ||
               parentName.length > 100 || stableKey.length > 120 ||
               type.length > 30) throw new Error("invalid category");
+          if (name !== undefined && (typeof name !== "string" || name.length > 100)) throw new Error("invalid category");
           const trimmedChildName = childName.trim();
           if (!trimmedChildName) throw new Error("invalid category");
           // 层级合同与 understand 端点口径一致：模型候选使用子分类名，父分类仅供去歧义上下文。
