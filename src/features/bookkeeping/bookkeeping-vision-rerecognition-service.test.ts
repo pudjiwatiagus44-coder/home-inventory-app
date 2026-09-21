@@ -68,6 +68,36 @@ describe("bookkeeping vision rerecognition service", () => {
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
+  it("aborts a stalled DeepSeek vision request and returns timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      })) as unknown as typeof fetch;
+      const service = createBookkeepingVisionRerecognitionService({
+        deepseekApiKey: "sk-hosted-test-key",
+        fetchImpl,
+      });
+      const result = service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg());
+
+      await vi.advanceTimersByTimeAsync(45_000);
+
+      await expect(result).resolves.toEqual({ ok: false, reason: "timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("maps DeepSeek HTTP 408 to timeout", async () => {
+    const service = createBookkeepingVisionRerecognitionService({
+      deepseekApiKey: "sk-hosted-test-key",
+      fetchImpl: vi.fn(async () => new Response("", { status: 408 })) as unknown as typeof fetch,
+    });
+
+    await expect(service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg()))
+      .resolves.toEqual({ ok: false, reason: "timeout" });
+  });
+
   it("uses the selected vision model once even when a text provider would fail", async () => {
     const vision = vi.fn(async () => ({ ok: true as const, value: [draft], model: "qwen3.5-ocr" }));
     const service = createBookkeepingVisionRerecognitionService({

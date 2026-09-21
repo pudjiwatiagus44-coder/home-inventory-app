@@ -6,6 +6,7 @@ import {
 } from "../../server/recognition/doubao-bookkeeping";
 
 type PersonalDoubaoModel = "doubao-seed-2-0-mini-260428" | "doubao-seed-2-0-lite-260428";
+const DEEPSEEK_VISION_TIMEOUT_MS = 45_000;
 
 export type RerecognitionProvider = "DOUBAO" | "QWEN" | "DEEPSEEK";
 export type RerecognitionInput = {
@@ -75,6 +76,7 @@ function createDefaultVisionProviders(
       apiKey: deepseekApiKey,
       model: "deepseek-flash",
       baseUrl: "https://api.deepseek.com/chat/completions",
+      timeoutMs: DEEPSEEK_VISION_TIMEOUT_MS,
       fetchImpl,
     }),
   };
@@ -86,6 +88,7 @@ function createOpenAiVisionProvider(config: {
   baseUrl?: string;
   requireBeijingWorkspace?: boolean;
   approvedModels?: ReadonlySet<string>;
+  timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): VisionProvider {
   return async (input) => {
@@ -100,6 +103,14 @@ function createOpenAiVisionProvider(config: {
       return { ok: false, reason: "configuration_invalid" };
     }
     if (input.signal?.aborted) return { ok: false, reason: "request_aborted" };
+    const controller = new AbortController();
+    let timedOut = false;
+    const onCallerAbort = () => controller.abort();
+    input.signal?.addEventListener("abort", onCallerAbort, { once: true });
+    const timer = config.timeoutMs ? setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, config.timeoutMs) : undefined;
     let response: Response;
     try {
       response = await (config.fetchImpl ?? globalThis.fetch)(baseUrl, {
@@ -116,16 +127,22 @@ function createOpenAiVisionProvider(config: {
             ],
           }],
         }),
-        signal: input.signal,
+        signal: controller.signal,
       });
     } catch (error) {
-      if (input.signal?.aborted || isAbortError(error)) return { ok: false, reason: "request_aborted" };
+      if (input.signal?.aborted) return { ok: false, reason: "request_aborted" };
+      if (timedOut) return { ok: false, reason: "timeout" };
+      if (isAbortError(error)) return { ok: false, reason: "request_aborted" };
       return { ok: false, reason: "upstream_error" };
+    } finally {
+      if (timer) clearTimeout(timer);
+      input.signal?.removeEventListener("abort", onCallerAbort);
     }
     if (!response.ok) {
       if (response.status === 401) return { ok: false, reason: "auth_invalid" };
       if (response.status === 403) return { ok: false, reason: "quota_exhausted" };
       if (response.status === 429) return { ok: false, reason: "rate_limit" };
+      if (response.status === 408) return { ok: false, reason: "timeout" };
       if (response.status >= 500) return { ok: false, reason: "server_error" };
       return { ok: false, reason: "invalid_request" };
     }

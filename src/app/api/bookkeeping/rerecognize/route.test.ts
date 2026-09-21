@@ -59,6 +59,21 @@ describe("/api/bookkeeping/rerecognize", () => {
     expect(service.rerecognize).toHaveBeenCalledWith(expect.objectContaining({ provider: "DEEPSEEK" }), expect.any(Buffer));
   });
 
+  it("returns the stable DeepSeek timeout code without exposing provider details", async () => {
+    const service = serviceStub();
+    service.rerecognize.mockResolvedValue({ ok: false, reason: "timeout" });
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: { decryptForProvider: async () => "sk-user-a-key" },
+      service,
+    });
+
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "DEEPSEEK" }));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_timeout", errorCode: "DEEPSEEK_TIMEOUT" });
+  });
+
   it.each([
     ["quota_exhausted", 403],
     ["rate_limit", 429],
