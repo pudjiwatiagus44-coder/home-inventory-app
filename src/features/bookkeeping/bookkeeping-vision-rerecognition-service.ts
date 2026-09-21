@@ -41,7 +41,7 @@ export function createBookkeepingVisionRerecognitionService(deps: Dependencies =
       if (input.signal?.aborted) return { ok: false as const, reason: "request_aborted" };
       const vision = await visionProviders[input.provider]!({ ...input, image });
       if (!vision.ok) return { ok: false as const, reason: vision.reason };
-      const drafts = vision.value.map(normalizeDraft);
+      const drafts = vision.value;
       if (drafts.length === 0 || drafts.some((draft) => !isCompleteDraft(draft))) {
         return { ok: false as const, reason: "invalid_response" };
       }
@@ -183,13 +183,6 @@ function isCompleteDraft(draft: BookkeepingDraft) {
   return Number.isFinite(amount) && amount > 0 && draft.category.trim() !== "" &&
     (draft.merchant.trim() !== "" || draft.payerPayee.trim() !== "") &&
     ["支出", "收入"].includes(draft.type);
-}
-
-function normalizeDraft(draft: BookkeepingDraft): BookkeepingDraft {
-  const type = draft.type.includes("支出") || draft.type.includes("消费") ? "支出" :
-    draft.type.includes("收入") ? "收入" :
-    draft.type.includes("转账") ? "转账" : draft.type;
-  return { ...draft, type };
 }
 
 function visionPrompt(input: RerecognitionInput) {

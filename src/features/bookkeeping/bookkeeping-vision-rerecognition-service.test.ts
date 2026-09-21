@@ -112,34 +112,20 @@ describe("bookkeeping vision rerecognition service", () => {
     expect(vision).toHaveBeenCalledWith(expect.objectContaining({ image: jpeg(), ocrText: input.ocrText }));
   });
 
-  it("normalizes a vision model's descriptive expense type before validating the draft", async () => {
+  it.each(["消费支出", "收入退款"])("rejects descriptive vision type %s instead of coercing it", async (type) => {
     const service = createBookkeepingVisionRerecognitionService({
       visionProviders: {
         QWEN: vi.fn(async () => ({
           ok: true as const,
-          value: [{ ...draft, type: "消费支出" }],
+          value: [{ ...draft, type }],
           model: "qwen-vision",
         })),
       },
     });
 
     await expect(service.rerecognize(input, jpeg())).resolves.toMatchObject({
-      ok: true,
-      drafts: [{ type: "支出" }],
-      stage: "vision",
-    });
-  });
-
-  it("normalizes the vision model's consumption label to expense", async () => {
-    const service = createBookkeepingVisionRerecognitionService({
-      visionProviders: {
-        QWEN: vi.fn(async () => ({ ok: true as const, value: [{ ...draft, type: "消费" }], model: "qwen-vision" })),
-      },
-    });
-
-    await expect(service.rerecognize(input, jpeg())).resolves.toMatchObject({
-      ok: true,
-      drafts: [{ type: "支出" }],
+      ok: false,
+      reason: "invalid_response",
     });
   });
 
