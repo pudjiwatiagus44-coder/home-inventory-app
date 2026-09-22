@@ -1067,3 +1067,11 @@
 - 必须证明：固定字段解析与长度限制、稳定 UUID 幂等、用户 A/B 读写删除隔离、无会话/数据库失败时普通识别不回归、恶意样本不能改变系统指令、日志与错误不泄露正文。
 - Android 必须证明：通知进入对应识别交易、无差异不能报错、逐次预览授权、账目保存成功但反馈失败时给出真实状态、设置页只删除当前账号反馈。
 - 在真实 PostgreSQL 迁移、备份回滚、账号 A/B 负例和生产 smoke 完成前，状态保持 `未验证`。
+
+## 2026-09-22 DeepSeek 凭据托管生产部署证据
+
+- 部署前 `homestorag.xyz/api/bookkeeping/deepseek-credential` 返回 404；部署后未登录访问返回 401，证明路由已上线且受会话保护。登录页、豆包凭据接口、移动库存接口和 APK 版本文件的公网 smoke 分别返回预期的 200/401。
+- 部署前完整 PostgreSQL 自定义格式备份为 `/opt/home-inventory-backups/pre-deepseek-20260922_203423.dump`（263,966 字节，`pg_restore --list` 可读取 170 个条目）；旧应用目录保留为 `/opt/home-inventory-app.bak.deepseek-20260922_203423`。
+- 生产迁移创建 `bookkeeping_deepseek_credentials`，运行账号具备最小的 select/insert/update/delete 权限；服务器受限环境文件中的 AES-256-GCM 主密钥解码为 32 字节，权限保持 `root:deploy 640`，密钥值未写入仓库、输出或验收记录。
+- 新服务部署提交为 `f3046ba`，systemd 状态为 active，最近 10 分钟错误级日志为 0；构建路由包含 `/api/bookkeeping/deepseek-credential`。
+- 一次性账号 smoke 完成 PUT 加密保存（200）、GET 掩码读取（200）、随机假 Key 上游验证返回脱敏的 `DEEPSEEK_AUTH_INVALID`（401）、DELETE 删除（200）。测试账号和凭据记录随后均清理为 0；未使用、读取或记录真实用户 DeepSeek Key。
