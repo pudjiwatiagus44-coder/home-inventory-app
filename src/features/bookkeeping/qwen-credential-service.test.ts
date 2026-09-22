@@ -126,6 +126,64 @@ describe("Qwen credential service", () => {
     expect(JSON.stringify(await service.getStatusForUser("user-a"))).not.toContain(API_KEY);
   });
 
+  it("validates a replacement candidate before saving it and keeps the previous key on failure", async () => {
+    const store = database();
+    const fetchImpl = vi.fn(async () => new Response("invalid key", { status: 401 }));
+    const service = createQwenCredentialService({
+      database: store,
+      env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    await service.saveForUser("user-a", API_KEY);
+    const previous = store.rows.get("user-a");
+
+    const result = await service.validateAndSaveForUser("user-a", "sk-qwen-new-secret-9876");
+
+    expect(result).toMatchObject({ ok: false, code: "QWEN_AUTH_INVALID" });
+    expect(store.rows.get("user-a")).toBe(previous);
+    expect(store.saveForTrustedServerUser).toHaveBeenCalledTimes(1);
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get("Authorization"))
+      .toBe("Bearer sk-qwen-new-secret-9876");
+    expect(JSON.stringify(result)).not.toContain("sk-qwen-new-secret-9876");
+  });
+
+  it("saves a candidate only after DashScope confirms it", async () => {
+    const store = database();
+    const service = createQwenCredentialService({
+      database: store,
+      env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({
+        choices: [{ message: { content: '{"ok":true}' } }],
+      }), { status: 200 })) as typeof fetch,
+      now: () => new Date("2026-09-23T01:00:00.000Z"),
+    });
+
+    const result = await service.validateAndSaveForUser("user-a", "sk-qwen-candidate-4321");
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: { configured: true, maskedKey: "****4321", lastVerifiedAt: "2026-09-23T01:00:00.000Z" },
+    });
+    expect(await service.decryptForProvider("user-a")).toBe("sk-qwen-candidate-4321");
+  });
+
+  it("rejects malformed candidate keys without making a provider request or saving", async () => {
+    const store = database();
+    const fetchImpl = vi.fn();
+    const service = createQwenCredentialService({
+      database: store,
+      env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await expect(service.validateAndSaveForUser("user-a", "x")).resolves.toMatchObject({
+      ok: false,
+      code: "QWEN_INVALID_REQUEST",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(store.saveForTrustedServerUser).not.toHaveBeenCalled();
+  });
+
   it.each([
     [401, "QWEN_AUTH_INVALID"],
     [429, "QWEN_QUOTA_EXHAUSTED"],

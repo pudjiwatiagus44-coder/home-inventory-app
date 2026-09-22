@@ -49,6 +49,7 @@ export type QwenValidationCode =
   | "QWEN_QUOTA_EXHAUSTED"
   | "QWEN_TIMEOUT"
   | "QWEN_INVALID_JSON"
+  | "QWEN_INVALID_REQUEST"
   | "QWEN_VALIDATION_FAILED";
 
 export type QwenValidationResult =
@@ -64,29 +65,28 @@ export function createQwenCredentialService({
 }: Dependencies) {
   const masterKey = parseMasterKey(env.BOOKKEEPING_CREDENTIAL_MASTER_KEY);
 
+  async function storeCredential(trustedServerUserId: string, value: string, lastVerifiedAt: string | null) {
+    const plaintext = validateApiKey(value);
+    const nonce = randomBytes(NONCE_LENGTH);
+    const cipher = createCipheriv(ALGORITHM, masterKey, nonce, { authTagLength: AUTH_TAG_LENGTH });
+    const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+    const saved = await database.saveForTrustedServerUser(trustedServerUserId, {
+      ciphertext,
+      nonce,
+      tag: cipher.getAuthTag(),
+      keyVersion: 1,
+      lastFour: plaintext.slice(-4),
+      lastVerifiedAt,
+    });
+    return publicStatus(saved);
+  }
+
   return {
     async saveForUser(
       trustedServerUserId: string,
       apiKey: string,
     ): Promise<QwenCredentialStatus> {
-      const plaintext = validateApiKey(apiKey);
-      const nonce = randomBytes(NONCE_LENGTH);
-      const cipher = createCipheriv(ALGORITHM, masterKey, nonce, {
-        authTagLength: AUTH_TAG_LENGTH,
-      });
-      const ciphertext = Buffer.concat([
-        cipher.update(plaintext, "utf8"),
-        cipher.final(),
-      ]);
-      const saved = await database.saveForTrustedServerUser(trustedServerUserId, {
-        ciphertext,
-        nonce,
-        tag: cipher.getAuthTag(),
-        keyVersion: 1,
-        lastFour: plaintext.slice(-4),
-        lastVerifiedAt: null,
-      });
-      return publicStatus(saved);
+      return storeCredential(trustedServerUserId, apiKey, null);
     },
 
     async getStatusForUser(trustedServerUserId: string): Promise<QwenCredentialStatus> {
@@ -112,6 +112,44 @@ export function createQwenCredentialService({
       } catch {
         return validationFailure("QWEN_VALIDATION_FAILED", startedAt);
       }
+
+      return validateCredential(trustedServerUserId, apiKey, startedAt);
+    },
+
+    async validateAndSaveForUser(
+      trustedServerUserId: string,
+      candidateApiKey: string,
+    ): Promise<QwenValidationResult> {
+      const startedAt = Date.now();
+      let apiKey: string;
+      try {
+        apiKey = validateApiKey(candidateApiKey);
+      } catch {
+        return validationFailure("QWEN_INVALID_REQUEST", startedAt);
+      }
+      const validation = await validateCredential(trustedServerUserId, apiKey, startedAt, false);
+      if (!validation.ok) return validation;
+
+      const verifiedAt = now().toISOString();
+      const status = await storeCredential(trustedServerUserId, apiKey, verifiedAt);
+      return {
+        ok: true,
+        status,
+        elapsedMs: validation.elapsedMs,
+      };
+    },
+
+    async deleteForUser(trustedServerUserId: string): Promise<boolean> {
+      return database.deleteForTrustedServerUser(trustedServerUserId);
+    },
+  };
+
+  async function validateCredential(
+    trustedServerUserId: string,
+    apiKey: string,
+    startedAt: number,
+    recordSuccess = true,
+  ): Promise<QwenValidationResult> {
 
       const controller = new AbortController();
       let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -153,10 +191,14 @@ export function createQwenCredentialService({
           return validationFailure("QWEN_INVALID_JSON", startedAt);
         }
 
-        const updated = await database.recordSuccessfulValidationForTrustedServerUser(
-          trustedServerUserId,
-          now().toISOString(),
-        );
+        if (!recordSuccess) {
+          return {
+            ok: true,
+            status: { configured: false, maskedKey: null, lastVerifiedAt: null },
+            elapsedMs: Date.now() - startedAt,
+          };
+        }
+        const updated = await database.recordSuccessfulValidationForTrustedServerUser(trustedServerUserId, now().toISOString());
         if (!updated) return validationFailure("QWEN_CREDENTIAL_NOT_CONFIGURED", startedAt);
         return { ok: true, status: publicStatus(updated), elapsedMs: Date.now() - startedAt };
       } catch (error) {
@@ -169,12 +211,7 @@ export function createQwenCredentialService({
       } finally {
         if (timeout) clearTimeout(timeout);
       }
-    },
-
-    async deleteForUser(trustedServerUserId: string): Promise<boolean> {
-      return database.deleteForTrustedServerUser(trustedServerUserId);
-    },
-  };
+  }
 }
 
 function decrypt(masterKey: Buffer, stored: StoredQwenCredential): string {
