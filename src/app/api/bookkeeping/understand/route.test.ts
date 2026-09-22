@@ -24,6 +24,65 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(understandOcrText).toHaveBeenCalledOnce();
   });
 
+  it("uses only the current session's hosted DeepSeek key for provider=DEEPSEEK", async () => {
+    const deepseek = { decryptForProvider: vi.fn(async () => "sk-user-a-key") };
+    const doubaoCredentialService = {
+      resolveForUser: vi.fn(async () => ({ source: "PERSONAL" as const, apiKey: "ark-user-a-key", revision: "rev-a" })),
+      recordProviderFailure: vi.fn(),
+      recordProviderSuccess: vi.fn(),
+    };
+    const deepseekProvider = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("12", "早餐")], model: "deepseek-flash" })) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+      credentialService: doubaoCredentialService,
+      providers: { doubao: deepseekProvider, qwen: deepseekProvider, deepseek: deepseekProvider },
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+
+    expect(response.status).toBe(200);
+    expect(deepseek.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(doubaoCredentialService.resolveForUser).not.toHaveBeenCalled();
+    expect(doubaoCredentialService.recordProviderSuccess).not.toHaveBeenCalled();
+    expect(doubaoCredentialService.recordProviderFailure).not.toHaveBeenCalled();
+    expect(deepseekProvider.understand).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toMatchObject({ ok: true, model: "deepseek-flash" });
+  });
+
+  it("maps a DeepSeek text timeout to 504 without mutating a Doubao credential", async () => {
+    const doubaoCredentialService = {
+      resolveForUser: vi.fn(), recordProviderFailure: vi.fn(), recordProviderSuccess: vi.fn(),
+    };
+    const deepseekProvider = { understand: vi.fn(async () => ({ ok: false as const, reason: "timeout" })) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: { decryptForProvider: async () => "sk-user-a-key" },
+      credentialService: doubaoCredentialService,
+      providers: { doubao: deepseekProvider, qwen: deepseekProvider, deepseek: deepseekProvider },
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_timeout", errorCode: "DEEPSEEK_TIMEOUT" });
+    expect(doubaoCredentialService.resolveForUser).not.toHaveBeenCalled();
+    expect(doubaoCredentialService.recordProviderFailure).not.toHaveBeenCalled();
+  });
+
+  it("returns a stable code without calling a provider when DeepSeek is not configured", async () => {
+    const deepseek = { decryptForProvider: vi.fn(async () => null) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_credential_not_configured", errorCode: "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" });
+  });
+
   it("rejects blank OCR text", async () => {
     const handlers = createBookkeepingUnderstandHandlers();
     const response = await handlers.POST(request({ ocrText: "  " }));
@@ -36,17 +95,24 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(response.status).toBe(413);
   });
 
-  it("passes enabled category context to the recognizer", async () => {
+  it("accepts the newer hierarchy contract and normalizes childName before recognition", async () => {
     const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "doubao-test" }));
     const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
     await handlers.POST(request({
       ocrText: "早餐 12 元",
-      categories: [{ name: "餐饮/早餐", type: "Expense", keywords: "早餐" }],
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: " 早餐 ",
+        description: "早上吃的",
+        keywords: "早餐",
+      }],
     }));
     expect(understandOcrText).toHaveBeenCalledWith(
       "早餐 12 元",
       expect.any(String),
-      [{ name: "餐饮/早餐", type: "Expense", keywords: "早餐" }],
+      [{ name: "早餐", type: "Expense", keywords: "早餐" }],
       [],
       [],
       { signal: expect.any(AbortSignal) },

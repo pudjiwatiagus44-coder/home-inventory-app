@@ -12,6 +12,8 @@ import { createPostgresQueryClientFromEnv, type PostgresEnv } from "../../../../
 import { parsePaymentAmountCandidates, type PaymentAmountCandidate } from "../../../../server/recognition/payment-amount-candidates";
 import { createPostgresBookkeepingDoubaoCredentialRepository } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-repository";
 import { createBookkeepingDoubaoCredentialService } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-service";
+import { createDeepSeekCredentialService } from "../../../../features/bookkeeping/deepseek-credential-service";
+import { createPostgresDeepSeekCredentialRepository } from "../../../../features/bookkeeping/deepseek-credential-repository";
 import { detectSuspectedMultiOrder } from "../../../../server/recognition/multi-order-detection";
 import {
   understandWithFallback,
@@ -34,6 +36,7 @@ export type BookkeepingUnderstandDependencies = {
   env?: PostgresEnv;
   providers?: TextUnderstandingProviders;
   credentialService?: Pick<ReturnType<typeof createBookkeepingDoubaoCredentialService>, "resolveForUser" | "recordProviderFailure" | "recordProviderSuccess">;
+  deepseekCredentialService?: Pick<ReturnType<typeof createDeepSeekCredentialService>, "decryptForProvider">;
 };
 
 const MAX_OCR_TEXT_LENGTH = 12_000;
@@ -60,6 +63,7 @@ export function createBookkeepingUnderstandHandlers(
         categories?: unknown;
         amountCandidates?: unknown;
         modelMode?: unknown;
+        provider?: unknown;
       } | null;
       const ocrText = typeof body?.ocrText === "string" ? body.ocrText.trim() : "";
       if (!ocrText) {
@@ -72,14 +76,7 @@ export function createBookkeepingUnderstandHandlers(
       const capturedAt = typeof body?.capturedAt === "string" && body.capturedAt.trim()
         ? body.capturedAt.trim()
         : new Date().toISOString();
-      const categories: BookkeepingCategoryContext[] = Array.isArray(body?.categories)
-        ? body.categories.flatMap((item) => {
-            if (!item || typeof item !== "object") return [];
-            const value = item as Record<string, unknown>;
-            if (typeof value.name !== "string" || typeof value.type !== "string" || typeof value.keywords !== "string") return [];
-            return [{ name: value.name.trim(), type: value.type.trim(), keywords: value.keywords.trim() }];
-          }).filter((item) => item.name.length > 0)
-        : [];
+      const categories = normalizeCategoryContracts(body?.categories);
       let amountCandidates: PaymentAmountCandidate[];
       try {
         amountCandidates = parsePaymentAmountCandidates(body?.amountCandidates);
@@ -98,11 +95,36 @@ export function createBookkeepingUnderstandHandlers(
       } catch {
         console.warn("bookkeeping_feedback_lookup_failed");
       }
-      const modelMode = parseModelMode(body?.modelMode);
+      const modelMode = parseModelMode(body?.modelMode, body?.provider);
+      let deepseekApiKey: string | undefined;
+      if (modelMode === "DEEPSEEK_ONLY") {
+        if (!currentUser) {
+          return NextResponse.json({ ok: false, message: "Authentication required" }, { status: 401 });
+        }
+        let deepseekCredentialService = dependencies.deepseekCredentialService;
+        if (!deepseekCredentialService) {
+          try {
+            deepseekCredentialService = createDeepSeekCredentialService({
+              database: createPostgresDeepSeekCredentialRepository(
+                createPostgresQueryClientFromEnv(dependencies.env ?? process.env),
+              ),
+              env: process.env,
+            });
+          } catch {
+            return deepseekFailure("configuration_missing");
+          }
+        }
+        try {
+          deepseekApiKey = await deepseekCredentialService.decryptForProvider(currentUser.userId) ?? undefined;
+        } catch {
+          return deepseekFailure("configuration_missing");
+        }
+        if (!deepseekApiKey) return deepseekFailure("api_key_missing");
+      }
       let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
       let credentialRevision: string | null = null;
       let credentialService = dependencies.credentialService;
-      if (!credentialService && currentUser && modelMode !== "QWEN_ONLY") {
+      if (!credentialService && currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY")) {
         const client = createPostgresQueryClientFromEnv(dependencies.env ?? process.env);
         credentialService = createBookkeepingDoubaoCredentialService({
           repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
@@ -110,7 +132,10 @@ export function createBookkeepingUnderstandHandlers(
         });
       }
       let providers = dependencies.providers;
-      if (currentUser && modelMode !== "QWEN_ONLY" && credentialService) {
+      if (modelMode === "DEEPSEEK_ONLY" && !providers) {
+        providers = createTextUnderstandingProviders(process.env, undefined, { deepseekApiKey });
+      }
+      if (currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY") && credentialService) {
         try {
           const resolved = await credentialService.resolveForUser(currentUser.userId);
           credentialSource = resolved.source;
@@ -124,7 +149,7 @@ export function createBookkeepingUnderstandHandlers(
         }
       }
       console.info("bookkeeping understanding started", { modelMode });
-      const recognize = (reviewInstruction?: string) => dependencies.client
+      const recognize = (reviewInstruction?: string) => modelMode !== "DEEPSEEK_ONLY" && dependencies.client
         ? dependencies.client.understandOcrText(
           ocrText,
           capturedAt,
@@ -145,6 +170,7 @@ export function createBookkeepingUnderstandHandlers(
           return NextResponse.json({ ok: false, message: result.reason, errorCode: result.reason === "auth_invalid" ? "PERSONAL_AUTH_INVALID" : "PERSONAL_QUOTA_EXHAUSTED", credentialSource }, { status: result.reason === "auth_invalid" ? 401 : 403 });
         }
         console.warn("bookkeeping understanding failed", { modelMode, reason: result.reason });
+        if (modelMode === "DEEPSEEK_ONLY") return deepseekFailure(result.reason);
         const status = result.reason === "api_key_missing" ? 501 : 502;
         return NextResponse.json({ ok: false, message: result.reason }, { status });
       }
@@ -176,10 +202,34 @@ export function createBookkeepingUnderstandHandlers(
   };
 }
 
-function parseModelMode(value: unknown): TextUnderstandingMode {
+function parseModelMode(value: unknown, provider: unknown): TextUnderstandingMode {
+  if (provider === "DEEPSEEK") return "DEEPSEEK_ONLY";
   return value === "DOUBAO_ONLY" || value === "QWEN_ONLY" || value === "AUTOMATIC"
     ? value
     : "AUTOMATIC";
+}
+
+function normalizeCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const category = item as Record<string, unknown>;
+    if (typeof category.type !== "string" || typeof category.keywords !== "string") return [];
+    const name = typeof category.childName === "string" ? category.childName.trim() :
+      typeof category.name === "string" ? category.name.trim() : "";
+    return name ? [{ name, type: category.type.trim(), keywords: category.keywords.trim() }] : [];
+  });
+}
+
+function deepseekFailure(reason: string) {
+  const errorCode = reason === "api_key_missing" ? "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" :
+    reason === "auth_invalid" ? "DEEPSEEK_AUTH_INVALID" :
+    reason === "timeout" ? "DEEPSEEK_TIMEOUT" :
+    reason === "invalid_response" ? "DEEPSEEK_INVALID_JSON" : "DEEPSEEK_REQUEST_FAILED";
+  const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
+    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 :
+      errorCode === "DEEPSEEK_TIMEOUT" ? 504 : 502;
+  return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }
 
 const INCOME_KEYWORDS = ["提现", "体现"];

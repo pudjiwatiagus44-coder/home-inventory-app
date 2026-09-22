@@ -50,6 +50,54 @@ describe("bookkeeping vision rerecognition service", () => {
     expect(vision).toHaveBeenCalledWith(expect.objectContaining({ image: jpeg(), ocrText: input.ocrText }));
   });
 
+  it("sends the hosted DeepSeek key only to deepseek-flash and strictly parses its JSON array", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.deepseek.com/chat/completions");
+      expect(init?.headers).toMatchObject({ Authorization: "Bearer sk-hosted-test-key" });
+      expect(JSON.parse(String(init?.body)).model).toBe("deepseek-flash");
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify([draft]) } }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const service = createBookkeepingVisionRerecognitionService({
+      deepseekApiKey: "sk-hosted-test-key",
+      fetchImpl,
+    });
+
+    await expect(service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg())).resolves.toMatchObject({
+      ok: true, provider: "DEEPSEEK", model: "deepseek-flash", stage: "vision",
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("aborts a stalled DeepSeek vision request and returns timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      })) as unknown as typeof fetch;
+      const service = createBookkeepingVisionRerecognitionService({
+        deepseekApiKey: "sk-hosted-test-key",
+        fetchImpl,
+      });
+      const result = service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg());
+
+      await vi.advanceTimersByTimeAsync(45_000);
+
+      await expect(result).resolves.toEqual({ ok: false, reason: "timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("maps DeepSeek HTTP 408 to timeout", async () => {
+    const service = createBookkeepingVisionRerecognitionService({
+      deepseekApiKey: "sk-hosted-test-key",
+      fetchImpl: vi.fn(async () => new Response("", { status: 408 })) as unknown as typeof fetch,
+    });
+
+    await expect(service.rerecognize({ ...input, provider: "DEEPSEEK" }, jpeg()))
+      .resolves.toEqual({ ok: false, reason: "timeout" });
+  });
+
   it("uses the selected vision model once even when a text provider would fail", async () => {
     const vision = vi.fn(async () => ({ ok: true as const, value: [draft], model: "qwen3.5-ocr" }));
     const service = createBookkeepingVisionRerecognitionService({
@@ -64,34 +112,20 @@ describe("bookkeeping vision rerecognition service", () => {
     expect(vision).toHaveBeenCalledWith(expect.objectContaining({ image: jpeg(), ocrText: input.ocrText }));
   });
 
-  it("normalizes a vision model's descriptive expense type before validating the draft", async () => {
+  it.each(["消费支出", "收入退款"])("rejects descriptive vision type %s instead of coercing it", async (type) => {
     const service = createBookkeepingVisionRerecognitionService({
       visionProviders: {
         QWEN: vi.fn(async () => ({
           ok: true as const,
-          value: [{ ...draft, type: "消费支出" }],
+          value: [{ ...draft, type }],
           model: "qwen-vision",
         })),
       },
     });
 
     await expect(service.rerecognize(input, jpeg())).resolves.toMatchObject({
-      ok: true,
-      drafts: [{ type: "支出" }],
-      stage: "vision",
-    });
-  });
-
-  it("normalizes the vision model's consumption label to expense", async () => {
-    const service = createBookkeepingVisionRerecognitionService({
-      visionProviders: {
-        QWEN: vi.fn(async () => ({ ok: true as const, value: [{ ...draft, type: "消费" }], model: "qwen-vision" })),
-      },
-    });
-
-    await expect(service.rerecognize(input, jpeg())).resolves.toMatchObject({
-      ok: true,
-      drafts: [{ type: "支出" }],
+      ok: false,
+      reason: "invalid_response",
     });
   });
 

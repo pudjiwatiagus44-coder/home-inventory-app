@@ -9,6 +9,8 @@ import {
 } from "../../../../features/bookkeeping/bookkeeping-vision-rerecognition-service";
 import { createPostgresBookkeepingDoubaoCredentialRepository } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-repository";
 import { createBookkeepingDoubaoCredentialService } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-service";
+import { createDeepSeekCredentialService } from "../../../../features/bookkeeping/deepseek-credential-service";
+import { createPostgresDeepSeekCredentialRepository } from "../../../../features/bookkeeping/deepseek-credential-repository";
 
 type CurrentUserAuthService = Pick<ReturnType<typeof createAuthService>, "getCurrentUser">;
 type Service = ReturnType<typeof createBookkeepingVisionRerecognitionService>;
@@ -17,6 +19,7 @@ export type RerecognizeDependencies = {
   service?: Service;
   serviceFactory?: typeof createBookkeepingVisionRerecognitionService;
   credentialService?: Pick<ReturnType<typeof createBookkeepingDoubaoCredentialService>, "resolveForUser" | "recordProviderFailure" | "recordProviderSuccess">;
+  deepseekCredentialService?: Pick<ReturnType<typeof createDeepSeekCredentialService>, "decryptForProvider">;
   env?: Record<string, string | undefined>;
 };
 const MAX_BODY_BYTES = 2 * 1024 * 1024 + 64 * 1024;
@@ -51,6 +54,7 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
         });
       }
       let resolvedKey: string | undefined;
+      let deepseekApiKey: string | undefined;
       let resolvedModel: "doubao-seed-2-0-mini-260428" | "doubao-seed-2-0-lite-260428" | undefined;
       if (credentialService && user && parsed.input.provider === "DOUBAO") {
         let resolved;
@@ -72,9 +76,29 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
           ? model
           : undefined;
       }
+      if (parsed.input.provider === "DEEPSEEK") {
+        let deepseekCredentialService = deps.deepseekCredentialService;
+        if (!deepseekCredentialService) {
+          try {
+            deepseekCredentialService = createDeepSeekCredentialService({
+              database: createPostgresDeepSeekCredentialRepository(createPostgresQueryClientFromEnv(deps.env ?? process.env)),
+              env: process.env,
+            });
+          } catch {
+            return deepseekFailure("configuration_missing");
+          }
+        }
+        try {
+          deepseekApiKey = await deepseekCredentialService.decryptForProvider(user.userId) ?? undefined;
+        } catch {
+          return deepseekFailure("configuration_missing");
+        }
+        if (!deepseekApiKey) return deepseekFailure("api_key_missing");
+      }
       const service = deps.service ?? (deps.serviceFactory ?? createBookkeepingVisionRerecognitionService)({
         doubaoApiKey: resolvedKey,
         doubaoModel: resolvedModel,
+        deepseekApiKey,
       });
       const result = await service.rerecognize({ ...parsed.input, signal: request.signal }, parsed.image);
       if (!result.ok) {
@@ -86,6 +110,7 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
           await credentialService.recordProviderFailure(user.userId, credentialRevision, result.reason).catch(() => undefined);
           return NextResponse.json({ ok: false, message: result.reason, errorCode: result.reason === "auth_invalid" ? "PERSONAL_AUTH_INVALID" : "PERSONAL_QUOTA_EXHAUSTED", credentialSource }, { status: result.reason === "auth_invalid" ? 401 : 403 });
         }
+        if (parsed.input.provider === "DEEPSEEK") return deepseekFailure(result.reason);
         const status = result.reason === "quota_exhausted" ? 403 : result.reason === "rate_limit" ? 429 : 502;
         return NextResponse.json({ ok: false, message: result.reason, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) }, { status });
       }
@@ -102,7 +127,8 @@ class BodyTooLargeError extends Error {}
 // 100 个内置子分类 + 用户自定义子分类的层级合同上限；understand 端点未设数量上限，这里保持同等宽松度。
 const MAX_CATEGORIES = 200;
 const LEGACY_CATEGORY_KEYS = "keywords,name,type";
-const HIERARCHICAL_CATEGORY_KEYS = "childName,description,keywords,name,parentName,stableKey,type";
+const HIERARCHICAL_CATEGORY_KEYS = "childName,description,keywords,parentName,stableKey,type";
+const HIERARCHICAL_CATEGORY_KEYS_WITH_NAME = "childName,description,keywords,name,parentName,stableKey,type";
 
 async function parseMultipart(request: NextRequest) {
   const contentType = request.headers.get("content-type");
@@ -161,7 +187,7 @@ function parseMetadata(value: unknown): RerecognitionInput {
   if (typeof record.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(record.requestId)) throw new Error("invalid requestId");
       if (typeof record.ocrText !== "string" || record.ocrText.length > 12_000) throw new Error("invalid ocrText");
       if (typeof record.capturedAt !== "string" || Number.isNaN(Date.parse(record.capturedAt))) throw new Error("invalid capturedAt");
-      if (record.provider !== "DOUBAO" && record.provider !== "QWEN") throw new Error("invalid provider");
+      if (record.provider !== "DOUBAO" && record.provider !== "QWEN" && record.provider !== "DEEPSEEK") throw new Error("invalid provider");
       if (!Array.isArray(record.categories) || record.categories.length > MAX_CATEGORIES) throw new Error("invalid categories");
       const categories = record.categories.map((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid category");
@@ -172,15 +198,16 @@ function parseMetadata(value: unknown): RerecognitionInput {
               category.name.length > 100 || category.type.length > 30 || category.keywords.length > 500) throw new Error("invalid category");
           return { name: category.name, type: category.type, keywords: category.keywords };
         }
-        if (keys === HIERARCHICAL_CATEGORY_KEYS) {
+        if (keys === HIERARCHICAL_CATEGORY_KEYS || keys === HIERARCHICAL_CATEGORY_KEYS_WITH_NAME) {
           const { childName, description, keywords, name, parentName, stableKey, type } = category;
           if (typeof childName !== "string" || typeof description !== "string" || typeof keywords !== "string" ||
-              typeof name !== "string" || typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string") {
+              typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string") {
             throw new Error("invalid category");
           }
           if (childName.length > 100 || description.length > 500 || keywords.length > 500 ||
-              name.length > 100 || parentName.length > 100 || stableKey.length > 120 ||
+              parentName.length > 100 || stableKey.length > 120 ||
               type.length > 30) throw new Error("invalid category");
+          if (name !== undefined && (typeof name !== "string" || name.length > 100)) throw new Error("invalid category");
           const trimmedChildName = childName.trim();
           if (!trimmedChildName) throw new Error("invalid category");
           // 层级合同与 understand 端点口径一致：模型候选使用子分类名，父分类仅供去歧义上下文。
@@ -189,4 +216,15 @@ function parseMetadata(value: unknown): RerecognitionInput {
         throw new Error("invalid category");
       });
       return { requestId: record.requestId, ocrText: record.ocrText, capturedAt: record.capturedAt, categories, provider: record.provider };
+}
+
+function deepseekFailure(reason: string) {
+  const errorCode = reason === "api_key_missing" ? "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" :
+    reason === "auth_invalid" ? "DEEPSEEK_AUTH_INVALID" :
+    reason === "timeout" ? "DEEPSEEK_TIMEOUT" :
+    reason === "invalid_response" ? "DEEPSEEK_INVALID_JSON" : "DEEPSEEK_REQUEST_FAILED";
+  const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
+    errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 :
+      errorCode === "DEEPSEEK_TIMEOUT" ? 504 : 502;
+  return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }

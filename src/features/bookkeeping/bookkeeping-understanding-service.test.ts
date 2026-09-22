@@ -69,6 +69,39 @@ describe("understandWithFallback", () => {
     expect(qwen.understand).not.toHaveBeenCalled();
   });
 
+  it("uses the selected DeepSeek provider without falling back to Doubao or Qwen", async () => {
+    const doubao = provider({ ok: true, value: draft, model: "doubao" });
+    const qwen = provider({ ok: true, value: draft, model: "qwen" });
+    const deepseek = provider({ ok: true, value: draft, model: "deepseek-flash" });
+
+    await expect(understandWithFallback(
+      { mode: "DEEPSEEK_ONLY", ...input },
+      { doubao, qwen, deepseek },
+    )).resolves.toEqual({ ok: true, value: draft, model: "deepseek-flash" });
+    expect(deepseek.understand).toHaveBeenCalledOnce();
+    expect(doubao.understand).not.toHaveBeenCalled();
+    expect(qwen.understand).not.toHaveBeenCalled();
+  });
+
+  it("uses deepseek-flash and strictly parses its JSON result when a hosted key is supplied", async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe("deepseek-flash");
+      expect(body.messages).toBeInstanceOf(Array);
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(draft) } }] }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    });
+    const providers = createTextUnderstandingProviders({}, fetchImpl as typeof fetch, {
+      deepseekApiKey: "sk-hosted-test-key",
+    });
+
+    await expect(providers.deepseek.understand(input)).resolves.toMatchObject({ ok: true, model: "deepseek-flash" });
+    expect(fetchImpl).toHaveBeenCalledWith("https://api.deepseek.com/chat/completions", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer sk-hosted-test-key" }),
+    }));
+  });
+
   it("uses qwen3.7-flash when QWEN_TEXT_MODEL is not configured", async () => {
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(JSON.parse(String(init?.body)).model).toBe("qwen3.7-flash");

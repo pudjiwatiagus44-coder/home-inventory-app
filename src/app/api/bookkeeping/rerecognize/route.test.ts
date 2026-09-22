@@ -44,6 +44,36 @@ describe("/api/bookkeeping/rerecognize", () => {
     );
   });
 
+  it("allows DEEPSEEK and injects only the current session's briefly decrypted key", async () => {
+    const service = serviceStub();
+    const deepseek = { decryptForProvider: vi.fn(async () => "sk-user-a-key") };
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: deepseek,
+      serviceFactory: vi.fn(() => service),
+    });
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "DEEPSEEK" }));
+
+    expect(response.status).toBe(200);
+    expect(deepseek.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(service.rerecognize).toHaveBeenCalledWith(expect.objectContaining({ provider: "DEEPSEEK" }), expect.any(Buffer));
+  });
+
+  it("returns the stable DeepSeek timeout code without exposing provider details", async () => {
+    const service = serviceStub();
+    service.rerecognize.mockResolvedValue({ ok: false, reason: "timeout" });
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      deepseekCredentialService: { decryptForProvider: async () => "sk-user-a-key" },
+      service,
+    });
+
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "DEEPSEEK" }));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_timeout", errorCode: "DEEPSEEK_TIMEOUT" });
+  });
+
   it.each([
     ["quota_exhausted", 403],
     ["rate_limit", 429],
@@ -58,7 +88,7 @@ describe("/api/bookkeeping/rerecognize", () => {
     await expect(response.json()).resolves.toEqual({ ok: false, message: reason });
   });
 
-  it("accepts the hierarchical category contract from newer Android clients", async () => {
+  it("accepts the newer hierarchical category contract without name", async () => {
     const service = serviceStub();
     const handlers = authenticatedHandlers(service);
 
@@ -71,7 +101,6 @@ describe("/api/bookkeeping/rerecognize", () => {
         childName: "早餐",
         description: "早上吃的",
         keywords: "早餐,早点",
-        name: "早餐",
       }],
     };
     const response = await handlers.POST(requestWithMetadata(hierarchical));
@@ -85,6 +114,48 @@ describe("/api/bookkeeping/rerecognize", () => {
     );
   });
 
+  it("accepts the legacy hierarchical category contract with name", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.POST(requestWithMetadata({
+      ...metadata,
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: "早餐",
+        description: "早上吃的",
+        keywords: "早餐,早点",
+        name: "早餐",
+      }],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(service.rerecognize).toHaveBeenCalledWith(
+      expect.objectContaining({ categories: [{ name: "早餐", type: "Expense", keywords: "早餐,早点" }] }),
+      expect.any(Buffer),
+    );
+  });
+
+  it.each([42, 101])("rejects a present hierarchical name when it is not a string within 100 characters", async (name) => {
+    const service = serviceStub();
+    const response = await authenticatedHandlers(service).POST(requestWithMetadata({
+      ...metadata,
+      categories: [{
+        stableKey: "expense.meal.breakfast",
+        type: "Expense",
+        parentName: "餐饮",
+        childName: "早餐",
+        description: "早上吃的",
+        keywords: "早餐",
+        name: typeof name === "number" ? name : "x".repeat(name),
+      }],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(service.rerecognize).not.toHaveBeenCalled();
+  });
+
   it("accepts up to 200 hierarchical categories (100 builtin plus custom children)", async () => {
     const service = serviceStub();
     const handlers = authenticatedHandlers(service);
@@ -96,7 +167,6 @@ describe("/api/bookkeeping/rerecognize", () => {
       childName: `自定义分类${index}`,
       description: "",
       keywords: "",
-      name: `自定义分类${index}`,
     }));
     const response = await handlers.POST(requestWithMetadata({ ...metadata, categories }));
 

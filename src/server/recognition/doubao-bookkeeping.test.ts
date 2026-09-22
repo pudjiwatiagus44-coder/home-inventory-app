@@ -88,6 +88,21 @@ describe("doubao bookkeeping client", () => {
       .resolves.toEqual({ ok: false, reason: "invalid_response" });
   });
 
+  it("requires an income or expense type and a nonempty free-form category without imposing a length limit", async () => {
+    const client = createDoubaoBookkeepingClient({
+      apiKey: "key",
+      fetchImpl: (async () => jsonResponse(200, {
+        choices: [{ message: { content: JSON.stringify([
+          draft({ type: "收入", category: "跨城市通勤交通费" }),
+          draft({ type: "支出", category: "" }),
+        ]) } }],
+      })) as typeof fetch,
+    });
+
+    await expect(client.understandOcrText("示例", "2026-09-01T08:00:00Z"))
+      .resolves.toEqual({ ok: false, reason: "invalid_response" });
+  });
+
   it.each([401, 403, 404])("treats non-rate-limit HTTP %i as a non-retryable request failure", async (status) => {
     const client = createDoubaoBookkeepingClient({
       apiKey: "key",

@@ -6,8 +6,9 @@ import {
 } from "../../server/recognition/doubao-bookkeeping";
 
 type PersonalDoubaoModel = "doubao-seed-2-0-mini-260428" | "doubao-seed-2-0-lite-260428";
+const DEEPSEEK_VISION_TIMEOUT_MS = 45_000;
 
-export type RerecognitionProvider = "DOUBAO" | "QWEN";
+export type RerecognitionProvider = "DOUBAO" | "QWEN" | "DEEPSEEK";
 export type RerecognitionInput = {
   requestId: string;
   ocrText: string;
@@ -26,12 +27,13 @@ type Dependencies = {
   fetchImpl?: typeof fetch;
   doubaoApiKey?: string;
   doubaoModel?: PersonalDoubaoModel;
+  deepseekApiKey?: string;
 };
 
 export function createBookkeepingVisionRerecognitionService(deps: Dependencies = {}) {
   const env = deps.env ?? process.env;
   const visionProviders = {
-    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel),
+    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel, deps.deepseekApiKey),
     ...deps.visionProviders,
   };
   return {
@@ -39,7 +41,7 @@ export function createBookkeepingVisionRerecognitionService(deps: Dependencies =
       if (input.signal?.aborted) return { ok: false as const, reason: "request_aborted" };
       const vision = await visionProviders[input.provider]!({ ...input, image });
       if (!vision.ok) return { ok: false as const, reason: vision.reason };
-      const drafts = vision.value.map(normalizeDraft);
+      const drafts = vision.value;
       if (drafts.length === 0 || drafts.some((draft) => !isCompleteDraft(draft))) {
         return { ok: false as const, reason: "invalid_response" };
       }
@@ -53,6 +55,7 @@ function createDefaultVisionProviders(
   fetchImpl?: typeof fetch,
   doubaoApiKey?: string,
   doubaoModel?: PersonalDoubaoModel,
+  deepseekApiKey?: string,
 ) {
   return {
     DOUBAO: createOpenAiVisionProvider({
@@ -69,6 +72,13 @@ function createDefaultVisionProviders(
       approvedModels: new Set(["qwen3.5-ocr"]),
       fetchImpl,
     }),
+    DEEPSEEK: createOpenAiVisionProvider({
+      apiKey: deepseekApiKey,
+      model: "deepseek-flash",
+      baseUrl: "https://api.deepseek.com/chat/completions",
+      timeoutMs: DEEPSEEK_VISION_TIMEOUT_MS,
+      fetchImpl,
+    }),
   };
 }
 
@@ -78,6 +88,7 @@ function createOpenAiVisionProvider(config: {
   baseUrl?: string;
   requireBeijingWorkspace?: boolean;
   approvedModels?: ReadonlySet<string>;
+  timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): VisionProvider {
   return async (input) => {
@@ -92,6 +103,14 @@ function createOpenAiVisionProvider(config: {
       return { ok: false, reason: "configuration_invalid" };
     }
     if (input.signal?.aborted) return { ok: false, reason: "request_aborted" };
+    const controller = new AbortController();
+    let timedOut = false;
+    const onCallerAbort = () => controller.abort();
+    input.signal?.addEventListener("abort", onCallerAbort, { once: true });
+    const timer = config.timeoutMs ? setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, config.timeoutMs) : undefined;
     let response: Response;
     try {
       response = await (config.fetchImpl ?? globalThis.fetch)(baseUrl, {
@@ -108,16 +127,22 @@ function createOpenAiVisionProvider(config: {
             ],
           }],
         }),
-        signal: input.signal,
+        signal: controller.signal,
       });
     } catch (error) {
-      if (input.signal?.aborted || isAbortError(error)) return { ok: false, reason: "request_aborted" };
+      if (input.signal?.aborted) return { ok: false, reason: "request_aborted" };
+      if (timedOut) return { ok: false, reason: "timeout" };
+      if (isAbortError(error)) return { ok: false, reason: "request_aborted" };
       return { ok: false, reason: "upstream_error" };
+    } finally {
+      if (timer) clearTimeout(timer);
+      input.signal?.removeEventListener("abort", onCallerAbort);
     }
     if (!response.ok) {
       if (response.status === 401) return { ok: false, reason: "auth_invalid" };
       if (response.status === 403) return { ok: false, reason: "quota_exhausted" };
       if (response.status === 429) return { ok: false, reason: "rate_limit" };
+      if (response.status === 408) return { ok: false, reason: "timeout" };
       if (response.status >= 500) return { ok: false, reason: "server_error" };
       return { ok: false, reason: "invalid_request" };
     }
@@ -157,18 +182,11 @@ function isCompleteDraft(draft: BookkeepingDraft) {
   const amount = Number(draft.amount);
   return Number.isFinite(amount) && amount > 0 && draft.category.trim() !== "" &&
     (draft.merchant.trim() !== "" || draft.payerPayee.trim() !== "") &&
-    ["支出", "收入", "转账"].includes(draft.type);
-}
-
-function normalizeDraft(draft: BookkeepingDraft): BookkeepingDraft {
-  const type = draft.type.includes("支出") || draft.type.includes("消费") ? "支出" :
-    draft.type.includes("收入") ? "收入" :
-    draft.type.includes("转账") ? "转账" : draft.type;
-  return { ...draft, type };
+    ["支出", "收入"].includes(draft.type);
 }
 
 function visionPrompt(input: RerecognitionInput) {
-  return `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出四个字或以下的细分分类名称（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”“收入”或“转账”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
+  return `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出非空的自由细分分类名称；建议四字内但不限制长度（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”或“收入”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
 }
 
 function isBeijingWorkspaceUrl(value: string) {
