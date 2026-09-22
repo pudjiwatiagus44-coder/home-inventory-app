@@ -12,7 +12,8 @@ const API_KEY = "sk-qwen-secret-account-a-1234";
 
 function database(): QwenCredentialDatabase & { rows: Map<string, StoredQwenCredential> } {
   const rows = new Map<string, StoredQwenCredential>();
-  return {
+  const lockTails = new Map<string, Promise<void>>();
+  const store = {
     rows,
     findForTrustedServerUser: vi.fn(async (userId: string) => rows.get(userId) ?? null),
     saveForTrustedServerUser: vi.fn(async (userId: string, value: StoredQwenCredential) => {
@@ -27,7 +28,19 @@ function database(): QwenCredentialDatabase & { rows: Map<string, StoredQwenCred
       return value;
     }),
     deleteForTrustedServerUser: vi.fn(async (userId: string) => rows.delete(userId)),
+    withUserMutationLock: async <T>(userId: string, operation: (lockedDatabase: QwenCredentialDatabase) => Promise<T>) => {
+      const previous = lockTails.get(userId) ?? Promise.resolve();
+      let release!: () => void;
+      const current = new Promise<void>((resolve) => { release = resolve; });
+      lockTails.set(userId, previous.then(() => current));
+      await previous;
+      try { return await operation(store); } finally { release(); }
+    },
+  } as QwenCredentialDatabase & {
+    rows: Map<string, StoredQwenCredential>;
+    withUserMutationLock: <T>(userId: string, operation: (lockedDatabase: QwenCredentialDatabase) => Promise<T>) => Promise<T>;
   };
+  return store;
 }
 
 describe("Qwen credential service", () => {
@@ -128,7 +141,11 @@ describe("Qwen credential service", () => {
 
   it("validates a replacement candidate before saving it and keeps the previous key on failure", async () => {
     const store = database();
-    const fetchImpl = vi.fn(async () => new Response("invalid key", { status: 401 }));
+    const fetchImpl = vi.fn(async (_url: string, _request?: RequestInit) => {
+      void _url;
+      void _request;
+      return new Response("invalid key", { status: 401 });
+    });
     const service = createQwenCredentialService({
       database: store,
       env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
@@ -231,4 +248,30 @@ describe("Qwen credential service", () => {
       code: "QWEN_INVALID_JSON",
     });
   });
+
+  it("serializes PUT validation and DELETE so deletion cannot be undone by an earlier pending PUT", async () => {
+    const store = database();
+    const providerResponse = deferred<Response>();
+    const fetchImpl = vi.fn(async () => providerResponse.promise);
+    const service = createQwenCredentialService({
+      database: store,
+      env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    const put = service.validateAndSaveForUser("user-a", "sk-qwen-race-key-1234");
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const deletion = service.deleteForUser("user-a");
+    await Promise.resolve();
+    providerResponse.resolve(new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), { status: 200 }));
+
+    await Promise.all([put, deletion]);
+
+    await expect(service.decryptForProvider("user-a")).resolves.toBeNull();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}

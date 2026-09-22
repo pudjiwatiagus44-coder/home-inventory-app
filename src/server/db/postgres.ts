@@ -15,6 +15,10 @@ type PoolLike = {
     text: string,
     values?: unknown[],
   ) => Promise<QueryResult<Row>>;
+  connect?: () => Promise<{
+    query: <Row = unknown>(text: string, values?: unknown[]) => Promise<QueryResult<Row>>;
+    release: () => void;
+  }>;
 };
 
 type FactoryOptions = {
@@ -54,6 +58,24 @@ function createPostgresQueryClient(
     query: async (text, values) => {
       const pool = getPool(connectionString, createPool);
       return pool.query(text, values);
+    },
+    transaction: async <Result>(operation: (transactionClient: PostgresQueryClient) => Promise<Result>) => {
+      const pool = getPool(connectionString, createPool);
+      if (!pool.connect) throw new Error("postgres_transactions_not_supported");
+      const connection = await pool.connect();
+      try {
+        await connection.query("begin");
+        try {
+          const result = await operation({ query: (text, values) => connection.query(text, values) });
+          await connection.query("commit");
+          return result;
+        } catch (error) {
+          await connection.query("rollback").catch(() => undefined);
+          throw error;
+        }
+      } finally {
+        connection.release();
+      }
     },
   };
 }

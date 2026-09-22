@@ -78,6 +78,17 @@ export function createPostgresQwenCredentialRepository(
       );
       return result.rows.length > 0;
     },
+
+    async withUserMutationLock(trustedServerUserId, operation) {
+      if (!client.transaction) throw new Error("qwen_credential_transaction_required");
+      return client.transaction(async (transactionClient) => {
+        await transactionClient.query(
+          "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [`bookkeeping-qwen-credential:${trustedServerUserId}`],
+        );
+        return operation(createPostgresQwenCredentialRepository(transactionClient));
+      });
+    },
   };
 }
 

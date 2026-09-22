@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { createQwenCredentialHandlers } from "./handlers";
-import { createQwenCredentialService, type QwenCredentialDatabase, type StoredQwenCredential } from "../../../../features/bookkeeping/qwen-credential-service";
+import { createQwenCredentialService, type QwenCredentialDatabase, type QwenValidationResult, type StoredQwenCredential } from "../../../../features/bookkeeping/qwen-credential-service";
+import { createQwenCredentialRateLimiter } from "../../../../server/recognition/qwen-credential-rate-limiter";
 
 describe("/api/bookkeeping/qwen-credential", () => {
   it("requires the home_inventory_session account before touching credentials", async () => {
@@ -98,6 +99,7 @@ describe("/api/bookkeeping/qwen-credential", () => {
         return updated;
       },
       deleteForTrustedServerUser: async (userId) => rows.delete(userId),
+      withUserMutationLock: async (_userId, operation) => operation(database),
     };
     const service = createQwenCredentialService({
       database,
@@ -131,6 +133,56 @@ describe("/api/bookkeeping/qwen-credential", () => {
     expect(response.status).toBe(504);
     expect(await response.json()).toEqual({ ok: false, code: "timeout" });
   });
+
+  it("rejects oversized declared credential bodies before parsing", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.PUT(new NextRequest("http://localhost/api/bookkeeping/qwen-credential", {
+      method: "PUT",
+      headers: { Cookie: "home_inventory_session=session-token", "Content-Length": "9000" },
+      body: JSON.stringify({ apiKey: "sk-valid-but-unused-1234" }),
+    }));
+
+    expect(response.status).toBe(413);
+    expect(service.validateAndSaveForUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized streamed bodies even when Content-Length is absent", async () => {
+    const service = serviceStub();
+    const handlers = authenticatedHandlers(service);
+    const response = await handlers.PUT(new NextRequest("http://localhost/api/bookkeeping/qwen-credential", {
+      method: "PUT",
+      headers: { Cookie: "home_inventory_session=session-token", "Content-Type": "application/json" },
+      body: "x".repeat(9 * 1024),
+    }));
+
+    expect(response.status).toBe(413);
+    expect(service.validateAndSaveForUser).not.toHaveBeenCalled();
+  });
+
+  it("enforces per-account verification rate and concurrent request limits", async () => {
+    const service = serviceStub();
+    const release = deferred<void>();
+    service.validateConnectivityForUser.mockImplementation(async () => {
+      await release.promise;
+      return { ok: true, status: { configured: true, maskedKey: "****1234", lastVerifiedAt: null }, elapsedMs: 1 };
+    });
+    const handlers = createQwenCredentialHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      service,
+      rateLimiter: createQwenCredentialRateLimiter({ maxRequests: 1, windowMs: 60_000, maxConcurrent: 1, now: () => 100 }),
+    });
+
+    const first = handlers.POST(request("POST"));
+    const concurrent = await handlers.POST(request("POST"));
+    release.resolve();
+    await first;
+    const limited = await handlers.POST(request("POST"));
+
+    expect(concurrent.status).toBe(429);
+    expect(limited.status).toBe(429);
+    expect(service.validateConnectivityForUser).toHaveBeenCalledTimes(1);
+  });
 });
 
 function authenticatedHandlers(service: ReturnType<typeof serviceStub>) {
@@ -144,8 +196,8 @@ function serviceStub() {
   const status = { configured: true, maskedKey: "****1234", lastVerifiedAt: null };
   return {
     getStatusForUser: vi.fn(async () => status),
-    validateAndSaveForUser: vi.fn(async () => ({ ok: true as const, status, elapsedMs: 5 })),
-    validateConnectivityForUser: vi.fn(async () => ({ ok: true as const, status, elapsedMs: 5 })),
+    validateAndSaveForUser: vi.fn(async (): Promise<QwenValidationResult> => ({ ok: true, status, elapsedMs: 5 })),
+    validateConnectivityForUser: vi.fn(async (): Promise<QwenValidationResult> => ({ ok: true, status, elapsedMs: 5 })),
     deleteForUser: vi.fn(async () => true),
   };
 }
@@ -159,4 +211,10 @@ function request(method: string, body?: unknown, authenticated = true, sessionTo
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
 }

@@ -51,4 +51,28 @@ describe("createPostgresQueryClientFromEnv", () => {
       },
     ]);
   });
+
+  it("runs a callback on one checked-out connection and always commits or rolls back", async () => {
+    const statements: string[] = [];
+    let released = 0;
+    const client = createPostgresQueryClientFromEnv(
+      { DATABASE_URL: "postgres://transaction-test.example/home_inventory" },
+      {
+        createPool: () => ({
+          query: async () => ({ rows: [] }),
+          connect: async () => ({
+            query: async (text: string) => { statements.push(text); return { rows: [] }; },
+            release: () => { released += 1; },
+          }),
+        }),
+      },
+    );
+
+    await expect(client.transaction?.(async (transaction) => {
+      await transaction.query("select pg_advisory_xact_lock($1)", [1]);
+      return "done";
+    })).resolves.toBe("done");
+    expect(statements).toEqual(["begin", "select pg_advisory_xact_lock($1)", "commit"]);
+    expect(released).toBe(1);
+  });
 });

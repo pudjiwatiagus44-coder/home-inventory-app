@@ -33,6 +33,11 @@ export type QwenCredentialDatabase = {
     lastVerifiedAt: string,
   ): Promise<StoredQwenCredential | null>;
   deleteForTrustedServerUser(trustedServerUserId: string): Promise<boolean>;
+  // Implemented by PostgreSQL with a transaction-scoped advisory lock; never replace with a process mutex.
+  withUserMutationLock<T>(
+    trustedServerUserId: string,
+    operation: (lockedDatabase: QwenCredentialDatabase) => Promise<T>,
+  ): Promise<T>;
 };
 
 type Dependencies = {
@@ -65,12 +70,12 @@ export function createQwenCredentialService({
 }: Dependencies) {
   const masterKey = parseMasterKey(env.BOOKKEEPING_CREDENTIAL_MASTER_KEY);
 
-  async function storeCredential(trustedServerUserId: string, value: string, lastVerifiedAt: string | null) {
+  async function storeCredential(lockedDatabase: QwenCredentialDatabase, trustedServerUserId: string, value: string, lastVerifiedAt: string | null) {
     const plaintext = validateApiKey(value);
     const nonce = randomBytes(NONCE_LENGTH);
     const cipher = createCipheriv(ALGORITHM, masterKey, nonce, { authTagLength: AUTH_TAG_LENGTH });
     const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-    const saved = await database.saveForTrustedServerUser(trustedServerUserId, {
+    const saved = await lockedDatabase.saveForTrustedServerUser(trustedServerUserId, {
       ciphertext,
       nonce,
       tag: cipher.getAuthTag(),
@@ -86,7 +91,8 @@ export function createQwenCredentialService({
       trustedServerUserId: string,
       apiKey: string,
     ): Promise<QwenCredentialStatus> {
-      return storeCredential(trustedServerUserId, apiKey, null);
+      return withMutationLock(trustedServerUserId, (lockedDatabase) =>
+        storeCredential(lockedDatabase, trustedServerUserId, apiKey, null));
     },
 
     async getStatusForUser(trustedServerUserId: string): Promise<QwenCredentialStatus> {
@@ -102,45 +108,42 @@ export function createQwenCredentialService({
     async validateConnectivityForUser(
       trustedServerUserId: string,
     ): Promise<QwenValidationResult> {
-      const startedAt = Date.now();
-      const stored = await database.findForTrustedServerUser(trustedServerUserId);
-      if (!stored) return validationFailure("QWEN_CREDENTIAL_NOT_CONFIGURED", startedAt);
-
-      let apiKey: string;
-      try {
-        apiKey = decrypt(masterKey, stored);
-      } catch {
-        return validationFailure("QWEN_VALIDATION_FAILED", startedAt);
-      }
-
-      return validateCredential(trustedServerUserId, apiKey, startedAt);
+      return withMutationLock(trustedServerUserId, async (lockedDatabase) => {
+        const startedAt = Date.now();
+        const stored = await lockedDatabase.findForTrustedServerUser(trustedServerUserId);
+        if (!stored) return validationFailure("QWEN_CREDENTIAL_NOT_CONFIGURED", startedAt);
+        let apiKey: string;
+        try {
+          apiKey = decrypt(masterKey, stored);
+        } catch {
+          return validationFailure("QWEN_VALIDATION_FAILED", startedAt);
+        }
+        return validateCredential(trustedServerUserId, apiKey, startedAt, true, lockedDatabase);
+      });
     },
 
     async validateAndSaveForUser(
       trustedServerUserId: string,
       candidateApiKey: string,
     ): Promise<QwenValidationResult> {
-      const startedAt = Date.now();
-      let apiKey: string;
-      try {
-        apiKey = validateApiKey(candidateApiKey);
-      } catch {
-        return validationFailure("QWEN_INVALID_REQUEST", startedAt);
-      }
-      const validation = await validateCredential(trustedServerUserId, apiKey, startedAt, false);
-      if (!validation.ok) return validation;
-
-      const verifiedAt = now().toISOString();
-      const status = await storeCredential(trustedServerUserId, apiKey, verifiedAt);
-      return {
-        ok: true,
-        status,
-        elapsedMs: validation.elapsedMs,
-      };
+      return withMutationLock(trustedServerUserId, async (lockedDatabase) => {
+        const startedAt = Date.now();
+        let apiKey: string;
+        try {
+          apiKey = validateApiKey(candidateApiKey);
+        } catch {
+          return validationFailure("QWEN_INVALID_REQUEST", startedAt);
+        }
+        const validation = await validateCredential(trustedServerUserId, apiKey, startedAt, false, lockedDatabase);
+        if (!validation.ok) return validation;
+        const status = await storeCredential(lockedDatabase, trustedServerUserId, apiKey, now().toISOString());
+        return { ok: true, status, elapsedMs: validation.elapsedMs };
+      });
     },
 
     async deleteForUser(trustedServerUserId: string): Promise<boolean> {
-      return database.deleteForTrustedServerUser(trustedServerUserId);
+      return withMutationLock(trustedServerUserId, (lockedDatabase) =>
+        lockedDatabase.deleteForTrustedServerUser(trustedServerUserId));
     },
   };
 
@@ -149,68 +152,78 @@ export function createQwenCredentialService({
     apiKey: string,
     startedAt: number,
     recordSuccess = true,
+    lockedDatabase: QwenCredentialDatabase = database,
   ): Promise<QwenValidationResult> {
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const response = await Promise.race([
+        fetchImpl(VALIDATION_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "qwen3.7-flash",
+            messages: [{ role: "user", content: 'Return exactly {"ok":true}.' }],
+            temperature: 0,
+            stream: false,
+          }),
+          signal: controller.signal,
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort();
+            reject(new Error("timeout"));
+          }, validationTimeoutMs);
+        }),
+      ]);
 
-      const controller = new AbortController();
-      let timeout: ReturnType<typeof setTimeout> | undefined;
+      if (response.status === 401) return validationFailure("QWEN_AUTH_INVALID", startedAt);
+      if (response.status === 429) return validationFailure("QWEN_QUOTA_EXHAUSTED", startedAt);
+      if (!response.ok) return validationFailure("QWEN_VALIDATION_FAILED", startedAt);
+
+      let payload: unknown;
       try {
-        const response = await Promise.race([
-          fetchImpl(VALIDATION_URL, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "qwen3.7-flash",
-              messages: [{ role: "user", content: 'Return exactly {"ok":true}.' }],
-              temperature: 0,
-              stream: false,
-            }),
-            signal: controller.signal,
-          }),
-          new Promise<never>((_resolve, reject) => {
-            timeout = setTimeout(() => {
-              controller.abort();
-              reject(new Error("timeout"));
-            }, validationTimeoutMs);
-          }),
-        ]);
-
-        if (response.status === 401) return validationFailure("QWEN_AUTH_INVALID", startedAt);
-        if (response.status === 429) return validationFailure("QWEN_QUOTA_EXHAUSTED", startedAt);
-        if (!response.ok) return validationFailure("QWEN_VALIDATION_FAILED", startedAt);
-
-        let payload: unknown;
-        try {
-          payload = await response.json();
-        } catch {
-          return validationFailure("QWEN_INVALID_JSON", startedAt);
-        }
-        if (!hasSuccessfulValidationContent(payload)) {
-          return validationFailure("QWEN_INVALID_JSON", startedAt);
-        }
-
-        if (!recordSuccess) {
-          return {
-            ok: true,
-            status: { configured: false, maskedKey: null, lastVerifiedAt: null },
-            elapsedMs: Date.now() - startedAt,
-          };
-        }
-        const updated = await database.recordSuccessfulValidationForTrustedServerUser(trustedServerUserId, now().toISOString());
-        if (!updated) return validationFailure("QWEN_CREDENTIAL_NOT_CONFIGURED", startedAt);
-        return { ok: true, status: publicStatus(updated), elapsedMs: Date.now() - startedAt };
-      } catch (error) {
-        return validationFailure(
-          controller.signal.aborted || (error instanceof Error && error.message === "timeout")
-            ? "QWEN_TIMEOUT"
-            : "QWEN_VALIDATION_FAILED",
-          startedAt,
-        );
-      } finally {
-        if (timeout) clearTimeout(timeout);
+        payload = await response.json();
+      } catch {
+        return validationFailure("QWEN_INVALID_JSON", startedAt);
       }
+      if (!hasSuccessfulValidationContent(payload)) {
+        return validationFailure("QWEN_INVALID_JSON", startedAt);
+      }
+
+      if (!recordSuccess) {
+        return {
+          ok: true,
+          status: { configured: false, maskedKey: null, lastVerifiedAt: null },
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      const updated = await lockedDatabase.recordSuccessfulValidationForTrustedServerUser(
+        trustedServerUserId,
+        now().toISOString(),
+      );
+      if (!updated) return validationFailure("QWEN_CREDENTIAL_NOT_CONFIGURED", startedAt);
+      return { ok: true, status: publicStatus(updated), elapsedMs: Date.now() - startedAt };
+    } catch (error) {
+      return validationFailure(
+        controller.signal.aborted || (error instanceof Error && error.message === "timeout")
+          ? "QWEN_TIMEOUT"
+          : "QWEN_VALIDATION_FAILED",
+        startedAt,
+      );
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
+  function withMutationLock<T>(
+    trustedServerUserId: string,
+    operation: (lockedDatabase: QwenCredentialDatabase) => Promise<T>,
+  ): Promise<T> {
+    return database.withUserMutationLock(trustedServerUserId, operation);
   }
 }
 

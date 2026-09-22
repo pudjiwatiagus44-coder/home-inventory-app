@@ -10,6 +10,7 @@ export type PostgresQueryClient = {
     text: string,
     values?: unknown[],
   ) => Promise<QueryResult<Row>>;
+  transaction?: <Result>(operation: (transactionClient: PostgresQueryClient) => Promise<Result>) => Promise<Result>;
 };
 
 type UserRow = {

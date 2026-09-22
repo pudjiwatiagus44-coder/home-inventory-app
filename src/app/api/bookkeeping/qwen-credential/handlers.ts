@@ -4,6 +4,7 @@ import { getCurrentUserFromRequest } from "../../auth/route-helpers";
 import type { createAuthService } from "../../../../server/auth/auth-service";
 import { createQwenCredentialService, type QwenValidationCode } from "../../../../features/bookkeeping/qwen-credential-service";
 import { createPostgresQwenCredentialRepository } from "../../../../features/bookkeeping/qwen-credential-repository";
+import { createQwenCredentialRateLimiter, type QwenCredentialRateLimiter } from "../../../../server/recognition/qwen-credential-rate-limiter";
 import {
   createPostgresQueryClientFromEnv,
   PostgresDatabaseNotConfiguredError,
@@ -19,12 +20,19 @@ type CredentialService = Pick<
 export type QwenCredentialHandlerDependencies = {
   authService?: AuthService;
   service?: CredentialService;
+  rateLimiter?: QwenCredentialRateLimiter;
   env?: PostgresEnv & NodeJS.ProcessEnv;
 };
 
+const MAX_BODY_BYTES = 8 * 1024;
 const noStoreHeaders = { "Cache-Control": "no-store, max-age=0", Pragma: "no-cache" };
 
 export function createQwenCredentialHandlers(dependencies: QwenCredentialHandlerDependencies = {}) {
+  const rateLimiter = dependencies.rateLimiter ?? createQwenCredentialRateLimiter({
+    maxRequests: 5,
+    windowMs: 10 * 60 * 1000,
+    maxConcurrent: 1,
+  });
   function response(body: unknown, status = 200) {
     return NextResponse.json(body, { status, headers: noStoreHeaders });
   }
@@ -61,16 +69,25 @@ export function createQwenCredentialHandlers(dependencies: QwenCredentialHandler
         if (!auth) return response({ ok: false, message: "Authentication required" }, 401);
         let body: unknown;
         try {
-          body = await request.json();
-        } catch {
+          body = await readBoundedJson(request);
+        } catch (error) {
+          if (error instanceof BodyTooLargeError) return response({ ok: false, code: "invalid_request" }, 413);
           return response({ ok: false, code: "invalid_request" }, 400);
         }
         if (!isRecord(body) || typeof body.apiKey !== "string") {
           return response({ ok: false, code: "invalid_request" }, 400);
         }
-        const result = await credentialService().validateAndSaveForUser(auth.userId, body.apiKey);
-        if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
-        return response({ ok: true, data: result.status });
+        const release = rateLimiter.tryAcquire(auth.userId);
+        if (!release) return response({ ok: false, code: "rate_limited" }, 429);
+        try {
+          const result = await credentialService().validateAndSaveForUser(auth.userId, body.apiKey);
+          if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
+          return response({ ok: true, data: result.status });
+        } catch (error) {
+          return internalError(error);
+        } finally {
+          release();
+        }
       } catch (error) {
         return internalError(error);
       }
@@ -80,9 +97,15 @@ export function createQwenCredentialHandlers(dependencies: QwenCredentialHandler
       try {
         const auth = await authenticated(request);
         if (!auth) return response({ ok: false, message: "Authentication required" }, 401);
-        const result = await credentialService().validateConnectivityForUser(auth.userId);
-        if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
-        return response({ ok: true, data: { status: result.status, elapsedMs: result.elapsedMs } });
+        const release = rateLimiter.tryAcquire(auth.userId);
+        if (!release) return response({ ok: false, code: "rate_limited" }, 429);
+        try {
+          const result = await credentialService().validateConnectivityForUser(auth.userId);
+          if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
+          return response({ ok: true, data: { status: result.status, elapsedMs: result.elapsedMs } });
+        } finally {
+          release();
+        }
       } catch (error) {
         return internalError(error);
       }
@@ -99,6 +122,41 @@ export function createQwenCredentialHandlers(dependencies: QwenCredentialHandler
       }
     },
   };
+}
+
+class BodyTooLargeError extends Error {}
+
+async function readBoundedJson(request: NextRequest): Promise<unknown> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null) {
+    if (!/^\d+$/.test(contentLength)) throw new Error("invalid_content_length");
+    if (Number(contentLength) > MAX_BODY_BYTES) throw new BodyTooLargeError();
+  }
+  const reader = request.body?.getReader();
+  if (!reader) throw new Error("missing_body");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new BodyTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
