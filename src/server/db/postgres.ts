@@ -114,5 +114,14 @@ function createPgPool(connectionString: string): PoolLike {
       const pool = await getPool();
       return pool.query(text, values);
     },
+    connect: async () => {
+      const pool = await getPool();
+      if (!pool.connect) throw new Error("postgres_connections_not_supported");
+      const connection = await pool.connect();
+      return {
+        query: (text, values) => connection.query(text, values),
+        release: () => connection.release(),
+      };
+    },
   };
 }

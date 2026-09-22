@@ -1,10 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUserFromRequest } from "../../auth/route-helpers";
 import type { createAuthService } from "../../../../server/auth/auth-service";
 import { createQwenCredentialService, type QwenValidationCode } from "../../../../features/bookkeeping/qwen-credential-service";
 import { createPostgresQwenCredentialRepository } from "../../../../features/bookkeeping/qwen-credential-repository";
-import { createQwenCredentialRateLimiter, type QwenCredentialRateLimiter } from "../../../../server/recognition/qwen-credential-rate-limiter";
 import {
   createPostgresQueryClientFromEnv,
   PostgresDatabaseNotConfiguredError,
@@ -14,13 +14,17 @@ import {
 type AuthService = Pick<ReturnType<typeof createAuthService>, "getCurrentUser">;
 type CredentialService = Pick<
   ReturnType<typeof createQwenCredentialService>,
-  "getStatusForUser" | "validateAndSaveForUser" | "validateConnectivityForUser" | "deleteForUser"
+  | "getStatusForUser"
+  | "validateAndSaveForUser"
+  | "validateConnectivityForUser"
+  | "deleteForUser"
+  | "acquireValidationSlotForUser"
+  | "releaseValidationSlotForUser"
 >;
 
 export type QwenCredentialHandlerDependencies = {
   authService?: AuthService;
   service?: CredentialService;
-  rateLimiter?: QwenCredentialRateLimiter;
   env?: PostgresEnv & NodeJS.ProcessEnv;
 };
 
@@ -28,11 +32,6 @@ const MAX_BODY_BYTES = 8 * 1024;
 const noStoreHeaders = { "Cache-Control": "no-store, max-age=0", Pragma: "no-cache" };
 
 export function createQwenCredentialHandlers(dependencies: QwenCredentialHandlerDependencies = {}) {
-  const rateLimiter = dependencies.rateLimiter ?? createQwenCredentialRateLimiter({
-    maxRequests: 5,
-    windowMs: 10 * 60 * 1000,
-    maxConcurrent: 1,
-  });
   function response(body: unknown, status = 200) {
     return NextResponse.json(body, { status, headers: noStoreHeaders });
   }
@@ -77,16 +76,18 @@ export function createQwenCredentialHandlers(dependencies: QwenCredentialHandler
         if (!isRecord(body) || typeof body.apiKey !== "string") {
           return response({ ok: false, code: "invalid_request" }, 400);
         }
-        const release = rateLimiter.tryAcquire(auth.userId);
-        if (!release) return response({ ok: false, code: "rate_limited" }, 429);
+        const service = credentialService();
+        const requestId = randomUUID();
+        const acquired = await service.acquireValidationSlotForUser(auth.userId, requestId);
+        if (!acquired) return response({ ok: false, code: "rate_limited" }, 429);
         try {
-          const result = await credentialService().validateAndSaveForUser(auth.userId, body.apiKey);
+          const result = await service.validateAndSaveForUser(auth.userId, body.apiKey);
           if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
           return response({ ok: true, data: result.status });
         } catch (error) {
           return internalError(error);
         } finally {
-          release();
+          await service.releaseValidationSlotForUser(auth.userId, requestId);
         }
       } catch (error) {
         return internalError(error);
@@ -97,14 +98,16 @@ export function createQwenCredentialHandlers(dependencies: QwenCredentialHandler
       try {
         const auth = await authenticated(request);
         if (!auth) return response({ ok: false, message: "Authentication required" }, 401);
-        const release = rateLimiter.tryAcquire(auth.userId);
-        if (!release) return response({ ok: false, code: "rate_limited" }, 429);
+        const service = credentialService();
+        const requestId = randomUUID();
+        const acquired = await service.acquireValidationSlotForUser(auth.userId, requestId);
+        if (!acquired) return response({ ok: false, code: "rate_limited" }, 429);
         try {
-          const result = await credentialService().validateConnectivityForUser(auth.userId);
+          const result = await service.validateConnectivityForUser(auth.userId);
           if (!result.ok) return response({ ok: false, code: publicCode(result.code) }, validationStatus(result.code));
           return response({ ok: true, data: { status: result.status, elapsedMs: result.elapsedMs } });
         } finally {
-          release();
+          await service.releaseValidationSlotForUser(auth.userId, requestId);
         }
       } catch (error) {
         return internalError(error);

@@ -80,16 +80,73 @@ export function createPostgresQwenCredentialRepository(
     },
 
     async withUserMutationLock(trustedServerUserId, operation) {
-      if (!client.transaction) throw new Error("qwen_credential_transaction_required");
-      return client.transaction(async (transactionClient) => {
+      return withUserAdvisoryTransaction(client, trustedServerUserId, (transactionClient) =>
+        operation(createPostgresQwenCredentialRepository(transactionClient)));
+    },
+
+    async acquireValidationSlotForTrustedServerUser(
+      trustedServerUserId,
+      requestId,
+      startedAt,
+      windowMs,
+      maxRequests,
+      maxConcurrent,
+    ) {
+      return withUserAdvisoryTransaction(client, trustedServerUserId, async (transactionClient) => {
         await transactionClient.query(
-          "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-          [`bookkeeping-qwen-credential:${trustedServerUserId}`],
+          `delete from bookkeeping_qwen_credential_rate_limits
+            where user_id = $1
+              and started_at < $2::timestamptz - ($3::double precision * interval '1 millisecond')`,
+          [trustedServerUserId, startedAt, windowMs],
         );
-        return operation(createPostgresQwenCredentialRepository(transactionClient));
+        const counts = await transactionClient.query<{ request_count: number; active_count: number }>(
+          `select count(*)::integer as request_count,
+                  count(*) filter (
+                    where completed_at is null
+                      and started_at >= $2::timestamptz - interval '2 minutes'
+                  )::integer as active_count
+             from bookkeeping_qwen_credential_rate_limits
+            where user_id = $1`,
+          [trustedServerUserId, startedAt],
+        );
+        const requestCount = Number(counts.rows[0]?.request_count ?? 0);
+        const activeCount = Number(counts.rows[0]?.active_count ?? 0);
+        if (requestCount >= maxRequests || activeCount >= maxConcurrent) return false;
+        await transactionClient.query(
+          `insert into bookkeeping_qwen_credential_rate_limits (user_id, request_id, started_at)
+           values ($1, $2, $3::timestamptz)`,
+          [trustedServerUserId, requestId, startedAt],
+        );
+        return true;
+      });
+    },
+
+    async releaseValidationSlotForTrustedServerUser(trustedServerUserId, requestId, completedAt) {
+      await withUserAdvisoryTransaction(client, trustedServerUserId, async (transactionClient) => {
+        await transactionClient.query(
+          `update bookkeeping_qwen_credential_rate_limits
+              set completed_at = $3::timestamptz
+            where user_id = $1 and request_id = $2 and completed_at is null`,
+          [trustedServerUserId, requestId, completedAt],
+        );
       });
     },
   };
+}
+
+function withUserAdvisoryTransaction<Result>(
+  client: PostgresQueryClient,
+  trustedServerUserId: string,
+  operation: (transactionClient: PostgresQueryClient) => Promise<Result>,
+): Promise<Result> {
+  if (!client.transaction) throw new Error("qwen_credential_transaction_required");
+  return client.transaction(async (transactionClient) => {
+    await transactionClient.query(
+      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`bookkeeping-qwen-credential:${trustedServerUserId}`],
+    );
+    return operation(transactionClient);
+  });
 }
 
 function normalize(row: CredentialRow): StoredQwenCredential {

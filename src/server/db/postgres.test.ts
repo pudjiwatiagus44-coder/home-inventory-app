@@ -1,8 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createPostgresQueryClientFromEnv,
   PostgresDatabaseNotConfiguredError,
 } from "./postgres";
+
+const pgPoolMock = vi.hoisted(() => ({ connect: vi.fn() }));
+vi.mock("pg", () => ({
+  Pool: class {
+    async query() { return { rows: [] }; }
+    connect() { return pgPoolMock.connect(); }
+  },
+}));
 
 describe("createPostgresQueryClientFromEnv", () => {
   it("rejects missing DATABASE_URL", () => {
@@ -74,5 +82,26 @@ describe("createPostgresQueryClientFromEnv", () => {
     })).resolves.toBe("done");
     expect(statements).toEqual(["begin", "select pg_advisory_xact_lock($1)", "commit"]);
     expect(released).toBe(1);
+  });
+
+  it("uses the default pg Pool wrapper's connection for a transaction and releases it", async () => {
+    const statements: string[] = [];
+    const connection = {
+      query: vi.fn(async (text: string) => { statements.push(text); return { rows: [] }; }),
+      release: vi.fn(),
+    };
+    pgPoolMock.connect.mockResolvedValue(connection);
+    const client = createPostgresQueryClientFromEnv({
+      DATABASE_URL: `postgres://default-pool-${Date.now()}.example/home_inventory`,
+    });
+
+    await expect(client.transaction?.(async (transaction) => {
+      await transaction.query("select pg_advisory_xact_lock(1)");
+      return "locked";
+    })).resolves.toBe("locked");
+
+    expect(pgPoolMock.connect).toHaveBeenCalledTimes(1);
+    expect(statements).toEqual(["begin", "select pg_advisory_xact_lock(1)", "commit"]);
+    expect(connection.release).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createQwenCredentialHandlers } from "./handlers";
 import { createQwenCredentialService, type QwenCredentialDatabase, type QwenValidationResult, type StoredQwenCredential } from "../../../../features/bookkeeping/qwen-credential-service";
-import { createQwenCredentialRateLimiter } from "../../../../server/recognition/qwen-credential-rate-limiter";
 
 describe("/api/bookkeeping/qwen-credential", () => {
   it("requires the home_inventory_session account before touching credentials", async () => {
@@ -100,6 +99,8 @@ describe("/api/bookkeeping/qwen-credential", () => {
       },
       deleteForTrustedServerUser: async (userId) => rows.delete(userId),
       withUserMutationLock: async (_userId, operation) => operation(database),
+      acquireValidationSlotForTrustedServerUser: async () => true,
+      releaseValidationSlotForTrustedServerUser: async () => undefined,
     };
     const service = createQwenCredentialService({
       database,
@@ -167,17 +168,32 @@ describe("/api/bookkeeping/qwen-credential", () => {
       await release.promise;
       return { ok: true, status: { configured: true, maskedKey: "****1234", lastVerifiedAt: null }, elapsedMs: 1 };
     });
-    const handlers = createQwenCredentialHandlers({
-      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+    let hitCount = 0;
+    let activeCount = 0;
+    service.acquireValidationSlotForUser.mockImplementation(async () => {
+      if (activeCount >= 1 || hitCount >= 1) return false;
+      hitCount += 1;
+      activeCount += 1;
+      return true;
+    });
+    service.releaseValidationSlotForUser.mockImplementation(async () => { activeCount -= 1; });
+    const authService = {
+      getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }),
+    };
+    const workerA = createQwenCredentialHandlers({
+      authService,
       service,
-      rateLimiter: createQwenCredentialRateLimiter({ maxRequests: 1, windowMs: 60_000, maxConcurrent: 1, now: () => 100 }),
+    });
+    const workerB = createQwenCredentialHandlers({
+      authService,
+      service,
     });
 
-    const first = handlers.POST(request("POST"));
-    const concurrent = await handlers.POST(request("POST"));
+    const first = workerA.POST(request("POST"));
+    const concurrent = await workerB.POST(request("POST"));
     release.resolve();
     await first;
-    const limited = await handlers.POST(request("POST"));
+    const limited = await workerB.POST(request("POST"));
 
     expect(concurrent.status).toBe(429);
     expect(limited.status).toBe(429);
@@ -199,6 +215,8 @@ function serviceStub() {
     validateAndSaveForUser: vi.fn(async (): Promise<QwenValidationResult> => ({ ok: true, status, elapsedMs: 5 })),
     validateConnectivityForUser: vi.fn(async (): Promise<QwenValidationResult> => ({ ok: true, status, elapsedMs: 5 })),
     deleteForUser: vi.fn(async () => true),
+    acquireValidationSlotForUser: vi.fn(async () => true),
+    releaseValidationSlotForUser: vi.fn(async () => undefined),
   };
 }
 

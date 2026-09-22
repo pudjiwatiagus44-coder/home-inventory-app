@@ -33,6 +33,19 @@ export type QwenCredentialDatabase = {
     lastVerifiedAt: string,
   ): Promise<StoredQwenCredential | null>;
   deleteForTrustedServerUser(trustedServerUserId: string): Promise<boolean>;
+  acquireValidationSlotForTrustedServerUser(
+    trustedServerUserId: string,
+    requestId: string,
+    startedAt: string,
+    windowMs: number,
+    maxRequests: number,
+    maxConcurrent: number,
+  ): Promise<boolean>;
+  releaseValidationSlotForTrustedServerUser(
+    trustedServerUserId: string,
+    requestId: string,
+    completedAt: string,
+  ): Promise<void>;
   // Implemented by PostgreSQL with a transaction-scoped advisory lock; never replace with a process mutex.
   withUserMutationLock<T>(
     trustedServerUserId: string,
@@ -46,6 +59,7 @@ type Dependencies = {
   now?: () => Date;
   fetchImpl?: typeof fetch;
   validationTimeoutMs?: number;
+  validationRateLimit?: { maxRequests: number; windowMs: number; maxConcurrent: number };
 };
 
 export type QwenValidationCode =
@@ -67,6 +81,7 @@ export function createQwenCredentialService({
   now = () => new Date(),
   fetchImpl = globalThis.fetch,
   validationTimeoutMs = 10_000,
+  validationRateLimit = { maxRequests: 5, windowMs: 10 * 60 * 1000, maxConcurrent: 1 },
 }: Dependencies) {
   const masterKey = parseMasterKey(env.BOOKKEEPING_CREDENTIAL_MASTER_KEY);
 
@@ -87,6 +102,25 @@ export function createQwenCredentialService({
   }
 
   return {
+    async acquireValidationSlotForUser(trustedServerUserId: string, requestId: string): Promise<boolean> {
+      return database.acquireValidationSlotForTrustedServerUser(
+        trustedServerUserId,
+        requestId,
+        now().toISOString(),
+        validationRateLimit.windowMs,
+        validationRateLimit.maxRequests,
+        validationRateLimit.maxConcurrent,
+      );
+    },
+
+    async releaseValidationSlotForUser(trustedServerUserId: string, requestId: string): Promise<void> {
+      await database.releaseValidationSlotForTrustedServerUser(
+        trustedServerUserId,
+        requestId,
+        now().toISOString(),
+      );
+    },
+
     async saveForUser(
       trustedServerUserId: string,
       apiKey: string,

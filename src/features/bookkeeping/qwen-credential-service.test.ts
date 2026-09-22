@@ -12,6 +12,7 @@ const API_KEY = "sk-qwen-secret-account-a-1234";
 
 function database(): QwenCredentialDatabase & { rows: Map<string, StoredQwenCredential> } {
   const rows = new Map<string, StoredQwenCredential>();
+  const validationEvents = new Map<string, Array<{ requestId: string; startedAt: number; completedAt: number | null }>>();
   const lockTails = new Map<string, Promise<void>>();
   const store = {
     rows,
@@ -28,6 +29,28 @@ function database(): QwenCredentialDatabase & { rows: Map<string, StoredQwenCred
       return value;
     }),
     deleteForTrustedServerUser: vi.fn(async (userId: string) => rows.delete(userId)),
+    acquireValidationSlotForTrustedServerUser: async (
+      userId: string,
+      requestId: string,
+      startedAt: string,
+      windowMs: number,
+      maxRequests: number,
+      maxConcurrent: number,
+    ) => {
+      const current = Date.parse(startedAt);
+      const entries = (validationEvents.get(userId) ?? []).filter((event) => current - event.startedAt < windowMs);
+      if (entries.length >= maxRequests || entries.filter((event) => event.completedAt === null && current - event.startedAt < 2 * 60 * 1000).length >= maxConcurrent) {
+        validationEvents.set(userId, entries);
+        return false;
+      }
+      entries.push({ requestId, startedAt: current, completedAt: null });
+      validationEvents.set(userId, entries);
+      return true;
+    },
+    releaseValidationSlotForTrustedServerUser: async (userId: string, requestId: string, completedAt: string) => {
+      const entry = validationEvents.get(userId)?.find((event) => event.requestId === requestId);
+      if (entry) entry.completedAt = Date.parse(completedAt);
+    },
     withUserMutationLock: async <T>(userId: string, operation: (lockedDatabase: QwenCredentialDatabase) => Promise<T>) => {
       const previous = lockTails.get(userId) ?? Promise.resolve();
       let release!: () => void;
@@ -267,6 +290,24 @@ describe("Qwen credential service", () => {
     await Promise.all([put, deletion]);
 
     await expect(service.decryptForProvider("user-a")).resolves.toBeNull();
+  });
+
+  it("enforces one shared validation window across service instances for the same account", async () => {
+    const store = database();
+    const dependencies = {
+      database: store,
+      env: { ...process.env, BOOKKEEPING_CREDENTIAL_MASTER_KEY: MASTER_KEY },
+      validationRateLimit: { maxRequests: 1, windowMs: 60_000, maxConcurrent: 1 },
+      now: () => new Date("2026-09-23T01:00:00.000Z"),
+    };
+    const workerA = createQwenCredentialService(dependencies);
+    const workerB = createQwenCredentialService(dependencies);
+
+    expect(await workerA.acquireValidationSlotForUser("user-a", "request-a")).toBe(true);
+    expect(await workerB.acquireValidationSlotForUser("user-a", "request-b")).toBe(false);
+    await workerA.releaseValidationSlotForUser("user-a", "request-a");
+    expect(await workerB.acquireValidationSlotForUser("user-a", "request-c")).toBe(false);
+    expect(await workerB.acquireValidationSlotForUser("user-b", "request-d")).toBe(true);
   });
 });
 
