@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  consumeAndClearPlaintextBuffer,
   createQwenCredentialService,
   type QwenCredentialDatabase,
   type StoredQwenCredential,
@@ -30,6 +31,21 @@ function database(): QwenCredentialDatabase & { rows: Map<string, StoredQwenCred
 }
 
 describe("Qwen credential service", () => {
+  it("clears decrypted plaintext bytes after successful consumption", () => {
+    const plaintext = Buffer.from("temporary secret");
+    expect(consumeAndClearPlaintextBuffer(plaintext, (bytes) => bytes.toString("utf8")))
+      .toBe("temporary secret");
+    expect(plaintext.every((byte) => byte === 0)).toBe(true);
+  });
+
+  it("clears decrypted plaintext bytes when consumption throws", () => {
+    const plaintext = Buffer.from("temporary secret");
+    expect(() => consumeAndClearPlaintextBuffer(plaintext, () => {
+      throw new Error("consumer failed");
+    })).toThrow("consumer failed");
+    expect(plaintext.every((byte) => byte === 0)).toBe(true);
+  });
+
   it("stores only AES-256-GCM ciphertext and isolates users", async () => {
     const store = database();
     const service = createQwenCredentialService({

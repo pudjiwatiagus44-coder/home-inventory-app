@@ -182,10 +182,28 @@ function decrypt(masterKey: Buffer, stored: StoredQwenCredential): string {
     authTagLength: AUTH_TAG_LENGTH,
   });
   decipher.setAuthTag(stored.tag);
-  return Buffer.concat([
-    decipher.update(stored.ciphertext),
-    decipher.final(),
-  ]).toString("utf8");
+  const decryptedChunk = decipher.update(stored.ciphertext);
+  let finalChunk: Buffer | undefined;
+  try {
+    finalChunk = decipher.final();
+    const plaintextBuffer = Buffer.concat([decryptedChunk, finalChunk]);
+    return consumeAndClearPlaintextBuffer(plaintextBuffer, (plaintext) => plaintext.toString("utf8"));
+  } finally {
+    decryptedChunk.fill(0);
+    finalChunk?.fill(0);
+  }
+}
+
+/** @internal Exposed so zeroing can be verified without relying on garbage collection. */
+export function consumeAndClearPlaintextBuffer<T>(
+  plaintextBuffer: Buffer,
+  consume: (plaintext: Buffer) => T,
+): T {
+  try {
+    return consume(plaintextBuffer);
+  } finally {
+    plaintextBuffer.fill(0);
+  }
 }
 
 function hasSuccessfulValidationContent(payload: unknown): boolean {
