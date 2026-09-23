@@ -38,6 +38,7 @@ export type TextUnderstandingProviders = {
 
 export type TextUnderstandingProviderOptions = {
   doubaoApiKey?: string;
+  qwenApiKey?: string;
   deepseekApiKey?: string;
 };
 
@@ -72,7 +73,7 @@ export function createTextUnderstandingProviders(
       baseUrl: env.DOUBAO_TEXT_BASE_URL,
       fetchImpl,
     })),
-    qwen: createQwenProvider(env, fetchImpl),
+    qwen: createQwenProvider(env, fetchImpl, options.qwenApiKey),
     deepseek: toProvider(createDoubaoBookkeepingClient({
       apiKey: options.deepseekApiKey,
       model: "deepseek-flash",
@@ -82,8 +83,8 @@ export function createTextUnderstandingProviders(
   };
 }
 
-function createQwenProvider(env: NodeJS.ProcessEnv, fetchImpl?: typeof fetch): TextUnderstandingProvider {
-  const apiKey = env.QWEN_API_KEY?.trim();
+function createQwenProvider(env: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, personalApiKey?: string): TextUnderstandingProvider {
+  const apiKey = personalApiKey?.trim() || env.QWEN_API_KEY?.trim();
   const model = env.QWEN_TEXT_MODEL?.trim() || DEFAULT_QWEN_TEXT_MODEL;
   const baseUrl = env.QWEN_TEXT_BASE_URL?.trim();
   if (!apiKey) {

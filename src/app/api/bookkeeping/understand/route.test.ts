@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { createBookkeepingUnderstandHandlers } from "./handlers";
+import type { TextUnderstandingProvider } from "../../../../features/bookkeeping/bookkeeping-understanding-service";
 
 describe("POST /api/bookkeeping/understand", () => {
   it("returns all structured fields", async () => {
@@ -20,7 +21,7 @@ describe("POST /api/bookkeeping/understand", () => {
     }));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, data: [value], model: "doubao-test" });
+    await expect(response.json()).resolves.toEqual({ ok: true, data: [value], model: "doubao-test", provider: "DOUBAO", credentialMode: "PLATFORM" });
     expect(understandOcrText).toHaveBeenCalledOnce();
   });
 
@@ -39,7 +40,7 @@ describe("POST /api/bookkeeping/understand", () => {
       providers: { doubao: deepseekProvider, qwen: deepseekProvider, deepseek: deepseekProvider },
     });
 
-    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK", credentialMode: "PERSONAL" }, true));
 
     expect(response.status).toBe(200);
     expect(deepseek.decryptForProvider).toHaveBeenCalledWith("user-a");
@@ -47,14 +48,14 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(doubaoCredentialService.recordProviderSuccess).not.toHaveBeenCalled();
     expect(doubaoCredentialService.recordProviderFailure).not.toHaveBeenCalled();
     expect(deepseekProvider.understand).toHaveBeenCalledOnce();
-    await expect(response.json()).resolves.toMatchObject({ ok: true, model: "deepseek-flash" });
+    await expect(response.json()).resolves.toMatchObject({ ok: true, model: "deepseek-flash", provider: "DEEPSEEK", credentialMode: "PERSONAL" });
   });
 
   it("maps a DeepSeek text timeout to 504 without mutating a Doubao credential", async () => {
     const doubaoCredentialService = {
       resolveForUser: vi.fn(), recordProviderFailure: vi.fn(), recordProviderSuccess: vi.fn(),
     };
-    const deepseekProvider = { understand: vi.fn(async () => ({ ok: false as const, reason: "timeout" })) };
+    const deepseekProvider: TextUnderstandingProvider = { understand: vi.fn(async () => ({ ok: false as const, reason: "timeout" as const })) };
     const handlers = createBookkeepingUnderstandHandlers({
       authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
       deepseekCredentialService: { decryptForProvider: async () => "sk-user-a-key" },
@@ -62,7 +63,7 @@ describe("POST /api/bookkeeping/understand", () => {
       providers: { doubao: deepseekProvider, qwen: deepseekProvider, deepseek: deepseekProvider },
     });
 
-    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK", credentialMode: "PERSONAL" }, true));
 
     expect(response.status).toBe(504);
     await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_timeout", errorCode: "DEEPSEEK_TIMEOUT" });
@@ -77,10 +78,73 @@ describe("POST /api/bookkeeping/understand", () => {
       deepseekCredentialService: deepseek,
     });
 
-    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK" }, true));
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DEEPSEEK", credentialMode: "PERSONAL" }, true));
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ ok: false, message: "deepseek_credential_not_configured", errorCode: "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" });
+  });
+
+  it("routes Qwen only through the current user's personal key and reports the selected provider", async () => {
+    const qwen = { decryptForProvider: vi.fn(async (userId: string) => userId === "user-a" ? "sk-qwen-user-a" : null) };
+    const other = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("9", "wrong provider")], model: "wrong" })) };
+    const qwenProvider = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("12", "早餐")], model: "qwen3.7-flash" })) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      qwenCredentialService: qwen,
+      providers: { doubao: other, qwen: qwenProvider, deepseek: other },
+    });
+
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "QWEN", credentialMode: "PERSONAL" }, true));
+
+    expect(response.status).toBe(200);
+    expect(qwen.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(qwenProvider.understand).toHaveBeenCalledOnce();
+    expect(other.understand).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ ok: true, provider: "QWEN" });
+  });
+
+  it("returns PERSONAL_API_REQUIRED for an unconfigured Qwen key without trying another provider", async () => {
+    const other = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("9", "不应调用")], model: "wrong" })) };
+    const qwenCredentialService = { decryptForProvider: vi.fn(async () => null) };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      qwenCredentialService,
+      providers: { doubao: other, qwen: other, deepseek: other },
+    });
+    const response = await handlers.POST(request({ ocrText: "午餐 9 元", provider: "QWEN", credentialMode: "PERSONAL" }, true));
+    expect(response.status).toBe(409);
+    expect(qwenCredentialService.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(other.understand).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ errorCode: "PERSONAL_API_REQUIRED" });
+  });
+
+  it("routes Doubao PERSONAL with its own account credential and no other provider", async () => {
+    const doubao = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("12", "早餐")], model: "doubao-personal-model" })) };
+    const other = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("9", "错误服务商")], model: "wrong" })) };
+    const credentialService = {
+      resolveForUser: vi.fn(async () => ({ source: "PERSONAL" as const, apiKey: "ark-user-a-key", revision: "rev-a" })),
+      recordProviderFailure: vi.fn(async () => undefined), recordProviderSuccess: vi.fn(async () => undefined),
+    };
+    const handlers = createBookkeepingUnderstandHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      credentialService,
+      providers: { doubao, qwen: other, deepseek: other },
+    });
+    const response = await handlers.POST(request({ ocrText: "早餐 12 元", provider: "DOUBAO", credentialMode: "PERSONAL" }, true));
+    expect(response.status).toBe(200);
+    expect(credentialService.resolveForUser).toHaveBeenCalledWith("user-a");
+    expect(doubao.understand).toHaveBeenCalledOnce();
+    expect(other.understand).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ provider: "DOUBAO", credentialMode: "PERSONAL", credentialSource: "PERSONAL" });
+  });
+
+  it.each(["QWEN", "DEEPSEEK"])("rejects %s + PLATFORM before invoking any provider", async (provider) => {
+    const other = { understand: vi.fn(async () => ({ ok: true as const, value: [draft("9", "不应调用")], model: "wrong" })) };
+    const handlers = createBookkeepingUnderstandHandlers({ providers: { doubao: other, qwen: other, deepseek: other } });
+    const response = await handlers.POST(request({ ocrText: "午餐 9 元", provider, credentialMode: "PLATFORM" }));
+    expect(response.status).toBe(409);
+    expect(other.understand).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ ok: false, errorCode: "PERSONAL_API_REQUIRED" });
   });
 
   it("rejects blank OCR text", async () => {
@@ -222,6 +286,6 @@ function request(body: unknown, authenticated = false) {
       "Content-Type": "application/json",
       ...(authenticated ? { Cookie: "home_inventory_session=session-token" } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ provider: "DOUBAO", credentialMode: "PLATFORM", ...(body as Record<string, unknown>) }),
   });
 }

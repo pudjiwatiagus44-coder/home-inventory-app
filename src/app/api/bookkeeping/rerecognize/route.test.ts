@@ -9,6 +9,7 @@ const metadata = {
   capturedAt: "2026-09-10T00:00:00.000Z",
   categories: [{ name: "餐饮", type: "EXPENSE", keywords: "吃饭" }],
   provider: "QWEN",
+  credentialMode: "PERSONAL",
 };
 const draft = {
   dateTime: "2026-09-10 08:00", type: "支出", category: "餐饮", amount: "18.00",
@@ -37,7 +38,7 @@ describe("/api/bookkeeping/rerecognize", () => {
     const response = await handlers.POST(request());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, drafts: [draft], provider: "QWEN", model: "qwen3.5-ocr" });
+    await expect(response.json()).resolves.toEqual({ ok: true, drafts: [draft], provider: "QWEN", credentialMode: "PERSONAL", model: "qwen3.5-ocr", credentialSource: "PERSONAL" });
     expect(service.rerecognize).toHaveBeenCalledWith(
       expect.objectContaining({ requestId: metadata.requestId, provider: "QWEN" }),
       expect.any(Buffer),
@@ -46,6 +47,7 @@ describe("/api/bookkeeping/rerecognize", () => {
 
   it("allows DEEPSEEK and injects only the current session's briefly decrypted key", async () => {
     const service = serviceStub();
+    service.rerecognize.mockResolvedValue({ ok: true, drafts: [draft], provider: "DEEPSEEK", model: "deepseek-flash", stage: "vision" } as never);
     const deepseek = { decryptForProvider: vi.fn(async () => "sk-user-a-key") };
     const handlers = createBookkeepingRerecognizeHandlers({
       authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
@@ -59,9 +61,68 @@ describe("/api/bookkeeping/rerecognize", () => {
     expect(service.rerecognize).toHaveBeenCalledWith(expect.objectContaining({ provider: "DEEPSEEK" }), expect.any(Buffer));
   });
 
+  it("uses only the current session's Qwen key for visual rerecognition", async () => {
+    const service = serviceStub();
+    const qwen = { decryptForProvider: vi.fn(async () => "sk-qwen-user-a") };
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      qwenCredentialService: qwen,
+      serviceFactory: vi.fn(() => service),
+    });
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider: "QWEN" }));
+    expect(response.status).toBe(200);
+    expect(qwen.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(service.rerecognize).toHaveBeenCalledOnce();
+  });
+
+  it("requires a personal Qwen key and does not invoke any visual provider when absent", async () => {
+    const service = serviceStub();
+    const qwen = { decryptForProvider: vi.fn(async () => null) };
+    const factory = vi.fn(() => service);
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      qwenCredentialService: qwen,
+      serviceFactory: factory,
+    });
+    const response = await handlers.POST(request());
+    expect(response.status).toBe(409);
+    expect(qwen.decryptForProvider).toHaveBeenCalledWith("user-a");
+    expect(factory).not.toHaveBeenCalled();
+    expect(service.rerecognize).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ errorCode: "PERSONAL_API_REQUIRED" });
+  });
+
+  it("fails closed if a vision service reports a different provider than requested", async () => {
+    const service = serviceStub();
+    service.rerecognize.mockResolvedValue({ ok: true, drafts: [draft], provider: "DEEPSEEK", model: "deepseek-flash", stage: "vision" } as never);
+    const response = await authenticatedHandlers(service).POST(request());
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ ok: false, message: "provider_mismatch", errorCode: "PROVIDER_MISMATCH" });
+  });
+
+  it.each(["QWEN", "DEEPSEEK"])("rejects visual %s + PLATFORM without calling any provider", async (provider) => {
+    const service = serviceStub();
+    const qwen = { decryptForProvider: vi.fn(async () => "sk-qwen-user-a") };
+    const deepseek = { decryptForProvider: vi.fn(async () => "sk-deepseek-user-a") };
+    const factory = vi.fn(() => service);
+    const handlers = createBookkeepingRerecognizeHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+      qwenCredentialService: qwen,
+      deepseekCredentialService: deepseek,
+      serviceFactory: factory,
+    });
+    const response = await handlers.POST(requestWithMetadata({ ...metadata, provider, credentialMode: "PLATFORM" }));
+    expect(response.status).toBe(409);
+    expect(factory).not.toHaveBeenCalled();
+    expect(service.rerecognize).not.toHaveBeenCalled();
+    expect(qwen.decryptForProvider).not.toHaveBeenCalled();
+    expect(deepseek.decryptForProvider).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ errorCode: "PERSONAL_API_REQUIRED" });
+  });
+
   it("returns the stable DeepSeek timeout code without exposing provider details", async () => {
     const service = serviceStub();
-    service.rerecognize.mockResolvedValue({ ok: false, reason: "timeout" });
+    service.rerecognize.mockResolvedValue({ ok: false, reason: "timeout" } as never);
     const handlers = createBookkeepingRerecognizeHandlers({
       authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
       deepseekCredentialService: { decryptForProvider: async () => "sk-user-a-key" },
@@ -81,11 +142,12 @@ describe("/api/bookkeeping/rerecognize", () => {
     ["invalid_response", 502],
   ])("maps %s to HTTP %s without returning a draft", async (reason, status) => {
     const service = serviceStub();
-    service.rerecognize.mockResolvedValue({ ok: false, reason });
+    service.rerecognize.mockResolvedValue({ ok: false, reason } as never);
     const response = await authenticatedHandlers(service).POST(request());
 
     expect(response.status).toBe(status);
-    await expect(response.json()).resolves.toEqual({ ok: false, message: reason });
+    const errorCode = reason === "quota_exhausted" ? "QWEN_QUOTA_EXHAUSTED" : reason === "rate_limit" ? "QWEN_RATE_LIMIT" : reason === "invalid_response" ? "QWEN_INVALID_JSON" : "QWEN_REQUEST_FAILED";
+    await expect(response.json()).resolves.toEqual({ ok: false, message: errorCode.toLowerCase(), errorCode });
   });
 
   it("accepts the newer hierarchical category contract without name", async () => {
@@ -190,6 +252,7 @@ describe("/api/bookkeeping/rerecognize", () => {
 function authenticatedHandlers(service: ReturnType<typeof serviceStub>) {
   return createBookkeepingRerecognizeHandlers({
     authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@example.com" }) },
+    qwenCredentialService: { decryptForProvider: async () => "sk-qwen-user-a" },
     service,
   });
 }

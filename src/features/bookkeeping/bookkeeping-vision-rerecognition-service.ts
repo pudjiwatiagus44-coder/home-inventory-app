@@ -28,12 +28,13 @@ type Dependencies = {
   doubaoApiKey?: string;
   doubaoModel?: PersonalDoubaoModel;
   deepseekApiKey?: string;
+  qwenApiKey?: string;
 };
 
 export function createBookkeepingVisionRerecognitionService(deps: Dependencies = {}) {
   const env = deps.env ?? process.env;
   const visionProviders = {
-    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel, deps.deepseekApiKey),
+    ...createDefaultVisionProviders(env, deps.fetchImpl, deps.doubaoApiKey, deps.doubaoModel, deps.deepseekApiKey, deps.qwenApiKey),
     ...deps.visionProviders,
   };
   return {
@@ -56,6 +57,7 @@ function createDefaultVisionProviders(
   doubaoApiKey?: string,
   doubaoModel?: PersonalDoubaoModel,
   deepseekApiKey?: string,
+  qwenApiKey?: string,
 ) {
   return {
     DOUBAO: createOpenAiVisionProvider({
@@ -65,7 +67,7 @@ function createDefaultVisionProviders(
       fetchImpl,
     }),
     QWEN: createOpenAiVisionProvider({
-      apiKey: env.QWEN_API_KEY,
+      apiKey: qwenApiKey,
       model: env.QWEN_VISION_MODEL ?? "qwen3.5-ocr",
       baseUrl: env.QWEN_VISION_BASE_URL,
       requireBeijingWorkspace: true,

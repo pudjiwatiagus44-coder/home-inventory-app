@@ -11,6 +11,8 @@ import { createPostgresBookkeepingDoubaoCredentialRepository } from "../../../..
 import { createBookkeepingDoubaoCredentialService } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-service";
 import { createDeepSeekCredentialService } from "../../../../features/bookkeeping/deepseek-credential-service";
 import { createPostgresDeepSeekCredentialRepository } from "../../../../features/bookkeeping/deepseek-credential-repository";
+import { createQwenCredentialService } from "../../../../features/bookkeeping/qwen-credential-service";
+import { createPostgresQwenCredentialRepository } from "../../../../features/bookkeeping/qwen-credential-repository";
 
 type CurrentUserAuthService = Pick<ReturnType<typeof createAuthService>, "getCurrentUser">;
 type Service = ReturnType<typeof createBookkeepingVisionRerecognitionService>;
@@ -20,6 +22,7 @@ export type RerecognizeDependencies = {
   serviceFactory?: typeof createBookkeepingVisionRerecognitionService;
   credentialService?: Pick<ReturnType<typeof createBookkeepingDoubaoCredentialService>, "resolveForUser" | "recordProviderFailure" | "recordProviderSuccess">;
   deepseekCredentialService?: Pick<ReturnType<typeof createDeepSeekCredentialService>, "decryptForProvider">;
+  qwenCredentialService?: Pick<ReturnType<typeof createQwenCredentialService>, "decryptForProvider">;
   env?: Record<string, string | undefined>;
 };
 const MAX_BODY_BYTES = 2 * 1024 * 1024 + 64 * 1024;
@@ -36,27 +39,33 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
       }
       const user = await getCurrentUserFromRequest(request, deps.authService).catch(() => null);
       if (!user) return NextResponse.json({ ok: false, message: "Authentication required" }, { status: 401 });
-      let parsed: { input: RerecognitionInput; image: Buffer };
+      let parsed: { input: RerecognitionInput; credentialMode: "PLATFORM" | "PERSONAL"; image: Buffer };
       try {
         parsed = await parseMultipart(request);
       } catch (error) {
         const status = error instanceof BodyTooLargeError ? 413 : 400;
         return NextResponse.json({ ok: false, message: status === 413 ? "Image is too large" : "Invalid rerecognition request" }, { status });
       }
+      if (parsed.input.provider !== "DOUBAO" && parsed.credentialMode !== "PERSONAL") return personalApiRequired();
       let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
       let credentialRevision: string | null = null;
       let credentialService = deps.credentialService;
-      if (!credentialService && user && parsed.input.provider === "DOUBAO") {
-        const client = createPostgresQueryClientFromEnv(deps.env ?? process.env);
-        credentialService = createBookkeepingDoubaoCredentialService({
-          repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
-          env: process.env,
-        });
+      if (!credentialService && user && parsed.input.provider === "DOUBAO" && parsed.credentialMode === "PERSONAL") {
+        try {
+          const client = createPostgresQueryClientFromEnv(deps.env ?? process.env);
+          credentialService = createBookkeepingDoubaoCredentialService({
+            repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
+            env: process.env,
+          });
+        } catch {
+          return NextResponse.json({ ok: false, message: "personal_credential_unavailable", errorCode: "PERSONAL_CREDENTIAL_UNAVAILABLE" }, { status: 503 });
+        }
       }
       let resolvedKey: string | undefined;
       let deepseekApiKey: string | undefined;
+      let qwenApiKey: string | undefined;
       let resolvedModel: "doubao-seed-2-0-mini-260428" | "doubao-seed-2-0-lite-260428" | undefined;
-      if (credentialService && user && parsed.input.provider === "DOUBAO") {
+      if (credentialService && user && parsed.input.provider === "DOUBAO" && parsed.credentialMode === "PERSONAL") {
         let resolved;
         try {
           resolved = await credentialService.resolveForUser(user.userId);
@@ -69,6 +78,7 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
         }
         credentialSource = resolved.source;
         credentialRevision = resolved.revision;
+        if (resolved.source !== "PERSONAL") return personalApiRequired();
         resolvedKey = resolved.source === "PERSONAL" ? resolved.apiKey : undefined;
         const model = "model" in resolved ? resolved.model : null;
         resolvedModel = resolved.source === "PERSONAL" &&
@@ -94,11 +104,33 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
           return deepseekFailure("configuration_missing");
         }
         if (!deepseekApiKey) return deepseekFailure("api_key_missing");
+        credentialSource = "PERSONAL";
+      }
+      if (parsed.input.provider === "QWEN") {
+        let qwenCredentialService = deps.qwenCredentialService;
+        if (!qwenCredentialService) {
+          try {
+            qwenCredentialService = createQwenCredentialService({
+              database: createPostgresQwenCredentialRepository(createPostgresQueryClientFromEnv(deps.env ?? process.env)),
+              env: process.env,
+            });
+          } catch {
+            return qwenFailure("configuration_missing");
+          }
+        }
+        try {
+          qwenApiKey = await qwenCredentialService.decryptForProvider(user.userId) ?? undefined;
+        } catch {
+          return qwenFailure("configuration_invalid");
+        }
+        if (!qwenApiKey) return personalApiRequired();
+        credentialSource = "PERSONAL";
       }
       const service = deps.service ?? (deps.serviceFactory ?? createBookkeepingVisionRerecognitionService)({
         doubaoApiKey: resolvedKey,
         doubaoModel: resolvedModel,
         deepseekApiKey,
+        qwenApiKey,
       });
       const result = await service.rerecognize({ ...parsed.input, signal: request.signal }, parsed.image);
       if (!result.ok) {
@@ -111,13 +143,18 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
           return NextResponse.json({ ok: false, message: result.reason, errorCode: result.reason === "auth_invalid" ? "PERSONAL_AUTH_INVALID" : "PERSONAL_QUOTA_EXHAUSTED", credentialSource }, { status: result.reason === "auth_invalid" ? 401 : 403 });
         }
         if (parsed.input.provider === "DEEPSEEK") return deepseekFailure(result.reason);
+        if (parsed.input.provider === "QWEN") return qwenFailure(result.reason);
         const status = result.reason === "quota_exhausted" ? 403 : result.reason === "rate_limit" ? 429 : 502;
-        return NextResponse.json({ ok: false, message: result.reason, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) }, { status });
+        const errorCode = result.reason === "timeout" ? "DOUBAO_TIMEOUT" : result.reason === "invalid_request" ? "DOUBAO_INVALID_REQUEST" : "DOUBAO_REQUEST_FAILED";
+        return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) }, { status });
+      }
+      if (result.provider !== parsed.input.provider) {
+        return NextResponse.json({ ok: false, message: "provider_mismatch", errorCode: "PROVIDER_MISMATCH" }, { status: 502 });
       }
       if (user && credentialSource === "PERSONAL" && credentialRevision && credentialService) {
         await credentialService.recordProviderSuccess(user.userId, credentialRevision).catch(() => undefined);
       }
-      return NextResponse.json({ ok: true, drafts: result.drafts, provider: result.provider, model: result.model, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) });
+      return NextResponse.json({ ok: true, drafts: result.drafts, provider: parsed.input.provider, credentialMode: parsed.credentialMode, model: result.model, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) });
     },
   };
 }
@@ -151,7 +188,7 @@ async function parseMultipart(request: NextRequest) {
   if (imageBuffer.length > 2 * 1024 * 1024 || imageBuffer.length < 4 ||
       imageBuffer[0] !== 0xff || imageBuffer[1] !== 0xd8 ||
       imageBuffer.at(-2) !== 0xff || imageBuffer.at(-1) !== 0xd9) throw new Error("invalid jpeg");
-  return { input, image: imageBuffer };
+  return { input: input.input, credentialMode: input.credentialMode, image: imageBuffer };
 }
 
 async function readBounded(request: NextRequest) {
@@ -179,15 +216,16 @@ async function readBounded(request: NextRequest) {
   return result;
 }
 
-function parseMetadata(value: unknown): RerecognitionInput {
+function parseMetadata(value: unknown): { input: RerecognitionInput; credentialMode: "PLATFORM" | "PERSONAL" } {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid request");
   const record = value as Record<string, unknown>;
-  const allowed = new Set(["requestId", "ocrText", "capturedAt", "categories", "provider"]);
+  const allowed = new Set(["requestId", "ocrText", "capturedAt", "categories", "provider", "credentialMode"]);
   if (Object.keys(record).some((key) => !allowed.has(key))) throw new Error("unexpected field");
   if (typeof record.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(record.requestId)) throw new Error("invalid requestId");
       if (typeof record.ocrText !== "string" || record.ocrText.length > 12_000) throw new Error("invalid ocrText");
       if (typeof record.capturedAt !== "string" || Number.isNaN(Date.parse(record.capturedAt))) throw new Error("invalid capturedAt");
       if (record.provider !== "DOUBAO" && record.provider !== "QWEN" && record.provider !== "DEEPSEEK") throw new Error("invalid provider");
+      if (record.credentialMode !== "PLATFORM" && record.credentialMode !== "PERSONAL") throw new Error("invalid credential mode");
       if (!Array.isArray(record.categories) || record.categories.length > MAX_CATEGORIES) throw new Error("invalid categories");
       const categories = record.categories.map((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid category");
@@ -215,7 +253,10 @@ function parseMetadata(value: unknown): RerecognitionInput {
         }
         throw new Error("invalid category");
       });
-      return { requestId: record.requestId, ocrText: record.ocrText, capturedAt: record.capturedAt, categories, provider: record.provider };
+      return {
+        input: { requestId: record.requestId, ocrText: record.ocrText, capturedAt: record.capturedAt, categories, provider: record.provider },
+        credentialMode: record.credentialMode,
+      };
 }
 
 function deepseekFailure(reason: string) {
@@ -226,5 +267,27 @@ function deepseekFailure(reason: string) {
   const status = errorCode === "DEEPSEEK_CREDENTIAL_NOT_CONFIGURED" ? 409 :
     errorCode === "DEEPSEEK_AUTH_INVALID" ? 401 :
       errorCode === "DEEPSEEK_TIMEOUT" ? 504 : 502;
+  return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
+}
+
+function personalApiRequired() {
+  return NextResponse.json({ ok: false, message: "personal_api_required", errorCode: "PERSONAL_API_REQUIRED" }, { status: 409 });
+}
+
+function qwenFailure(reason: string) {
+  const errorCode = reason === "api_key_missing" ? "PERSONAL_API_REQUIRED" :
+    reason === "auth_invalid" ? "QWEN_AUTH_INVALID" :
+      reason === "timeout" ? "QWEN_TIMEOUT" :
+        reason === "invalid_request" ? "QWEN_INVALID_REQUEST" :
+          reason === "quota_exhausted" ? "QWEN_QUOTA_EXHAUSTED" :
+            reason === "rate_limit" ? "QWEN_RATE_LIMIT" :
+              reason === "invalid_response" ? "QWEN_INVALID_JSON" :
+          reason === "configuration_missing" || reason === "configuration_invalid" ? "QWEN_PROVIDER_UNAVAILABLE" : "QWEN_REQUEST_FAILED";
+  const status = errorCode === "PERSONAL_API_REQUIRED" ? 409 :
+    errorCode === "QWEN_AUTH_INVALID" ? 401 :
+      errorCode === "QWEN_TIMEOUT" ? 504 :
+        errorCode === "QWEN_INVALID_REQUEST" ? 400 :
+          errorCode === "QWEN_QUOTA_EXHAUSTED" ? 403 :
+            errorCode === "QWEN_RATE_LIMIT" ? 429 : 502;
   return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
 }

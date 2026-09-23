@@ -14,6 +14,8 @@ import { createPostgresBookkeepingDoubaoCredentialRepository } from "../../../..
 import { createBookkeepingDoubaoCredentialService } from "../../../../features/bookkeeping/bookkeeping-doubao-credential-service";
 import { createDeepSeekCredentialService } from "../../../../features/bookkeeping/deepseek-credential-service";
 import { createPostgresDeepSeekCredentialRepository } from "../../../../features/bookkeeping/deepseek-credential-repository";
+import { createQwenCredentialService } from "../../../../features/bookkeeping/qwen-credential-service";
+import { createPostgresQwenCredentialRepository } from "../../../../features/bookkeeping/qwen-credential-repository";
 import { detectSuspectedMultiOrder } from "../../../../server/recognition/multi-order-detection";
 import {
   understandWithFallback,
@@ -37,6 +39,7 @@ export type BookkeepingUnderstandDependencies = {
   providers?: TextUnderstandingProviders;
   credentialService?: Pick<ReturnType<typeof createBookkeepingDoubaoCredentialService>, "resolveForUser" | "recordProviderFailure" | "recordProviderSuccess">;
   deepseekCredentialService?: Pick<ReturnType<typeof createDeepSeekCredentialService>, "decryptForProvider">;
+  qwenCredentialService?: Pick<ReturnType<typeof createQwenCredentialService>, "decryptForProvider">;
 };
 
 const MAX_OCR_TEXT_LENGTH = 12_000;
@@ -64,6 +67,7 @@ export function createBookkeepingUnderstandHandlers(
         amountCandidates?: unknown;
         modelMode?: unknown;
         provider?: unknown;
+        credentialMode?: unknown;
       } | null;
       const ocrText = typeof body?.ocrText === "string" ? body.ocrText.trim() : "";
       if (!ocrText) {
@@ -84,6 +88,12 @@ export function createBookkeepingUnderstandHandlers(
         return NextResponse.json({ ok: false, message: "Invalid amount candidates" }, { status: 400 });
       }
       const currentUser = await getCurrentUserFromRequest(request, dependencies.authService).catch(() => null);
+      const route = parseProviderRoute(body?.provider, body?.credentialMode);
+      if (!route) return routeContractFailure();
+      if (route.provider !== "DOUBAO" && route.credentialMode !== "PERSONAL") return personalApiRequired();
+      if (route.provider === "DOUBAO" && route.credentialMode === "PERSONAL" && !currentUser) {
+        return NextResponse.json({ ok: false, message: "authentication_required", errorCode: "AUTHENTICATION_REQUIRED" }, { status: 401 });
+      }
       let correctionExamples: BookkeepingCorrectionExample[] = [];
       try {
         if (currentUser) {
@@ -95,9 +105,13 @@ export function createBookkeepingUnderstandHandlers(
       } catch {
         console.warn("bookkeeping_feedback_lookup_failed");
       }
-      const modelMode = parseModelMode(body?.modelMode, body?.provider);
+      const modelMode: TextUnderstandingMode = route.provider === "DOUBAO" ? "DOUBAO_ONLY" : route.provider === "QWEN" ? "QWEN_ONLY" : "DEEPSEEK_ONLY";
+      let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
+      let credentialRevision: string | null = null;
       let deepseekApiKey: string | undefined;
-      if (modelMode === "DEEPSEEK_ONLY") {
+      let qwenApiKey: string | undefined;
+      let doubaoApiKey: string | undefined;
+      if (route.provider === "DEEPSEEK") {
         if (!currentUser) {
           return NextResponse.json({ ok: false, message: "Authentication required" }, { status: 401 });
         }
@@ -120,36 +134,58 @@ export function createBookkeepingUnderstandHandlers(
           return deepseekFailure("configuration_missing");
         }
         if (!deepseekApiKey) return deepseekFailure("api_key_missing");
+        credentialSource = "PERSONAL";
       }
-      let credentialSource: "PERSONAL" | "PLATFORM" = "PLATFORM";
-      let credentialRevision: string | null = null;
-      let credentialService = dependencies.credentialService;
-      if (!credentialService && currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY")) {
-        const client = createPostgresQueryClientFromEnv(dependencies.env ?? process.env);
-        credentialService = createBookkeepingDoubaoCredentialService({
-          repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
-          env: process.env,
-        });
-      }
-      let providers = dependencies.providers;
-      if (modelMode === "DEEPSEEK_ONLY" && !providers) {
-        providers = createTextUnderstandingProviders(process.env, undefined, { deepseekApiKey });
-      }
-      if (currentUser && (modelMode === "AUTOMATIC" || modelMode === "DOUBAO_ONLY") && credentialService) {
+      if (route.provider === "QWEN") {
+        if (!currentUser) return NextResponse.json({ ok: false, message: "authentication_required", errorCode: "AUTHENTICATION_REQUIRED" }, { status: 401 });
+        let qwenCredentialService = dependencies.qwenCredentialService;
+        if (!qwenCredentialService) {
+          try {
+            qwenCredentialService = createQwenCredentialService({
+              database: createPostgresQwenCredentialRepository(createPostgresQueryClientFromEnv(dependencies.env ?? process.env)),
+              env: process.env,
+            });
+          } catch {
+            return qwenFailure("configuration_missing");
+          }
+        }
         try {
-          const resolved = await credentialService.resolveForUser(currentUser.userId);
-          credentialSource = resolved.source;
-          credentialRevision = resolved.revision;
-          providers ??= createTextUnderstandingProviders(process.env, undefined, {
-            doubaoApiKey: resolved.source === "PERSONAL" ? resolved.apiKey : undefined,
+          qwenApiKey = await qwenCredentialService.decryptForProvider(currentUser.userId) ?? undefined;
+        } catch {
+          return qwenFailure("configuration_invalid");
+        }
+        if (!qwenApiKey) return personalApiRequired();
+        credentialSource = "PERSONAL";
+      }
+      let credentialService = dependencies.credentialService;
+      if (!credentialService && currentUser && route.provider === "DOUBAO" && route.credentialMode === "PERSONAL") {
+        try {
+          const client = createPostgresQueryClientFromEnv(dependencies.env ?? process.env);
+          credentialService = createBookkeepingDoubaoCredentialService({
+            repository: createPostgresBookkeepingDoubaoCredentialRepository(client),
+            env: process.env,
           });
         } catch {
-          credentialService = undefined;
-          credentialSource = "PLATFORM";
+          return NextResponse.json({ ok: false, message: "personal_credential_unavailable", errorCode: "PERSONAL_CREDENTIAL_UNAVAILABLE" }, { status: 503 });
         }
       }
+      let providers = dependencies.providers;
+      if (route.provider === "DOUBAO" && route.credentialMode === "PERSONAL" && currentUser && credentialService) {
+        try {
+          const resolved = await credentialService.resolveForUser(currentUser.userId);
+          if (resolved.source !== "PERSONAL") return NextResponse.json({ ok: false, message: "personal_api_required", errorCode: "PERSONAL_API_REQUIRED" }, { status: 409 });
+          credentialSource = "PERSONAL";
+          credentialRevision = resolved.revision;
+          doubaoApiKey = resolved.apiKey;
+        } catch {
+          return NextResponse.json({ ok: false, message: "personal_api_required", errorCode: "PERSONAL_API_REQUIRED" }, { status: 409 });
+        }
+      }
+      if (!providers && !(route.provider === "DOUBAO" && route.credentialMode === "PLATFORM" && dependencies.client)) {
+        providers = createTextUnderstandingProviders(process.env, undefined, { doubaoApiKey, qwenApiKey, deepseekApiKey });
+      }
       console.info("bookkeeping understanding started", { modelMode });
-      const recognize = (reviewInstruction?: string) => modelMode !== "DEEPSEEK_ONLY" && dependencies.client
+      const recognize = (reviewInstruction?: string) => route.provider === "DOUBAO" && route.credentialMode === "PLATFORM" && dependencies.client
         ? dependencies.client.understandOcrText(
           ocrText,
           capturedAt,
@@ -170,9 +206,10 @@ export function createBookkeepingUnderstandHandlers(
           return NextResponse.json({ ok: false, message: result.reason, errorCode: result.reason === "auth_invalid" ? "PERSONAL_AUTH_INVALID" : "PERSONAL_QUOTA_EXHAUSTED", credentialSource }, { status: result.reason === "auth_invalid" ? 401 : 403 });
         }
         console.warn("bookkeeping understanding failed", { modelMode, reason: result.reason });
-        if (modelMode === "DEEPSEEK_ONLY") return deepseekFailure(result.reason);
+        if (route.provider === "DEEPSEEK") return deepseekFailure(result.reason);
+        if (route.provider === "QWEN") return qwenFailure(result.reason);
         const status = result.reason === "api_key_missing" ? 501 : 502;
-        return NextResponse.json({ ok: false, message: result.reason }, { status });
+        return NextResponse.json({ ok: false, message: result.reason, errorCode: doubaoErrorCode(result.reason) }, { status });
       }
       let data = Array.isArray(result.value) ? result.value : [result.value];
       const multiOrder = detectSuspectedMultiOrder(ocrText);
@@ -197,17 +234,25 @@ export function createBookkeepingUnderstandHandlers(
       if (currentUser && credentialSource === "PERSONAL" && credentialRevision && credentialService) {
         await credentialService.recordProviderSuccess(currentUser.userId, credentialRevision).catch(() => undefined);
       }
-      return NextResponse.json({ ok: true, data: finalData, model: result.model, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) });
+      return NextResponse.json({ ok: true, data: finalData, model: result.model, provider: route.provider, credentialMode: route.credentialMode, ...(credentialSource === "PERSONAL" ? { credentialSource } : {}) });
     },
   };
 }
 
-function parseModelMode(value: unknown, provider: unknown): TextUnderstandingMode {
-  if (provider === "DEEPSEEK") return "DEEPSEEK_ONLY";
-  return value === "DOUBAO_ONLY" || value === "QWEN_ONLY" || value === "AUTOMATIC"
-    ? value
-    : "AUTOMATIC";
+function parseProviderRoute(provider: unknown, credentialMode: unknown): { provider: "DOUBAO" | "QWEN" | "DEEPSEEK"; credentialMode: "PLATFORM" | "PERSONAL" } | null {
+  if ((provider !== "DOUBAO" && provider !== "QWEN" && provider !== "DEEPSEEK") ||
+      (credentialMode !== "PLATFORM" && credentialMode !== "PERSONAL")) return null;
+  return { provider, credentialMode };
 }
+
+function routeContractFailure() { return NextResponse.json({ ok: false, message: "invalid_provider_route", errorCode: "INVALID_PROVIDER_ROUTE" }, { status: 400 }); }
+function personalApiRequired() { return NextResponse.json({ ok: false, message: "personal_api_required", errorCode: "PERSONAL_API_REQUIRED" }, { status: 409 }); }
+function qwenFailure(reason: string) {
+  const errorCode = reason === "api_key_missing" ? "PERSONAL_API_REQUIRED" : reason === "auth_invalid" ? "QWEN_AUTH_INVALID" : reason === "timeout" ? "QWEN_TIMEOUT" : reason === "invalid_request" ? "QWEN_INVALID_REQUEST" : reason === "configuration_missing" || reason === "configuration_invalid" ? "QWEN_PROVIDER_UNAVAILABLE" : "QWEN_REQUEST_FAILED";
+  const status = errorCode === "PERSONAL_API_REQUIRED" ? 409 : errorCode === "QWEN_AUTH_INVALID" ? 401 : errorCode === "QWEN_TIMEOUT" ? 504 : errorCode === "QWEN_INVALID_REQUEST" ? 400 : 502;
+  return NextResponse.json({ ok: false, message: errorCode.toLowerCase(), errorCode }, { status });
+}
+function doubaoErrorCode(reason: string) { return reason === "timeout" ? "DOUBAO_TIMEOUT" : reason === "api_key_missing" ? "DOUBAO_PROVIDER_UNAVAILABLE" : "DOUBAO_REQUEST_FAILED"; }
 
 function normalizeCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
   if (!Array.isArray(value)) return [];

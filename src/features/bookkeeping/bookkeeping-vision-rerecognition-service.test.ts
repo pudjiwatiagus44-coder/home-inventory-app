@@ -165,11 +165,11 @@ describe("bookkeeping vision rerecognition service", () => {
     }) as unknown as typeof fetch;
     const workspaceUrl = "https://ws-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
     const service = createBookkeepingVisionRerecognitionService({
+      qwenApiKey: "server-only-test-key",
       env: {
-        QWEN_API_KEY: "server-only-test-key",
         QWEN_TEXT_BASE_URL: workspaceUrl,
         QWEN_VISION_BASE_URL: workspaceUrl,
-      } as NodeJS.ProcessEnv,
+      } as unknown as NodeJS.ProcessEnv,
       fetchImpl,
     });
 
@@ -190,10 +190,10 @@ describe("bookkeeping vision rerecognition service", () => {
     }) as unknown as typeof fetch;
     const workspaceUrl = "https://ws-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
     const service = createBookkeepingVisionRerecognitionService({
+      qwenApiKey: "server-only-test-key",
       env: {
-        QWEN_API_KEY: "server-only-test-key",
         QWEN_VISION_BASE_URL: workspaceUrl,
-      } as NodeJS.ProcessEnv,
+      } as unknown as NodeJS.ProcessEnv,
       fetchImpl,
     });
 
@@ -221,7 +221,8 @@ describe("bookkeeping vision rerecognition service", () => {
   it("rejects an empty JSON array from the vision model", async () => {
     const workspaceUrl = "https://ws-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
     const service = createBookkeepingVisionRerecognitionService({
-      env: { QWEN_API_KEY: "key", QWEN_VISION_BASE_URL: workspaceUrl } as NodeJS.ProcessEnv,
+      qwenApiKey: "key",
+      env: { QWEN_VISION_BASE_URL: workspaceUrl } as unknown as NodeJS.ProcessEnv,
       fetchImpl: vi.fn(async () => new Response(JSON.stringify({
         choices: [{ message: { content: "[]" } }],
       }), { status: 200 })) as unknown as typeof fetch,
@@ -255,12 +256,12 @@ describe("bookkeeping vision rerecognition service", () => {
     const workspaceUrl = "https://ws-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
     const service = createBookkeepingVisionRerecognitionService({
       textProviders: { QWEN: vi.fn(async () => ({ ok: false, reason: "invalid_response" })) },
+      qwenApiKey: "server-only-test-key",
       env: {
-        QWEN_API_KEY: "server-only-test-key",
         QWEN_TEXT_BASE_URL: workspaceUrl,
         QWEN_VISION_BASE_URL: workspaceUrl,
         QWEN_VISION_MODEL: "unapproved-model",
-      } as NodeJS.ProcessEnv,
+      } as unknown as NodeJS.ProcessEnv,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -276,7 +277,8 @@ function jpeg() {
 function qwenFetchService(content: string) {
   const workspaceUrl = "https://ws-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions";
   return createBookkeepingVisionRerecognitionService({
-    env: { QWEN_API_KEY: "key", QWEN_VISION_BASE_URL: workspaceUrl } as NodeJS.ProcessEnv,
+    qwenApiKey: "key",
+    env: { QWEN_VISION_BASE_URL: workspaceUrl } as unknown as NodeJS.ProcessEnv,
     fetchImpl: vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content } }],
     }), { status: 200 })) as unknown as typeof fetch,
