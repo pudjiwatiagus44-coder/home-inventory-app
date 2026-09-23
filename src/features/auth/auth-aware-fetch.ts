@@ -6,38 +6,30 @@ type FetchLike = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-type SessionEventTarget = {
-  addEventListener(type: string, listener: EventListener): void;
-  removeEventListener(type: string, listener: EventListener): void;
-};
-
 export function setupSelfHostedSessionLifecycle({
   enabled,
-  fetchImpl,
-  browserWindow,
-  replace,
+  fetchImpl = globalThis.fetch,
 }: {
   enabled: boolean;
-  fetchImpl: FetchLike;
-  browserWindow: SessionEventTarget;
-  replace: (href: string) => void;
+  fetchImpl?: FetchLike;
 }) {
   if (!enabled) {
     return () => undefined;
   }
 
   const refreshSession = () => {
-    void fetchImpl("/api/auth/session", { method: "POST" }).catch(() => undefined);
+    void authAwareFetch(
+      "/api/auth/session",
+      { method: "POST" },
+      fetchImpl,
+    ).catch(() => undefined);
   };
-  const handleSessionExpired = () => replace("/login?expired=1");
 
   refreshSession();
   const interval = setInterval(refreshSession, SESSION_REFRESH_INTERVAL_MS);
-  browserWindow.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
 
   return () => {
     clearInterval(interval);
-    browserWindow.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   };
 }
 

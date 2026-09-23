@@ -7,22 +7,20 @@ import {
   SESSION_EXPIRED_EVENT,
   setupSelfHostedSessionLifecycle,
 } from "../auth/auth-aware-fetch";
+import { setupAuthSessionExpiryListener } from "../auth/AuthSessionExpiryBoundary";
 
 describe("AppDashboard location actions", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("refreshes the self-hosted session immediately and every 24 hours", async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
-    const browserWindow = new EventTarget();
-
     const cleanup = setupSelfHostedSessionLifecycle({
       enabled: true,
       fetchImpl,
-      browserWindow,
-      replace: vi.fn(),
     });
 
     expect(fetchImpl).toHaveBeenCalledWith("/api/auth/session", { method: "POST" });
@@ -31,25 +29,25 @@ describe("AppDashboard location actions", () => {
     cleanup();
   });
 
-  it("redirects on expiry and removes timers and listeners on cleanup", async () => {
+  it("sends a refresh 401 through the global boundary and clears its timer", async () => {
     vi.useFakeTimers();
-    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 401 }));
     const replace = vi.fn();
     const browserWindow = new EventTarget();
+    vi.stubGlobal("window", browserWindow);
+    const cleanupBoundary = setupAuthSessionExpiryListener(browserWindow, replace);
     const cleanup = setupSelfHostedSessionLifecycle({
       enabled: true,
       fetchImpl,
-      browserWindow,
-      replace,
     });
 
-    browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    await Promise.resolve();
     expect(replace).toHaveBeenCalledWith("/login?expired=1");
     cleanup();
-    browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
     expect(replace).toHaveBeenCalledOnce();
     expect(fetchImpl).toHaveBeenCalledOnce();
+    cleanupBoundary();
   });
 
   it("does not refresh or listen on the Supabase-compatible path", () => {
@@ -59,8 +57,6 @@ describe("AppDashboard location actions", () => {
     const cleanup = setupSelfHostedSessionLifecycle({
       enabled: false,
       fetchImpl,
-      browserWindow,
-      replace,
     });
 
     browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));

@@ -247,11 +247,8 @@ export function AppDashboard({
   useEffect(() => {
     return setupSelfHostedSessionLifecycle({
       enabled: Boolean(selfHostedUser),
-      fetchImpl: fetch,
-      browserWindow: window,
-      replace: (href) => router.replace(href),
     });
-  }, [router, selfHostedUser]);
+  }, [selfHostedUser]);
 
   const loadDashboard = useCallback(
     async (shouldUpdate: () => boolean = () => true) => {
