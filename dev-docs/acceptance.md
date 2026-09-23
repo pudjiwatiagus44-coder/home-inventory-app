@@ -1076,19 +1076,14 @@
 - 新服务部署提交为 `f3046ba`，systemd 状态为 active，最近 10 分钟错误级日志为 0；构建路由包含 `/api/bookkeeping/deepseek-credential`。
 - 一次性账号 smoke 完成 PUT 加密保存（200）、GET 掩码读取（200）、随机假 Key 上游验证返回脱敏的 `DEEPSEEK_AUTH_INVALID`（401）、DELETE 删除（200）。测试账号和凭据记录随后均清理为 0；未使用、读取或记录真实用户 DeepSeek Key。
 
-## 2026-09-23 记账全模型重新识别兼容修复部署（阻塞，线上未更新）
+## 2026-09-23 记账全模型重新识别兼容修复部署（已部署）
 
-- 根因：当前 Android multipart 元数据必带 `credentialMode`；上一部署服务端的字段 allowlist 不接受该字段，因此豆包、千问、DeepSeek 均会在模型调用前失败。服务端本地 `3439c5a` 已显式解析该字段并按 provider/credentialMode 路由。
-- 用户于 2026-09-23 回复“继续”，授权先备份，再应用两份新增千问凭据/限流表 migration、部署服务端并重启；不授权真机 API Key 验证、真实订单图像访问/上传或无关业务变更。
-- 数据库备份：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`（192789 字节，`pg_restore --list` 成功，191 个目录项）。数据库迁移未执行。
-- 新 staging 目录 `.../home-inventory-app-release-3439c5a-20260923T052425Z` 的 `npm run build` 超过 11 分钟无输出；本机 SSH 控制通道已中止。之后 SSH banner 与 HTTPS smoke 超时，22/80/443 TCP 连通。远端残留构建进程、systemd 原服务状态、网站可用性均未验证。
-- 应用目录没有切换，原目录及 PostgreSQL 未被迁移命令改动；未发送真实订单图像、OCR 文本或个人 API Key。数据库备份与新 staging 均保留。
-- 用户随后明确同意重启阿里云实例；但 SSH 仍在 banner exchange 超时，本机未发现 Aliyun CLI 或可用的阿里云环境凭据，控制台浏览器自动化会话初始化失败，因此重启尚未执行。
-- 用户随后告知已重启实例；重启后 SSH 登录成功，旧 systemd 服务为 active，PostgreSQL 为 accepting connections，内存可用约 1.1 GiB、swap 可用 2.0 GiB，磁盘可用约 9.8 GiB。重启后重新在 staging 运行 Next.js production build，仍停在 `Creating an optimized production build ...` 数分钟无输出，随后 SSH/HTTPS 管理请求再次超时；22 端口 TCP 仍通。远端 build 和线上服务此刻状态未知，数据库仍未迁移、应用目录仍未切换。
-- 下一步：实例管理连接再次恢复后不要在服务器重复构建；改用本地已验证构建产物上传，先检查并清理 staging 残留进程，确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
-
-## 2026-09-23 记账全模型重新识别兼容修复部署（执行中）
-
-- 根因：当前 Android multipart 元数据必带 `credentialMode`；上一部署服务端的字段 allowlist 不接受该字段，因此豆包、千问、DeepSeek 均会在模型调用前失败。服务端本地 `3439c5a` 已显式解析该字段并按 provider/credentialMode 路由。
-- 用户于 2026-09-23 回复“继续”，授权先备份，再应用两份新增千问凭据/限流表 migration、部署服务端并重启；不授权真机 API Key 验证、真实订单图像访问/上传或无关业务变更。
-- 备份可读性、migration 结果、构建和重启状态、路由 smoke 及回滚路径待执行后填写；在取得证据前不能标记部署完成。
+- 根因：Android multipart 元数据必带 `credentialMode`；旧服务端 allowlist 不接受该字段，豆包、千问、DeepSeek 请求均会在模型调用前失败。服务端 `3439c5a` 已兼容 provider/credentialMode；`a5f98aa` 加强文本理解请求校验。
+- 用户授权先备份、执行新增千问表 migration、部署和服务重启；未授权真实订单图像/OCR、真实个人 API Key、真机或无关业务变更。
+- 数据库备份 `/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`：192789 字节，SHA-256 `919c61d25d8b62238302297128dbedbb6f702dbd5988f591b168cd9a7e065be6`，`pg_restore --list` 成功（191 个目录项）。
+- 已应用 `bookkeeping_qwen_credentials` 和 `bookkeeping_qwen_credential_rate_limits` 两份加表 migration；PostgreSQL 返回两次 `CREATE TABLE`、`CREATE INDEX`、`GRANT`，无破坏性表操作。
+- 阿里云小内存实例上的 staging 构建会反复卡住并导致 SSH/HTTPS 管理请求超时。改为上传本地已验证的 Next.js 构建产物（Build ID `Lc4ed1o-QEoqQ4y_YllpD`），不再在服务器构建。部署代码目录 `/opt/home-inventory-app`；上一版完整保留于 `/opt/home-inventory-app-backup-before-recognition-20260923T1835Z`。数据库备份及此目录是回滚材料。
+- 部署前确认 `data/` 与旧目录一致；`public/` 文件名/大小清单一致，最新 APK 逐字节相同，21 个静态文件均保留。当前 systemd 服务 `active`，工作目录正确，Next.js Ready；PostgreSQL 接受连接。
+- 线上无登录 smoke：`/login` 返回 200；`/api/bookkeeping/rerecognize` 与 `/api/bookkeeping/understand` 的 GET 返回预期 405；`/api/bookkeeping/qwen-credential` 未登录返回 401。没有发送模型请求、真实订单内容或 API Key。
+- 另以合成文本 `smoke` 对 `/api/bookkeeping/understand` 分别发送 DOUBAO/QWEN/DEEPSEEK + `credentialMode=PERSONAL` 的未登录请求，三者均返回 401 Unauthorized，表明请求合同/路由可解析并在模型调用前执行登录门禁；该请求未触发上游模型。
+- 已验证服务端本地测试 85 个文件、615 项通过、5 项跳过；本地 production build 成功。未验证：真实用户登录后各模型文本/图像识别端到端结果。此轮只部署服务器，没有改动或发布 Android APK。

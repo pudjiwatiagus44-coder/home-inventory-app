@@ -194,14 +194,15 @@ Vercel 只配置 public client 所需变量：
 - 内测 APK：`https://homestorag.xyz/apk/home-inventory-internal-latest.apk`，SHA-256 为 `3f6af79a3b4979d207541d9430c306c2ba34c33f75ef09d74aeb6062c3f44996`，大小 `155658091` 字节。
 - 个人 Key 的真实文本/视觉调用、跨账号隔离和荣耀 90 真机操作仍标记为“未验证”。
 
-## 2026-09-23 记账全模型重新识别兼容修复（等待服务器恢复，尚未部署）
+## 2026-09-23 记账全模型重新识别兼容修复（已部署）
 
 - 用户反馈豆包、千问、DeepSeek 均重新识别失败。代码对照确认 Android 请求新增 `credentialMode` 字段，而旧服务端 allowlist 不接受该字段，会在调用模型前统一返回 400；兼容 parser 已在本地服务端提交 `3439c5a`。
 - 用户回复“继续”，授权本轮在阿里云 `homestorag.xyz` 服务先备份，再应用千问凭据及限流新表迁移、构建并重启记账服务，最后仅执行不登录、不带真实订单内容的路由/页面 smoke。
 - 授权不包含读取/上传真实订单图像、查看或改动真实用户 API Key、真机连接、APK 安装或无关业务发布。
-- PostgreSQL 备份已完成：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`，192789 字节，`pg_restore --list` 读取成功；尚未执行 migration。
-- 新 release staging 构建超过 11 分钟没有输出，停止本地 SSH 控制通道后远端管理 SSH 与 HTTPS 请求均超时；22/80/443 TCP 探测仍成功。应用目录未切换，原服务后续状态未验证。
-- 用户已明确同意整机重启，但 SSH 仍超时、本机无 Aliyun CLI/API 凭据且控制台自动化不可用，故重启尚未执行。需恢复/提供阿里云控制台或 API 管理通道，或由用户在控制台重启并告知；恢复后先查明并停止残留构建进程、确认原服务和数据库状态，再继续。
+- PostgreSQL 备份：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`，192789 字节，SHA-256 `919c61d25d8b62238302297128dbedbb6f702dbd5988f591b168cd9a7e065be6`，`pg_restore --list` 读取成功。两份 Qwen 新表及索引 migration 已执行。
+- 服务端代码包含 `3439c5a` 的 provider/credentialMode 兼容和 `a5f98aa` 的请求校验；本地构建产物 Build ID `Lc4ed1o-QEoqQ4y_YllpD` 上传到新 release 后已切换。服务器端 Next build 曾多次卡住，最终绕过服务器构建。
+- 当前服务 `home-inventory-app` 为 active，Next.js 启动 Ready，数据库正常；旧应用完整保留在 `/opt/home-inventory-app-backup-before-recognition-20260923T1835Z`。`/login` 返回 200，重新识别/理解 GET 返回 405，未登录千问凭据 GET 返回 401。
+- 没有读取或上传真实订单图像/OCR、没有触发模型 API 请求、没有访问或更改真实个人 API Key，也没有发布 Android APK。真实用户登录后的模型端到端识别仍待验证。
 
 ## Android 内测 APK 托管与自动更新
 

@@ -5,7 +5,7 @@
 - 2026-09-23：用户已确认在 Android 记账 App 中增加“豆包 / 千问 / DeepSeek”显式单选及各自的个人 API 管理。本文件记录服务器侧千问凭据与请求路由合同。
 - 原状态要求生产数据库备份/迁移、服务部署和重启另行确认；2026-09-23 用户针对全模型重新识别失败回复“继续”，已明确授权本轮先备份，再应用所需千问表迁移并部署当前已验证的服务端识别合同修复。授权仅限记账凭据/识别路由，不包括无关业务、读取/处理真实订单图像或真机 API Key 配置。
 - 本设计只作用于记账 `bookkeeping_*` 凭据与识别端点，不改变库存、家庭共享、认证核心或其他业务接口。
-- 本地凭据与 API 服务、显式 provider 路由及输入校验已实现并完成目标测试/lint。生产迁移尚未执行。2026-09-23 部署预构建时阿里云实例随后对 SSH/HTTP(S) 无响应，当前须先恢复实例管理连接；未经用户进一步确认，不执行整机重启。
+- 本地凭据与 API 服务、显式 provider 路由及输入校验已实现并完成目标测试/lint。2026-09-23 数据库备份后已执行 Qwen 凭据/限流表 migration，并部署兼容 provider/credentialMode 的服务端代码；服务器构建反复卡住，最终改用本地已验证 build 输出。
 
 ## 账号与密钥边界
 
@@ -60,5 +60,5 @@
 - 服务端全量 Vitest：85 个测试文件通过，615 项通过、5 项跳过。`npm run build` 成功。
 - 本轮未向进程提供数据库连接环境变量，因此没有连接真实或隔离 PostgreSQL；数据库 migration、并发集成验证以及生产部署均仍为未验证。
 - `tsconfig.tsbuildinfo` 是工作区既有未提交修改，不属于本功能变更。
-- 全 provider 重试失败诊断：当前 Android 重新识别 multipart `request` 必含 `credentialMode`；旧服务端 parser 的 allowlist 仅包含 `provider` 而不接受 `credentialMode`，会在路由 provider 调用前返回 400。兼容 parser 已在 `3439c5a` 更新；生产/阿里云服务尚未更新，须本轮按用户授权部署。自动视觉兜底对截屏/相册最多执行一次，失败后不循环。
-- 2026-09-23 部署尝试：数据库备份 `/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump` 已完成并经 `pg_restore --list` 验证；未执行 migration、未切换应用目录。新发布目录构建超过 11 分钟无输出后本机 SSH 通道被中止；此后远端 SSH banner 与 HTTPS smoke 均超时，TCP 端口仍可建立连接，远端构建是否停止/旧服务是否仍 active 未验证。待用户确认是否允许阿里云实例重启恢复管理连接，再继续部署。
+- 全 provider 重试失败诊断与修复：当前 Android 重新识别 multipart `request` 必含 `credentialMode`；旧服务端 parser 的 allowlist 仅包含 `provider` 而不接受该字段，会在模型调用前返回 400。兼容 parser `3439c5a` 已部署；自动视觉兜底对截屏/相册最多执行一次，失败后不循环。
+- 2026-09-23 部署结果：数据库备份 `/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump` 已验证，新增 Qwen 凭据和限流表 migration 已执行。使用 Build ID `Lc4ed1o-QEoqQ4y_YllpD` 的本地 build 输出部署，systemd `home-inventory-app` active，页面/API 路由 smoke 正常；旧应用保留为 `/opt/home-inventory-app-backup-before-recognition-20260923T1835Z`。未调用模型 API、未上传真实交易内容或 API Key。已部署合同修复但真实登录后的模型识别端到端仍未验证；本次未发布 Android APK。
