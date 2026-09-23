@@ -1099,6 +1099,15 @@
 - 另以合成文本 `smoke` 对 `/api/bookkeeping/understand` 分别发送 DOUBAO/QWEN/DEEPSEEK + `credentialMode=PERSONAL` 的未登录请求，三者均返回 401 Unauthorized，表明请求合同/路由可解析并在模型调用前执行登录门禁；该请求未触发上游模型。
 - 已验证服务端本地测试 85 个文件、615 项通过、5 项跳过；本地 production build 成功。未验证：真实用户登录后各模型文本/图像识别端到端结果。此轮只部署服务器，没有改动或发布 Android APK。
 
+## 2026-09-24 长期登录与登录失效交互部署证据
+
+- 用户授权发布本轮长期登录与登录失效处理。服务端部署使用本地已验证的 Next.js 构建产物（Build ID `w-tYAAzKgT2ZPVnSsYcQy`），未在小内存服务器构建；旧应用目录保留为 `/opt/home-inventory-app-release-session-auth-20260924T073100Z`，可用于代码回滚。
+- 部署前创建 PostgreSQL 自定义格式备份 `/opt/home-inventory-backups/session-auth-20260924T073100Z/home_inventory_test.dump`（199,811 字节），并以 `pg_restore --list` 校验可读取；本轮没有数据库 migration。
+- 服务端切换后 `home-inventory-app.service` 为 `active`；公网 `https://homestorag.xyz/login` 返回 200；未登录 `POST /api/auth/session` 返回预期 401 `Authentication required`，证明新增会话续期路由已上线并保留登录门禁；最近 10 分钟 journal 错误级日志为 0。
+- Android 内测 APK 已构建并上传为 `0.5.34 / code 40`，大小 20,262,335 字节；`/apk/version.json` 返回相同版本/大小，APK 下载返回 200；服务器 APK SHA-256 与本地构建均为 `0cb27223c9ef98a9e2c22dc54940d01d182e9df2ce165b2de65273f90e89868c`。
+- 本地验证：精确排除 4 个本机 PostgreSQL 不可用的 integration 套件后，Vitest 86 个文件 / 631 项通过；`npx eslint src` 为 0 errors（8 条既有 warning）；`npm run build` 通过；Android `testDebugUnitTest` 与 `assembleDebug` 通过。
+- 未验证：真实账号重新登录后长期会话续期、撤销/密码重置后的 Web 与 Android 自动回登录、以及真机更新提示与新 APK 安装。未发送真实模型请求、未读取或记录真实用户密码、Cookie、API Key 或订单内容。
+
 ## 2026-09-24 长期登录与登录失效交互本地实施证据
 
 状态：本地实现与自动化验证完成；真实 PostgreSQL、浏览器点击、生产部署和 APK 发布均未执行。
