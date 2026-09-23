@@ -159,6 +159,38 @@ describe("POST /api/bookkeeping/understand", () => {
     expect(response.status).toBe(413);
   });
 
+  it("rejects a JSON body whose declared Content-Length exceeds the bounded limit before recognition", async () => {
+    const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "unused" }));
+    const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
+    const response = await handlers.POST(rawRequest(JSON.stringify({ ocrText: "午餐 12 元" }), {
+      "Content-Length": String(256 * 1024 + 1),
+    }));
+    expect(response.status).toBe(413);
+    expect(understandOcrText).not.toHaveBeenCalled();
+  });
+
+  it("rejects a JSON stream that exceeds the bounded limit even without an oversized length header", async () => {
+    const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "unused" }));
+    const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
+    const oversized = JSON.stringify({ ocrText: "x".repeat(256 * 1024) });
+    const response = await handlers.POST(rawRequest(oversized));
+    expect(response.status).toBe(413);
+    expect(understandOcrText).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown top-level fields and malformed categories without calling the provider", async () => {
+    const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "unused" }));
+    const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
+    const unexpected = await handlers.POST(request({ ocrText: "午餐 12 元", debug: true }));
+    expect(unexpected.status).toBe(400);
+    const invalidCategory = await handlers.POST(request({
+      ocrText: "午餐 12 元",
+      categories: [{ name: "餐饮", type: "Expense", keywords: "午餐", unexpected: "must reject" }],
+    }));
+    expect(invalidCategory.status).toBe(400);
+    expect(understandOcrText).not.toHaveBeenCalled();
+  });
+
   it("accepts the newer hierarchy contract and normalizes childName before recognition", async () => {
     const understandOcrText = vi.fn(async () => ({ ok: true as const, value: [], model: "doubao-test" }));
     const handlers = createBookkeepingUnderstandHandlers({ client: { understandOcrText } });
@@ -287,5 +319,13 @@ function request(body: unknown, authenticated = false) {
       ...(authenticated ? { Cookie: "home_inventory_session=session-token" } : {}),
     },
     body: JSON.stringify({ provider: "DOUBAO", credentialMode: "PLATFORM", ...(body as Record<string, unknown>) }),
+  });
+}
+
+function rawRequest(body: string, extraHeaders: Record<string, string> = {}) {
+  return new NextRequest("http://localhost/api/bookkeeping/understand", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...extraHeaders },
+    body,
   });
 }

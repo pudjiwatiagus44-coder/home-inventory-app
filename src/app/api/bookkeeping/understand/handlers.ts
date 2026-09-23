@@ -43,6 +43,10 @@ export type BookkeepingUnderstandDependencies = {
 };
 
 const MAX_OCR_TEXT_LENGTH = 12_000;
+const MAX_UNDERSTAND_BODY_BYTES = 256 * 1024;
+const ALLOWED_UNDERSTAND_FIELDS = new Set([
+  "ocrText", "capturedAt", "categories", "amountCandidates", "modelMode", "provider", "credentialMode",
+]);
 
 export function createBookkeepingUnderstandHandlers(
   dependencies: BookkeepingUnderstandDependencies = {},
@@ -60,15 +64,18 @@ export function createBookkeepingUnderstandHandlers(
         return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
       }
 
-      const body = await request.json().catch(() => null) as {
-        ocrText?: unknown;
-        capturedAt?: unknown;
-        categories?: unknown;
-        amountCandidates?: unknown;
-        modelMode?: unknown;
-        provider?: unknown;
-        credentialMode?: unknown;
-      } | null;
+      let body: Record<string, unknown> | null;
+      try {
+        body = await readBoundedJsonObject(request);
+      } catch (error) {
+        return NextResponse.json(
+          { ok: false, message: error instanceof BodyTooLargeError ? "Request body is too large" : "Invalid request body" },
+          { status: error instanceof BodyTooLargeError ? 413 : 400 },
+        );
+      }
+      if (!body || Object.keys(body).some((key) => !ALLOWED_UNDERSTAND_FIELDS.has(key))) {
+        return NextResponse.json({ ok: false, message: "Invalid request fields" }, { status: 400 });
+      }
       const ocrText = typeof body?.ocrText === "string" ? body.ocrText.trim() : "";
       if (!ocrText) {
         return NextResponse.json({ ok: false, message: "OCR text is required" }, { status: 400 });
@@ -77,10 +84,22 @@ export function createBookkeepingUnderstandHandlers(
         return NextResponse.json({ ok: false, message: "OCR text is too long" }, { status: 413 });
       }
 
-      const capturedAt = typeof body?.capturedAt === "string" && body.capturedAt.trim()
+      if (body.capturedAt !== undefined && (typeof body.capturedAt !== "string" || body.capturedAt.length > 100 || Number.isNaN(Date.parse(body.capturedAt)))) {
+        return NextResponse.json({ ok: false, message: "Invalid capturedAt" }, { status: 400 });
+      }
+      if (body.modelMode !== undefined && body.modelMode !== "AUTOMATIC" && body.modelMode !== "DOUBAO_ONLY" &&
+          body.modelMode !== "QWEN_ONLY" && body.modelMode !== "DEEPSEEK_ONLY") {
+        return NextResponse.json({ ok: false, message: "Invalid modelMode" }, { status: 400 });
+      }
+      const capturedAt = typeof body.capturedAt === "string" && body.capturedAt.trim()
         ? body.capturedAt.trim()
         : new Date().toISOString();
-      const categories = normalizeCategoryContracts(body?.categories);
+      let categories: BookkeepingCategoryContext[];
+      try {
+        categories = parseCategoryContracts(body.categories);
+      } catch {
+        return NextResponse.json({ ok: false, message: "Invalid categories" }, { status: 400 });
+      }
       let amountCandidates: PaymentAmountCandidate[];
       try {
         amountCandidates = parsePaymentAmountCandidates(body?.amountCandidates);
@@ -254,16 +273,76 @@ function qwenFailure(reason: string) {
 }
 function doubaoErrorCode(reason: string) { return reason === "timeout" ? "DOUBAO_TIMEOUT" : reason === "api_key_missing" ? "DOUBAO_PROVIDER_UNAVAILABLE" : "DOUBAO_REQUEST_FAILED"; }
 
-function normalizeCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+function parseCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 200) throw new Error("invalid_categories");
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid_category");
     const category = item as Record<string, unknown>;
-    if (typeof category.type !== "string" || typeof category.keywords !== "string") return [];
-    const name = typeof category.childName === "string" ? category.childName.trim() :
-      typeof category.name === "string" ? category.name.trim() : "";
-    return name ? [{ name, type: category.type.trim(), keywords: category.keywords.trim() }] : [];
+    const keys = Object.keys(category).sort().join(",");
+    if (keys === "keywords,name,type") {
+      if (typeof category.name !== "string" || typeof category.type !== "string" || typeof category.keywords !== "string" ||
+          category.name.length > 100 || category.type.length > 30 || category.keywords.length > 500 || !category.name.trim()) {
+        throw new Error("invalid_category");
+      }
+      return { name: category.name.trim(), type: category.type.trim(), keywords: category.keywords.trim() };
+    }
+    if (keys === "childName,description,keywords,parentName,stableKey,type" ||
+        keys === "childName,description,keywords,name,parentName,stableKey,type") {
+      const { childName, description, keywords, name, parentName, stableKey, type } = category;
+      if (typeof childName !== "string" || typeof description !== "string" || typeof keywords !== "string" ||
+          typeof parentName !== "string" || typeof stableKey !== "string" || typeof type !== "string" ||
+          childName.length > 100 || description.length > 500 || keywords.length > 500 ||
+          parentName.length > 100 || stableKey.length > 120 || type.length > 30 || !childName.trim() ||
+          (name !== undefined && (typeof name !== "string" || name.length > 100))) {
+        throw new Error("invalid_category");
+      }
+      return { name: childName.trim(), type: type.trim(), keywords: keywords.trim() };
+    }
+    throw new Error("invalid_category");
   });
+}
+
+class BodyTooLargeError extends Error {}
+
+async function readBoundedJsonObject(request: NextRequest): Promise<Record<string, unknown> | null> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null) {
+    if (!/^\d+$/.test(contentLength)) throw new Error("invalid_content_length");
+    if (Number(contentLength) > MAX_UNDERSTAND_BODY_BYTES) throw new BodyTooLargeError();
+  }
+  const reader = request.body?.getReader();
+  if (!reader) throw new Error("missing_body");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_UNDERSTAND_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new BodyTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error("invalid_json");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid_json_object");
+  return parsed as Record<string, unknown>;
 }
 
 function deepseekFailure(reason: string) {
