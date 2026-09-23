@@ -1084,7 +1084,8 @@
 - 新 staging 目录 `.../home-inventory-app-release-3439c5a-20260923T052425Z` 的 `npm run build` 超过 11 分钟无输出；本机 SSH 控制通道已中止。之后 SSH banner 与 HTTPS smoke 超时，22/80/443 TCP 连通。远端残留构建进程、systemd 原服务状态、网站可用性均未验证。
 - 应用目录没有切换，原目录及 PostgreSQL 未被迁移命令改动；未发送真实订单图像、OCR 文本或个人 API Key。数据库备份与新 staging 均保留。
 - 用户随后明确同意重启阿里云实例；但 SSH 仍在 banner exchange 超时，本机未发现 Aliyun CLI 或可用的阿里云环境凭据，控制台浏览器自动化会话初始化失败，因此重启尚未执行。
-- 下一步：需用户提供/恢复可用的阿里云控制台或 API 管理通道，或自行在阿里云控制台重启实例并通知我；随后先检查内存/CPU与残留构建、确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
+- 用户随后告知已重启实例；重启后 SSH 登录成功，旧 systemd 服务为 active，PostgreSQL 为 accepting connections，内存可用约 1.1 GiB、swap 可用 2.0 GiB，磁盘可用约 9.8 GiB。重启后重新在 staging 运行 Next.js production build，仍停在 `Creating an optimized production build ...` 数分钟无输出，随后 SSH/HTTPS 管理请求再次超时；22 端口 TCP 仍通。远端 build 和线上服务此刻状态未知，数据库仍未迁移、应用目录仍未切换。
+- 下一步：实例管理连接再次恢复后不要在服务器重复构建；改用本地已验证构建产物上传，先检查并清理 staging 残留进程，确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
 
 ## 2026-09-23 记账全模型重新识别兼容修复部署（执行中）
 
