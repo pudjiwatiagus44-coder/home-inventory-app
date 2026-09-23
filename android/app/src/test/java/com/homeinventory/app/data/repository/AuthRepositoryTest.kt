@@ -13,6 +13,7 @@ import com.homeinventory.app.data.remote.RemoteDashboardDto
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -127,6 +128,28 @@ class AuthRepositoryTest {
 
         assertTrue(result.isFailure)
         assertEquals("请求过于频繁，请稍后再试", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun logoutClearsLocalSessionWhenNetworkRequestFails() = runTest {
+        val sessionStore = InMemorySessionStore().apply {
+            saveSessionCookie("home_inventory_session=abc; Path=/; HttpOnly")
+        }
+        val repository = AuthRepository(
+            api = object : TestApiStub() {
+                override suspend fun logout(): Response<ApiEnvelope<Unit>> {
+                    throw IOException("timeout")
+                }
+            },
+            sessionStore = sessionStore,
+        )
+
+        val result = repository.logout()
+
+        assertTrue(result.isFailure)
+        assertEquals("timeout", result.exceptionOrNull()?.message)
+        assertNull(sessionStore.sessionCookieFlow.value)
+        assertFalse(sessionStore.sessionExpiredFlow.value)
     }
 }
 

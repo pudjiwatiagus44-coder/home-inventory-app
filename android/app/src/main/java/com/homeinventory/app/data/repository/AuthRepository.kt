@@ -99,13 +99,17 @@ class AuthRepository(
     }
 
     suspend fun logout(): Result<Unit> {
-        val response = api.logout()
-        sessionStore.clear()
-
-        return if (response.isSuccessful) {
-            Result.success(Unit)
-        } else {
-            Result.failure(IllegalStateException(response.body()?.message ?: "Logout failed"))
+        return try {
+            val response = api.logout()
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(IllegalStateException(response.body()?.message ?: "Logout failed"))
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        } finally {
+            sessionStore.clear()
         }
     }
 }
