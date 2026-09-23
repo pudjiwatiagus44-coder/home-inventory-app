@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import {
   createAuthErrorResponse,
+  createSessionRefreshResponse,
   createAuthSuccessResponse,
   createLogoutSuccessResponse,
   createRouteAuthService,
@@ -10,6 +11,45 @@ import {
 import { PostgresDatabaseNotConfiguredError } from "../../../server/db/postgres";
 
 describe("auth route helpers", () => {
+  it("sets the persistent auth cookie on login and session refresh", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalAuthCookieSecure = process.env.AUTH_COOKIE_SECURE;
+    process.env.NODE_ENV = "production";
+    delete process.env.AUTH_COOKIE_SECURE;
+
+    try {
+      const expiresAt = new Date("2027-09-23T12:34:56.000Z");
+      const loginResponse = createAuthSuccessResponse({
+        userId: "user-1",
+        sessionToken: "plain-session-token",
+        expiresAt,
+      });
+      const refreshResponse = createSessionRefreshResponse({
+        sessionToken: "plain-session-token",
+        expiresAt,
+      });
+
+      await expect(refreshResponse.json()).resolves.toEqual({ ok: true });
+
+      for (const response of [loginResponse, refreshResponse]) {
+        const cookie = response.headers.get("set-cookie");
+        expect(cookie).toContain(
+          "home_inventory_session=plain-session-token",
+        );
+        expect(cookie).toContain("Path=/");
+        expect(cookie).toContain(
+          "Expires=Thu, 23 Sep 2027 12:34:56 GMT",
+        );
+        expect(cookie).toContain("HttpOnly");
+        expect(cookie).toContain("Secure");
+        expect(cookie).toContain("SameSite=lax");
+      }
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.AUTH_COOKIE_SECURE = originalAuthCookieSecure;
+    }
+  });
+
   it("returns a not configured response when DATABASE_URL is missing", async () => {
     const response = createAuthErrorResponse(
       new PostgresDatabaseNotConfiguredError(),

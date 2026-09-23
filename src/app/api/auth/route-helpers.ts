@@ -120,6 +120,26 @@ export function createAuthSuccessResponse(input: {
     userId: input.userId,
   });
 
+  setAuthCookie(response, input);
+
+  return response;
+}
+
+export function createSessionRefreshResponse(input: {
+  sessionToken: string;
+  expiresAt: Date;
+}) {
+  const response = NextResponse.json({ ok: true });
+
+  setAuthCookie(response, input);
+
+  return response;
+}
+
+function setAuthCookie(
+  response: NextResponse,
+  input: { sessionToken: string; expiresAt: Date },
+) {
   response.cookies.set(AUTH_SESSION_COOKIE, input.sessionToken, {
     httpOnly: true,
     sameSite: "lax",
@@ -127,8 +147,6 @@ export function createAuthSuccessResponse(input: {
     path: "/",
     expires: input.expiresAt,
   });
-
-  return response;
 }
 
 export async function getCurrentUserFromRequest(
