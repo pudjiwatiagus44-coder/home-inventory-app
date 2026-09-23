@@ -1076,6 +1076,15 @@
 - 新服务部署提交为 `f3046ba`，systemd 状态为 active，最近 10 分钟错误级日志为 0；构建路由包含 `/api/bookkeeping/deepseek-credential`。
 - 一次性账号 smoke 完成 PUT 加密保存（200）、GET 掩码读取（200）、随机假 Key 上游验证返回脱敏的 `DEEPSEEK_AUTH_INVALID`（401）、DELETE 删除（200）。测试账号和凭据记录随后均清理为 0；未使用、读取或记录真实用户 DeepSeek Key。
 
+## 2026-09-23 记账全模型重新识别兼容修复部署（阻塞，线上未更新）
+
+- 根因：当前 Android multipart 元数据必带 `credentialMode`；上一部署服务端的字段 allowlist 不接受该字段，因此豆包、千问、DeepSeek 均会在模型调用前失败。服务端本地 `3439c5a` 已显式解析该字段并按 provider/credentialMode 路由。
+- 用户于 2026-09-23 回复“继续”，授权先备份，再应用两份新增千问凭据/限流表 migration、部署服务端并重启；不授权真机 API Key 验证、真实订单图像访问/上传或无关业务变更。
+- 数据库备份：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`（192789 字节，`pg_restore --list` 成功，191 个目录项）。数据库迁移未执行。
+- 新 staging 目录 `.../home-inventory-app-release-3439c5a-20260923T052425Z` 的 `npm run build` 超过 11 分钟无输出；本机 SSH 控制通道已中止。之后 SSH banner 与 HTTPS smoke 超时，22/80/443 TCP 连通。远端残留构建进程、systemd 原服务状态、网站可用性均未验证。
+- 应用目录没有切换，原目录及 PostgreSQL 未被迁移命令改动；未发送真实订单图像、OCR 文本或个人 API Key。数据库备份与新 staging 均保留。
+- 下一步：需用户明确同意阿里云实例重启以恢复管理连接；随后先检查内存/CPU与残留构建、确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
+
 ## 2026-09-23 记账全模型重新识别兼容修复部署（执行中）
 
 - 根因：当前 Android multipart 元数据必带 `credentialMode`；上一部署服务端的字段 allowlist 不接受该字段，因此豆包、千问、DeepSeek 均会在模型调用前失败。服务端本地 `3439c5a` 已显式解析该字段并按 provider/credentialMode 路由。
