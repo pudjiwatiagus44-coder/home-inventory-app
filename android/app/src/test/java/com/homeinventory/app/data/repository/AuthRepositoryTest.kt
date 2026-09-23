@@ -11,11 +11,13 @@ import com.homeinventory.app.data.remote.MobileSyncRequest
 import com.homeinventory.app.data.remote.MobileSyncResponse
 import com.homeinventory.app.data.remote.RemoteDashboardDto
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
@@ -148,6 +150,30 @@ class AuthRepositoryTest {
 
         assertTrue(result.isFailure)
         assertEquals("timeout", result.exceptionOrNull()?.message)
+        assertNull(sessionStore.sessionCookieFlow.value)
+        assertFalse(sessionStore.sessionExpiredFlow.value)
+    }
+
+    @Test
+    fun logoutRethrowsCancellationAfterClearingLocalSession() = runTest {
+        val sessionStore = InMemorySessionStore().apply {
+            saveSessionCookie("home_inventory_session=abc; Path=/; HttpOnly")
+        }
+        val repository = AuthRepository(
+            api = object : TestApiStub() {
+                override suspend fun logout(): Response<ApiEnvelope<Unit>> {
+                    throw CancellationException("cancelled")
+                }
+            },
+            sessionStore = sessionStore,
+        )
+
+        try {
+            repository.logout()
+            fail("Expected CancellationException")
+        } catch (error: CancellationException) {
+            assertEquals("cancelled", error.message)
+        }
         assertNull(sessionStore.sessionCookieFlow.value)
         assertFalse(sessionStore.sessionExpiredFlow.value)
     }

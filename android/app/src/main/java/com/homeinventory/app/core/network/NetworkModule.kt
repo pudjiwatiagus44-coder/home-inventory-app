@@ -38,7 +38,7 @@ class SessionCookieInterceptor(
         val response = chain.proceed(request)
 
         if (cookie != null && response.code == 401) {
-            sessionStore.invalidateSession()
+            sessionStore.invalidateSession(expectedCookie = cookie)
         }
 
         return response

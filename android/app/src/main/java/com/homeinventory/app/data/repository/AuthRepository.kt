@@ -7,6 +7,7 @@ import com.homeinventory.app.core.network.ForgotPasswordRequest
 import com.homeinventory.app.core.session.SessionStore
 import com.homeinventory.app.data.remote.AuthResponse
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CancellationException
 import retrofit2.Response
 
 class AuthRepository(
@@ -106,6 +107,8 @@ class AuthRepository(
             } else {
                 Result.failure(IllegalStateException(response.body()?.message ?: "Logout failed"))
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             Result.failure(error)
         } finally {

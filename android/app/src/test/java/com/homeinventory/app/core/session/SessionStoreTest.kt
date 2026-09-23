@@ -31,7 +31,8 @@ class SessionStoreTest {
     @Test
     fun saveAfterInvalidationRestoresAnActiveSession() {
         val store = InMemorySessionStore()
-        store.invalidateSession()
+        store.saveSessionCookie("home_inventory_session=old; Path=/; HttpOnly")
+        store.invalidateSession(expectedCookie = "home_inventory_session=old")
 
         store.saveSessionCookie("home_inventory_session=new; Path=/; HttpOnly")
 
@@ -55,9 +56,10 @@ class SessionStoreTest {
         val store = InMemorySessionStore()
         store.saveSessionCookie("home_inventory_session=abc; Path=/; HttpOnly")
 
-        store.invalidateSession()
+        val invalidated = store.invalidateSession(expectedCookie = "home_inventory_session=abc")
 
         assertNull(store.sessionCookieFlow.value)
         assertTrue(store.sessionExpiredFlow.value)
+        assertTrue(invalidated)
     }
 }

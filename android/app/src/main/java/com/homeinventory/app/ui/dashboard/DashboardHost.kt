@@ -57,6 +57,16 @@ import com.homeinventory.app.ui.dashboard.onboarding.GuideOverlay
 import com.homeinventory.app.ui.dashboard.onboarding.OnboardingSteps
 import kotlinx.coroutines.launch
 
+internal suspend fun performManualLogout(
+    clearAccountData: suspend () -> Unit,
+    logout: suspend () -> Result<Unit>,
+    onSignedOut: () -> Unit,
+) {
+    clearAccountData()
+    logout()
+    onSignedOut()
+}
+
 private sealed interface PhotoEntityTarget {
     data class Area(val id: String) : PhotoEntityTarget
     data class Location(val id: String) : PhotoEntityTarget
@@ -523,9 +533,11 @@ fun DashboardHost(
             draftCount = draftsUi.drafts.size,
             onSignOut = {
                 scope.launch {
-                    authRepository.logout()
-                    database.clearAll()
-                    onSignedOut()
+                    performManualLogout(
+                        clearAccountData = database::clearAll,
+                        logout = authRepository::logout,
+                        onSignedOut = onSignedOut,
+                    )
                 }
             },
             onAddButtonBounds = { addButtonBounds = it },

@@ -66,8 +66,39 @@ class NetworkModuleTest {
         assertFalse(store.sessionExpiredFlow.value)
     }
 
+    @Test
+    fun late401DoesNotInvalidateNewSession() {
+        val store = InMemorySessionStore().apply {
+            saveSessionCookie("home_inventory_session=cookie-A; Path=/; HttpOnly")
+        }
+        val chain = RecordingChain(responseCode = 401) {
+            store.saveSessionCookie("home_inventory_session=cookie-B; Path=/; HttpOnly")
+        }
+
+        SessionCookieInterceptor(store).intercept(chain)
+
+        assertEquals("home_inventory_session=cookie-B", store.sessionCookieFlow.value)
+        assertFalse(store.sessionExpiredFlow.value)
+    }
+
+    @Test
+    fun late401AfterManualLogoutDoesNotMarkSessionExpired() {
+        val store = InMemorySessionStore().apply {
+            saveSessionCookie("home_inventory_session=cookie-A; Path=/; HttpOnly")
+        }
+        val chain = RecordingChain(responseCode = 401) {
+            store.clear()
+        }
+
+        SessionCookieInterceptor(store).intercept(chain)
+
+        assertNull(store.sessionCookieFlow.value)
+        assertFalse(store.sessionExpiredFlow.value)
+    }
+
     private class RecordingChain(
         private val responseCode: Int,
+        private val beforeResponse: () -> Unit = {},
     ) : Interceptor.Chain {
         private val originalRequest = Request.Builder()
             .url("https://example.test/api/protected")
@@ -81,6 +112,7 @@ class NetworkModuleTest {
         override fun proceed(request: Request): Response {
             proceededRequest = request
             proceedCount += 1
+            beforeResponse()
             return Response.Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)

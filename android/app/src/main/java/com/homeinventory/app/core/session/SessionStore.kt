@@ -10,32 +10,37 @@ interface SessionStore {
     fun saveSessionCookie(setCookieHeader: String)
     fun sessionCookie(): String?
     fun clear()
-    fun invalidateSession()
+    fun invalidateSession(expectedCookie: String): Boolean
 }
 
 class InMemorySessionStore : SessionStore {
+    private val lock = Any()
     private val mutableSessionCookie = MutableStateFlow<String?>(null)
     private val mutableSessionExpired = MutableStateFlow(false)
 
     override val sessionCookieFlow: StateFlow<String?> = mutableSessionCookie
     override val sessionExpiredFlow: StateFlow<Boolean> = mutableSessionExpired
 
-    override fun saveSessionCookie(setCookieHeader: String) {
+    override fun saveSessionCookie(setCookieHeader: String) = synchronized(lock) {
         val cookie = CookieHeaderParser.parse(setCookieHeader) ?: return
         mutableSessionCookie.value = cookie
         mutableSessionExpired.value = false
     }
 
-    override fun sessionCookie(): String? = mutableSessionCookie.value
+    override fun sessionCookie(): String? = synchronized(lock) {
+        mutableSessionCookie.value
+    }
 
-    override fun clear() {
+    override fun clear() = synchronized(lock) {
         mutableSessionCookie.value = null
         mutableSessionExpired.value = false
     }
 
-    override fun invalidateSession() {
+    override fun invalidateSession(expectedCookie: String): Boolean = synchronized(lock) {
+        if (mutableSessionCookie.value != expectedCookie) return false
         mutableSessionCookie.value = null
         mutableSessionExpired.value = true
+        true
     }
 
     fun rawPasswordForTest(): String? = null
