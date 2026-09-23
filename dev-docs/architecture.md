@@ -55,7 +55,7 @@
 | 登录/权限 | Supabase Auth + RLS | 前端隐藏按钮 | 用户 A/B 权限负例 |
 | 第三方接入 | Supabase SDK 初始化层 | 任意页面随手初始化 | 环境变量和调用检查 |
 | 部署/配置 | `dev-docs/deployment-route.md` + `.env.example` + Vercel/Supabase 平台配置 | 硬编码密钥、聊天记忆、个人电脑进程 | 构建、环境变量、Auth 回跳地址和生产 URL 验收 |
-| 中国大陆正式版认证 | 待新增的服务端认证层 + `dev-docs/technical-selection.md` | Supabase Auth、前端 localStorage、聊天记忆 | 登录正负例、session 过期、密码存储验证 |
+| 中国大陆正式版认证 | 自有服务端认证层 + `dev-docs/technical-selection.md` | Supabase Auth、前端 localStorage、聊天记忆 | 登录正负例、session 撤销与续期、密码存储验证 |
 | 中国大陆正式版数据库 | 国内云 PostgreSQL + migration | Supabase 控制台手工状态、前端本地状态 | migration、备份恢复、跨用户负例 |
 | 中国大陆正式版部署 | `dev-docs/deployment-route.md` + 国内云平台配置 | Vercel preview、个人电脑进程 | ICP 备案、生产域名、HTTPS、日志和访问测试 |
 
@@ -305,6 +305,15 @@ Android 拍物品正面照
 - 新增接口：`POST /api/auth/forgot-password`、`POST /api/auth/reset-password`；新增页面：`/forgot-password`、`/reset-password`。
 - 记住邮箱：Web 用 localStorage（key `home_inventory_remembered_email`），Android 用 `RememberedEmailStore`（EncryptedSharedPreferences）；只存邮箱，不存密码；登录态保持逻辑不变。
 - Android 注册入口：复用现有 `POST /api/auth/register` 与 session cookie 流程，注册成功即进入 App。
+
+## 2026-09-23 长期设备会话与 401 统一处理架构
+
+- 正常登录会话不再以固定 30 天作为业务失效条件；服务端每次请求仍校验会话存在、未撤销和用户状态可用。
+- Web 使用 HttpOnly + Secure + SameSite=Lax 持久 Cookie，并在有效的已认证活动中滚动续期，以规避浏览器 Cookie 保存期限造成的突然退出。
+- 主动退出、修改/重置密码、账号禁用或服务端撤销仍使会话失效；密码重置后旧 session 返回 401 的既有安全边界保持不变。
+- Android 网络层统一捕获受保护接口 401，清除 `EncryptedSessionStore` 中的旧 Cookie并驱动 `AppRoot` 返回登录页；Web 统一捕获 401 后跳转 `/login`。
+- 两端统一显示“登录已失效，请重新登录”，不透传 `Authentication required`；只清除认证凭证，不删除 Android 本地库存缓存和草稿。
+- 完整设计见 `docs/superpowers/specs/2026-09-23-persistent-session-and-auth-expiry-ux-design.md`。当前未实施，数据库兼容迁移和生产部署必须先完成本地验证并另行取得授权。
 - 详细设计见 `docs/superpowers/specs/2026-08-08-auth-login-enhancements-design.md`，实施计划见 `docs/superpowers/plans/2026-08-08-auth-login-enhancements.md`。
 
 ## 2026-08-11 区域/位置照片架构
