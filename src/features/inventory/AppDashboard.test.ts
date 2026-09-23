@@ -1,9 +1,73 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  SESSION_EXPIRED_EVENT,
+  setupSelfHostedSessionLifecycle,
+} from "../auth/auth-aware-fetch";
 
 describe("AppDashboard location actions", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("refreshes the self-hosted session immediately and every 24 hours", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+    const browserWindow = new EventTarget();
+
+    const cleanup = setupSelfHostedSessionLifecycle({
+      enabled: true,
+      fetchImpl,
+      browserWindow,
+      replace: vi.fn(),
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/auth/session", { method: "POST" });
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    cleanup();
+  });
+
+  it("redirects on expiry and removes timers and listeners on cleanup", async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+    const replace = vi.fn();
+    const browserWindow = new EventTarget();
+    const cleanup = setupSelfHostedSessionLifecycle({
+      enabled: true,
+      fetchImpl,
+      browserWindow,
+      replace,
+    });
+
+    browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    expect(replace).toHaveBeenCalledWith("/login?expired=1");
+    cleanup();
+    browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    expect(replace).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh or listen on the Supabase-compatible path", () => {
+    const fetchImpl = vi.fn();
+    const replace = vi.fn();
+    const browserWindow = new EventTarget();
+    const cleanup = setupSelfHostedSessionLifecycle({
+      enabled: false,
+      fetchImpl,
+      browserWindow,
+      replace,
+    });
+
+    browserWindow.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    cleanup();
+  });
   it("exposes a delete action for each visible location", () => {
     const source = readFileSync(join(__dirname, "AppDashboard.tsx"), "utf8");
 

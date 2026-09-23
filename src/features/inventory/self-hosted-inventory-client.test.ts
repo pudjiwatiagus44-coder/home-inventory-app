@@ -1,8 +1,30 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SESSION_EXPIRED_EVENT } from "../auth/auth-aware-fetch";
 import { createSelfHostedInventoryClient } from "./self-hosted-inventory-client";
 
 describe("createSelfHostedInventoryClient", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("signals an expired session when the default fetch receives 401", async () => {
+    const browserWindow = new EventTarget();
+    const listener = vi.fn();
+    browserWindow.addEventListener(SESSION_EXPIRED_EVENT, listener);
+    vi.stubGlobal("window", browserWindow);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ ok: false, message: "Authentication required" }, 401),
+      ),
+    );
+
+    await expect(
+      createSelfHostedInventoryClient().getAreaPhoto("area-1"),
+    ).rejects.toThrow("加载区域照片失败");
+    expect(listener).toHaveBeenCalledOnce();
+  });
   it("loads dashboard data from the self-hosted inventory API", async () => {
     const requests: unknown[] = [];
     const client = createSelfHostedInventoryClient({

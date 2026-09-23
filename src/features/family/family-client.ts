@@ -5,6 +5,7 @@ import type {
   HouseholdOption,
   InvitationLinkRow,
 } from "./family-data";
+import { authAwareFetch } from "../auth/auth-aware-fetch";
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -20,7 +21,7 @@ type ClientOptions = {
 };
 
 export function createFamilyHttpClient({
-  fetch: fetchImpl = globalThis.fetch.bind(globalThis),
+  fetch: fetchImpl = authAwareFetch,
 }: ClientOptions = {}): FamilySettingsClient & {
   listHouseholds: () => Promise<HouseholdOption[]>;
   getJoinInfo: (
@@ -108,7 +109,9 @@ export function createFamilyHttpClient({
     const payload = (await response.json()) as ApiResponse<T>;
 
     if (!payload.ok) {
-      throw new Error(payload.message);
+      throw new Error(
+        response.status === 401 ? "登录已失效，请重新登录" : payload.message,
+      );
     }
 
     return payload.data;

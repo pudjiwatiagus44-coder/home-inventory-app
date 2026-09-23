@@ -51,6 +51,7 @@ import {
   generateInventoryBackupFilename,
 } from "./excel-backup";
 import { NoPhotoDialog, PhotoViewerDialog } from "./photo-dialogs";
+import { setupSelfHostedSessionLifecycle } from "../auth/auth-aware-fetch";
 
 type DashboardState =
   | { status: "loading" }
@@ -62,7 +63,6 @@ type MobileQuickPanel = "search" | "item" | "location" | "area" | null;
 type ItemSortMode = "expireSoon" | "expireLate" | "name";
 
 const areaColors = ["#64748b", "#256f6b", "#7c3aed", "#c2410c", "#be123c"];
-
 function createDashboardWriteClient(
   selfHostedUser: SelfHostedDashboardUser | null,
 ) {
@@ -243,6 +243,15 @@ export function AppDashboard({
     id: string;
   } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return setupSelfHostedSessionLifecycle({
+      enabled: Boolean(selfHostedUser),
+      fetchImpl: fetch,
+      browserWindow: window,
+      replace: (href) => router.replace(href),
+    });
+  }, [router, selfHostedUser]);
 
   const loadDashboard = useCallback(
     async (shouldUpdate: () => boolean = () => true) => {

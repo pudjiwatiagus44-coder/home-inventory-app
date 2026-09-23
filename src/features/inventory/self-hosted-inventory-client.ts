@@ -1,5 +1,6 @@
 import type { AreaInput, InventoryItemInput, LocationInput } from "./inventory-actions";
 import type { DashboardData } from "./dashboard-data";
+import { authAwareFetch } from "../auth/auth-aware-fetch";
 import type {
   InventoryBackupRow,
   InventoryConflictResolution,
@@ -29,7 +30,7 @@ type ApiFailure = {
 type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 export function createSelfHostedInventoryClient({
-  fetch: fetchImpl = globalThis.fetch.bind(globalThis),
+  fetch: fetchImpl = authAwareFetch,
 }: ClientOptions = {}) {
   return {
     getDashboard(householdId?: string) {
@@ -193,7 +194,9 @@ export function createSelfHostedInventoryClient({
     const payload = (await response.json()) as ApiResponse<T>;
 
     if (!payload.ok) {
-      throw new Error(payload.message);
+      throw new Error(
+        response.status === 401 ? "登录已失效，请重新登录" : payload.message,
+      );
     }
 
     return payload.data;

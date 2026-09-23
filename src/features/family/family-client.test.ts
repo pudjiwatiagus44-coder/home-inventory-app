@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SESSION_EXPIRED_EVENT } from "../auth/auth-aware-fetch";
 import { createFamilyHttpClient } from "./family-client";
 
 function jsonResponse(payload: unknown) {
@@ -10,6 +11,30 @@ function jsonResponse(payload: unknown) {
 }
 
 describe("createFamilyHttpClient", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("signals an expired session when the default fetch receives 401", async () => {
+    const browserWindow = new EventTarget();
+    const listener = vi.fn();
+    browserWindow.addEventListener(SESSION_EXPIRED_EVENT, listener);
+    vi.stubGlobal("window", browserWindow);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ ok: false, message: "Authentication required" }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(createFamilyHttpClient().listHouseholds()).rejects.toThrow(
+      "登录已失效，请重新登录",
+    );
+    expect(listener).toHaveBeenCalledOnce();
+  });
   it("lists households from the family API", async () => {
     const requests: unknown[] = [];
     const client = createFamilyHttpClient({
