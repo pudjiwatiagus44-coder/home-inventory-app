@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { createSessionHandlers } from "./route";
+import { createSessionHandlers } from "./handlers";
 
 describe("session refresh route", () => {
   it("rejects requests without a session cookie", async () => {

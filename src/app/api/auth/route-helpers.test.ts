@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import {
   createAuthErrorResponse,
@@ -12,10 +12,8 @@ import { PostgresDatabaseNotConfiguredError } from "../../../server/db/postgres"
 
 describe("auth route helpers", () => {
   it("sets the persistent auth cookie on login and session refresh", async () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    const originalAuthCookieSecure = process.env.AUTH_COOKIE_SECURE;
-    process.env.NODE_ENV = "production";
-    delete process.env.AUTH_COOKIE_SECURE;
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AUTH_COOKIE_SECURE", undefined);
 
     try {
       const expiresAt = new Date("2027-09-23T12:34:56.000Z");
@@ -45,8 +43,7 @@ describe("auth route helpers", () => {
         expect(cookie).toContain("SameSite=lax");
       }
     } finally {
-      process.env.NODE_ENV = originalNodeEnv;
-      process.env.AUTH_COOKIE_SECURE = originalAuthCookieSecure;
+      vi.unstubAllEnvs();
     }
   });
 
