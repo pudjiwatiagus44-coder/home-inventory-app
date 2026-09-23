@@ -1083,7 +1083,8 @@
 - 数据库备份：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`（192789 字节，`pg_restore --list` 成功，191 个目录项）。数据库迁移未执行。
 - 新 staging 目录 `.../home-inventory-app-release-3439c5a-20260923T052425Z` 的 `npm run build` 超过 11 分钟无输出；本机 SSH 控制通道已中止。之后 SSH banner 与 HTTPS smoke 超时，22/80/443 TCP 连通。远端残留构建进程、systemd 原服务状态、网站可用性均未验证。
 - 应用目录没有切换，原目录及 PostgreSQL 未被迁移命令改动；未发送真实订单图像、OCR 文本或个人 API Key。数据库备份与新 staging 均保留。
-- 下一步：需用户明确同意阿里云实例重启以恢复管理连接；随后先检查内存/CPU与残留构建、确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
+- 用户随后明确同意重启阿里云实例；但 SSH 仍在 banner exchange 超时，本机未发现 Aliyun CLI 或可用的阿里云环境凭据，控制台浏览器自动化会话初始化失败，因此重启尚未执行。
+- 下一步：需用户提供/恢复可用的阿里云控制台或 API 管理通道，或自行在阿里云控制台重启实例并通知我；随后先检查内存/CPU与残留构建、确认 PostgreSQL及旧服务，再继续。当前部署未完成，禁止声明故障已修复。
 
 ## 2026-09-23 记账全模型重新识别兼容修复部署（执行中）
 

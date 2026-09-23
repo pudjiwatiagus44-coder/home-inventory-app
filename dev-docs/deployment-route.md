@@ -201,7 +201,7 @@ Vercel 只配置 public client 所需变量：
 - 授权不包含读取/上传真实订单图像、查看或改动真实用户 API Key、真机连接、APK 安装或无关业务发布。
 - PostgreSQL 备份已完成：`/opt/home-inventory-backups/bookkeeping-retry-fix-20260923T052425Z/home_inventory_test.dump`，192789 字节，`pg_restore --list` 读取成功；尚未执行 migration。
 - 新 release staging 构建超过 11 分钟没有输出，停止本地 SSH 控制通道后远端管理 SSH 与 HTTPS 请求均超时；22/80/443 TCP 探测仍成功。应用目录未切换，原服务后续状态未验证。
-- 整机重启不在本轮已确认的“服务部署/重启”授权内；须先征得用户明确同意。恢复 SSH 后先查明并停止残留构建进程、确认原服务和数据库状态，再继续。
+- 用户已明确同意整机重启，但 SSH 仍超时、本机无 Aliyun CLI/API 凭据且控制台自动化不可用，故重启尚未执行。需恢复/提供阿里云控制台或 API 管理通道，或由用户在控制台重启并告知；恢复后先查明并停止残留构建进程、确认原服务和数据库状态，再继续。
 
 ## Android 内测 APK 托管与自动更新
 
