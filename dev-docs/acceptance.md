@@ -1098,3 +1098,15 @@
 - 线上无登录 smoke：`/login` 返回 200；`/api/bookkeeping/rerecognize` 与 `/api/bookkeeping/understand` 的 GET 返回预期 405；`/api/bookkeeping/qwen-credential` 未登录返回 401。没有发送模型请求、真实订单内容或 API Key。
 - 另以合成文本 `smoke` 对 `/api/bookkeeping/understand` 分别发送 DOUBAO/QWEN/DEEPSEEK + `credentialMode=PERSONAL` 的未登录请求，三者均返回 401 Unauthorized，表明请求合同/路由可解析并在模型调用前执行登录门禁；该请求未触发上游模型。
 - 已验证服务端本地测试 85 个文件、615 项通过、5 项跳过；本地 production build 成功。未验证：真实用户登录后各模型文本/图像识别端到端结果。此轮只部署服务器，没有改动或发布 Android APK。
+
+## 2026-09-24 长期登录与登录失效交互本地实施证据
+
+状态：本地实现与自动化验证完成；真实 PostgreSQL、浏览器点击、生产部署和 APK 发布均未执行。
+
+- 实现摘要：服务端不再按固定天数淘汰仍有效且未撤销的登录会话，并提供 `/api/auth/session` 供 Web 滚动续期 Cookie；Web 对受保护请求的 401 统一跳转登录页并显示“登录已失效，请重新登录”，照片交互同样纳入失效处理；Android 对受保护请求的 401 清除旧会话并返回登录页，补强并发失效与退出失败场景，同时区分手动退出的数据清理范围，保留已保存物品照片，不将本地库存缓存作为登录失效处理的一部分删除。
+- 非 PostgreSQL Vitest：执行 `npx vitest run` 并用四个精确 `--exclude` 排除 `postgres-auth-repository.integration.test.ts`、`photo-repository.integration.test.ts`、`postgres-inventory.integration.test.ts`、`bookkeeping-sync.integration.test.ts`；结果为 86 个测试文件通过、631 项测试通过、0 项跳过、0 项失败。
+- 静态检查与 Web 构建：`npx eslint src` exit 0（0 errors、8 warnings）；`npm run build` exit 0，Next.js production build 成功，路由清单确认包含动态路由 `/api/auth/session`。
+- Android：在 `android/` 执行 `.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug --no-daemon --rerun-tasks`，结果 `BUILD SUCCESSFUL`，45 个任务全部执行；测试报告共 15 个 suite、99 项测试，0 failures、0 errors、0 skipped；生成 `android/app/build/outputs/apk/debug/app-debug.apk`，大小 20,262,335 字节（19.32 MiB）。该 APK 仅为本地 Debug 构建，未发布。
+- 工作区检查：记录文档前 `git diff --check` exit 0；构建产生的 `tsconfig.tsbuildinfo` 保持为未提交修改，未删除、未纳入本次文档提交。
+- 未验证边界：本机 PostgreSQL（`127.0.0.1`/`::1:5432`）未启动，因此四个 PostgreSQL 集成测试未运行；未执行真实 PostgreSQL 中历史过期 session 继续有效、会话撤销、密码重置后旧 session 失效的闭环；未执行真实浏览器点击验收。以上项目不得视为通过。
+- 生产边界：本轮未连接或修改生产环境，未部署生产服务，未发布或上传 APK。生产操作前仍须按项目规则取得用户授权，并先完成数据库备份与可回滚准备。
