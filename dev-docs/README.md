@@ -27,6 +27,7 @@
 - `bookkeeping-recognition-feedback-design.md` - Android 识别纠错反馈、账号隔离、隐私边界和服务器接口真源（本地实现已确认，生产部署待确认）。
 - `bookkeeping-error-report-design.md` - 回收站错误订单上报、账号隔离、图片存储与维护删除真源（服务端本地实现已完成；迁移、服务器目录、反代限额、部署和生产验证均未执行）。
 - `bookkeeping-deepseek-hosted-key-design.md` - 记账 DeepSeek API Key 按账号加密托管、自由细分类与单次视觉重试设计（2026-09-21 已确认范围，待实施/部署）。
+- `bookkeeping-qwen-hosted-key-design.md` - 记账千问 API Key 按账号加密托管及显式 provider/credentialMode 路由设计（2026-09-23 已确认实现范围；本地实现与测试可继续，生产迁移和部署仍需单独确认）。
 
 ## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，已部署阿里云测试环境）
 
