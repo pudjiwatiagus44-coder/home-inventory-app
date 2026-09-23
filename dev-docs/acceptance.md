@@ -1075,3 +1075,9 @@
 - 生产迁移创建 `bookkeeping_deepseek_credentials`，运行账号具备最小的 select/insert/update/delete 权限；服务器受限环境文件中的 AES-256-GCM 主密钥解码为 32 字节，权限保持 `root:deploy 640`，密钥值未写入仓库、输出或验收记录。
 - 新服务部署提交为 `f3046ba`，systemd 状态为 active，最近 10 分钟错误级日志为 0；构建路由包含 `/api/bookkeeping/deepseek-credential`。
 - 一次性账号 smoke 完成 PUT 加密保存（200）、GET 掩码读取（200）、随机假 Key 上游验证返回脱敏的 `DEEPSEEK_AUTH_INVALID`（401）、DELETE 删除（200）。测试账号和凭据记录随后均清理为 0；未使用、读取或记录真实用户 DeepSeek Key。
+
+## 2026-09-23 记账全模型重新识别兼容修复部署（执行中）
+
+- 根因：当前 Android multipart 元数据必带 `credentialMode`；上一部署服务端的字段 allowlist 不接受该字段，因此豆包、千问、DeepSeek 均会在模型调用前失败。服务端本地 `3439c5a` 已显式解析该字段并按 provider/credentialMode 路由。
+- 用户于 2026-09-23 回复“继续”，授权先备份，再应用两份新增千问凭据/限流表 migration、部署服务端并重启；不授权真机 API Key 验证、真实订单图像访问/上传或无关业务变更。
+- 备份可读性、migration 结果、构建和重启状态、路由 smoke 及回滚路径待执行后填写；在取得证据前不能标记部署完成。

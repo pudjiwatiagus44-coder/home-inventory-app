@@ -194,6 +194,12 @@ Vercel 只配置 public client 所需变量：
 - 内测 APK：`https://homestorag.xyz/apk/home-inventory-internal-latest.apk`，SHA-256 为 `3f6af79a3b4979d207541d9430c306c2ba34c33f75ef09d74aeb6062c3f44996`，大小 `155658091` 字节。
 - 个人 Key 的真实文本/视觉调用、跨账号隔离和荣耀 90 真机操作仍标记为“未验证”。
 
+## 2026-09-23 记账全模型重新识别兼容修复（执行中）
+
+- 用户反馈豆包、千问、DeepSeek 均重新识别失败。代码对照确认 Android 请求新增 `credentialMode` 字段，而旧服务端 allowlist 不接受该字段，会在调用模型前统一返回 400；兼容 parser 已在本地服务端提交 `3439c5a`。
+- 用户回复“继续”，授权本轮在阿里云 `homestorag.xyz` 服务先备份，再应用千问凭据及限流新表迁移、构建并重启记账服务，最后仅执行不登录、不带真实订单内容的路由/页面 smoke。
+- 授权不包含读取/上传真实订单图像、查看或改动真实用户 API Key、真机连接、APK 安装或无关业务发布。执行结果和回滚备份路径待补记。
+
 ## Android 内测 APK 托管与自动更新
 
 - 内测 APK 由阿里云测试服务器静态托管（如 `https://homestorag.xyz/apk/`），下载地址为部署配置项 `NEXT_PUBLIC_APK_DOWNLOAD_URL`，默认指向最新 APK。
