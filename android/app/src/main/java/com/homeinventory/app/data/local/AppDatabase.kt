@@ -34,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
         locationDao().clearAll()
         itemDao().clearAll()
         pendingOperationDao().clearAll()
+        draftDao().clearAll()
         syncStateDao().put(SyncStateEntity(KEY_LAST_SYNC, ""))
     }
 

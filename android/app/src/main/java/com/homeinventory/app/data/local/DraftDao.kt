@@ -11,6 +11,9 @@ interface DraftDao {
     @Query("SELECT * FROM drafts ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<DraftEntity>>
 
+    @Query("SELECT * FROM drafts ORDER BY createdAt DESC")
+    suspend fun listAll(): List<DraftEntity>
+
     @Query("SELECT * FROM drafts WHERE id = :id")
     suspend fun getById(id: String): DraftEntity?
 
@@ -19,4 +22,7 @@ interface DraftDao {
 
     @Query("DELETE FROM drafts WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM drafts")
+    suspend fun clearAll()
 }

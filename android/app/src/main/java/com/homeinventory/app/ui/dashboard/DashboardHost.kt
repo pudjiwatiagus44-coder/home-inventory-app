@@ -34,6 +34,7 @@ import com.homeinventory.app.data.media.ImageCompressor
 import com.homeinventory.app.data.media.LocalPhotoStore
 import com.homeinventory.app.data.remote.ImportPreviewDto
 import com.homeinventory.app.data.repository.AuthRepository
+import com.homeinventory.app.data.repository.DraftGateway
 import com.homeinventory.app.data.repository.ImportExportRepository
 import com.homeinventory.app.data.repository.InventoryRepository
 import com.homeinventory.app.data.repository.InventorySnapshot
@@ -81,6 +82,7 @@ private data class EntityPhotoPreview(
 fun DashboardHost(
     viewModel: DashboardViewModel,
     repository: InventoryRepository,
+    draftRepository: DraftGateway,
     authRepository: AuthRepository,
     database: AppDatabase,
     importExportRepository: ImportExportRepository,
@@ -534,7 +536,10 @@ fun DashboardHost(
             onSignOut = {
                 scope.launch {
                     performManualLogout(
-                        clearAccountData = database::clearAll,
+                        clearAccountData = {
+                            draftRepository.clearAllForLogout()
+                            database.clearAll()
+                        },
                         logout = authRepository::logout,
                         onSignedOut = onSignedOut,
                     )

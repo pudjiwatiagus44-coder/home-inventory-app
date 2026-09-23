@@ -183,6 +183,7 @@ fun AppRoot() {
             DashboardHost(
                 viewModel = viewModel,
                 repository = repository,
+                draftRepository = draftRepository,
                 authRepository = authRepository,
                 database = app.database,
                 importExportRepository = importExportRepository,
