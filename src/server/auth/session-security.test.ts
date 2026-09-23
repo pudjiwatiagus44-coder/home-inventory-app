@@ -4,7 +4,7 @@ import {
   createSessionExpiry,
   hashSessionToken,
   isSessionUsable,
-  SESSION_DURATION_DAYS,
+  SESSION_COOKIE_DURATION_DAYS,
 } from "./session-security";
 
 describe("createSessionToken", () => {
@@ -17,10 +17,10 @@ describe("createSessionToken", () => {
 });
 
 describe("createSessionExpiry", () => {
-  it("uses a 30 day default session lifetime", () => {
-    expect(SESSION_DURATION_DAYS).toBe(30);
+  it("uses a 400 day browser-compatible session lifetime", () => {
+    expect(SESSION_COOKIE_DURATION_DAYS).toBe(400);
     expect(createSessionExpiry(new Date("2026-07-06T00:00:00.000Z"))).toEqual(
-      new Date("2026-08-05T00:00:00.000Z"),
+      new Date("2027-08-10T00:00:00.000Z"),
     );
   });
 });
@@ -52,22 +52,24 @@ describe("isSessionUsable", () => {
     ).toBe(true);
   });
 
-  it("rejects revoked and expired sessions", () => {
-    expect(
-      isSessionUsable(
-        {
-          expiresAt: new Date("2026-07-07T00:00:00.000Z"),
-          revokedAt: new Date("2026-07-06T12:00:00.000Z"),
-        },
-        new Date("2026-07-06T00:00:00.000Z"),
-      ),
-    ).toBe(false);
-
+  it("accepts an unrevoked session even when its historical expiry has passed", () => {
     expect(
       isSessionUsable(
         {
           expiresAt: new Date("2026-07-06T00:00:00.000Z"),
           revokedAt: null,
+        },
+        new Date("2026-07-07T00:00:00.000Z"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a revoked session", () => {
+    expect(
+      isSessionUsable(
+        {
+          expiresAt: new Date("2026-07-07T00:00:00.000Z"),
+          revokedAt: new Date("2026-07-06T12:00:00.000Z"),
         },
         new Date("2026-07-06T00:00:00.000Z"),
       ),

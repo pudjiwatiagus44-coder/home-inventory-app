@@ -5,7 +5,7 @@ export type SessionRecord = {
   revokedAt: Date | null;
 };
 
-export const SESSION_DURATION_DAYS = 30;
+export const SESSION_COOKIE_DURATION_DAYS = 400;
 
 export function createSessionToken(
   getRandomBytes: (size: number) => Buffer = randomBytes,
@@ -15,7 +15,7 @@ export function createSessionToken(
 
 export function createSessionExpiry(now: Date = new Date()): Date {
   return new Date(
-    now.getTime() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000,
+    now.getTime() + SESSION_COOKIE_DURATION_DAYS * 24 * 60 * 60 * 1000,
   );
 }
 
@@ -29,11 +29,7 @@ export function hashSessionToken(token: string, secret: string): string {
 
 export function isSessionUsable(
   session: SessionRecord,
-  now: Date = new Date(),
+  _now: Date = new Date(),
 ): boolean {
-  if (session.revokedAt) {
-    return false;
-  }
-
-  return session.expiresAt.getTime() > now.getTime();
+  return session.revokedAt === null;
 }

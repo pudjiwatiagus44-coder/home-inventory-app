@@ -249,15 +249,38 @@ describe("createAuthService", () => {
     expect(queriedHashes).toEqual(["hashed-token:plain-session-token"]);
   });
 
-  it("returns null for expired, revoked, disabled, or unknown sessions", async () => {
-    const sessions = [
-      {
-        userId: "user-expired",
-        email: "expired@example.com",
-        status: "active" as const,
+  it("resolves an active current user from an unrevoked session with a historical expiry", async () => {
+    const { repository } = createRepository({
+      findSessionByHash: async () => ({
+        userId: "user-1",
+        email: "user@example.com",
+        status: "active",
         expiresAt: new Date("2026-07-06T00:00:00.000Z"),
         revokedAt: null,
-      },
+      }),
+    });
+    const service = createAuthService({
+      repository,
+      hashPassword: async () => "hash",
+      verifyPassword: async () => false,
+      createSessionToken: () => "plain-session-token",
+      hashSessionToken: (token) => `hashed-token:${token}`,
+      createSessionExpiry: () => new Date("2026-08-05T00:00:00.000Z"),
+    });
+
+    await expect(
+      service.getCurrentUser(
+        "plain-session-token",
+        new Date("2026-07-07T00:00:00.000Z"),
+      ),
+    ).resolves.toEqual({
+      userId: "user-1",
+      email: "user@example.com",
+    });
+  });
+
+  it("returns null for revoked, disabled, or unknown sessions", async () => {
+    const sessions = [
       {
         userId: "user-revoked",
         email: "revoked@example.com",
@@ -287,9 +310,6 @@ describe("createAuthService", () => {
     });
     const now = new Date("2026-07-07T00:00:00.000Z");
 
-    await expect(service.getCurrentUser("expired-token", now)).resolves.toBe(
-      null,
-    );
     await expect(service.getCurrentUser("revoked-token", now)).resolves.toBe(
       null,
     );
