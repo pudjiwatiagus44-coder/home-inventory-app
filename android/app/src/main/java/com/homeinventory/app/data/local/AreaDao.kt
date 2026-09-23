@@ -11,6 +11,9 @@ interface AreaDao {
     @Query("select * from areas order by localUpdatedAt asc")
     fun observeAll(): Flow<List<AreaEntity>>
 
+    @Query("select photoKey from areas where photoKey is not null and photoKey != ''")
+    suspend fun listPhotoKeys(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(area: AreaEntity)
 

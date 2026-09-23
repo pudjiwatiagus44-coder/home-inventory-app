@@ -25,7 +25,7 @@ class DraftRepositoryTest {
             events += "delete:$fileName"
         }
 
-        repository.clearAllForLogout()
+        repository.clearAllForLogout(protectedPhotoKeys = emptySet())
 
         assertEquals(
             listOf(
@@ -51,11 +51,32 @@ class DraftRepositoryTest {
             if (fileName == "draft_one.jpg") error("cannot delete")
         }
 
-        repository.clearAllForLogout()
+        repository.clearAllForLogout(protectedPhotoKeys = emptySet())
 
         assertEquals(
             listOf("delete:draft_one.jpg", "delete:photo.jpg", "clear-table"),
             events,
+        )
+        assertTrue(dao.listAll().isEmpty())
+    }
+
+    @Test
+    fun clearAllForLogoutPreservesPhotoKeyReferencedBySavedEntity() = runTest {
+        val deleted = mutableListOf<String>()
+        val dao = FakeDraftDao(
+            drafts = listOf(
+                draft(id = "saved", photoKey = "saved-item.jpg"),
+                draft(id = "unsaved", photoKey = "draft-only.jpg"),
+            ),
+            onClear = {},
+        )
+        val repository = draftRepository(dao, deleted::add)
+
+        repository.clearAllForLogout(protectedPhotoKeys = setOf("saved-item.jpg"))
+
+        assertEquals(
+            listOf("draft_saved.jpg", "draft_unsaved.jpg", "draft-only.jpg"),
+            deleted,
         )
         assertTrue(dao.listAll().isEmpty())
     }

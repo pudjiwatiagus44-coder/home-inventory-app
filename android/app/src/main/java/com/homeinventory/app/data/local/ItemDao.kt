@@ -11,6 +11,9 @@ interface ItemDao {
     @Query("select * from items order by localUpdatedAt asc")
     fun observeAll(): Flow<List<ItemEntity>>
 
+    @Query("select photoKey from items where photoKey is not null and photoKey != ''")
+    suspend fun listPhotoKeys(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: ItemEntity)
 

@@ -816,7 +816,7 @@ private class FakeDraftGateway(
         flow.value = flow.value.filterNot { it.id == id }
     }
 
-    override suspend fun clearAllForLogout() {
+    override suspend fun clearAllForLogout(protectedPhotoKeys: Set<String>) {
         flow.value = emptyList()
     }
 

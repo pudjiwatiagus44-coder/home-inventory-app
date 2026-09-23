@@ -33,7 +33,7 @@ interface DraftGateway {
 
     suspend fun deleteAfterConfirm(id: String)
 
-    suspend fun clearAllForLogout()
+    suspend fun clearAllForLogout(protectedPhotoKeys: Set<String>)
 
     fun readPhoto(id: String, photoKey: String?): Bitmap?
 
@@ -147,11 +147,13 @@ class DraftRepository(
         // keep the photoKey local file: it now belongs to the saved item
     }
 
-    override suspend fun clearAllForLogout() {
+    override suspend fun clearAllForLogout(protectedPhotoKeys: Set<String>) {
         val fileNames = linkedSetOf<String>()
         draftDao.listAll().forEach { draft ->
             fileNames += draftFileName(draft.id)
-            draft.photoKey?.takeIf { it.isNotBlank() }?.let(fileNames::add)
+            draft.photoKey
+                ?.takeIf { it.isNotBlank() && it !in protectedPhotoKeys }
+                ?.let(fileNames::add)
         }
         fileNames.forEach { fileName ->
             try {

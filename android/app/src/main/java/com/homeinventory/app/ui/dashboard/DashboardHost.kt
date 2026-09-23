@@ -537,7 +537,12 @@ fun DashboardHost(
                 scope.launch {
                     performManualLogout(
                         clearAccountData = {
-                            draftRepository.clearAllForLogout()
+                            val protectedPhotoKeys = buildSet {
+                                addAll(database.itemDao().listPhotoKeys())
+                                addAll(database.areaDao().listPhotoKeys())
+                                addAll(database.locationDao().listPhotoKeys())
+                            }
+                            draftRepository.clearAllForLogout(protectedPhotoKeys)
                             database.clearAll()
                         },
                         logout = authRepository::logout,

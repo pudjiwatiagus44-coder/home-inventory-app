@@ -11,6 +11,9 @@ interface LocationDao {
     @Query("select * from locations order by localUpdatedAt asc")
     fun observeAll(): Flow<List<LocationEntity>>
 
+    @Query("select photoKey from locations where photoKey is not null and photoKey != ''")
+    suspend fun listPhotoKeys(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(location: LocationEntity)
 

@@ -765,6 +765,9 @@ private class FakeAreaDao : AreaDao {
 
     override fun observeAll(): Flow<List<AreaEntity>> = state
 
+    override suspend fun listPhotoKeys(): List<String> =
+        state.value.mapNotNull { it.photoKey?.takeIf(String::isNotBlank) }
+
     override suspend fun upsert(area: AreaEntity) {
         state.value = state.value.filterNot { it.id == area.id } + area
     }
@@ -785,6 +788,9 @@ private class FakeLocationDao : LocationDao {
 
     override fun observeAll(): Flow<List<LocationEntity>> = state
 
+    override suspend fun listPhotoKeys(): List<String> =
+        state.value.mapNotNull { it.photoKey?.takeIf(String::isNotBlank) }
+
     override suspend fun upsert(location: LocationEntity) {
         state.value = state.value.filterNot { it.id == location.id } + location
     }
@@ -804,6 +810,9 @@ private class FakeItemDao : ItemDao {
     private val state = MutableStateFlow<List<ItemEntity>>(emptyList())
 
     override fun observeAll(): Flow<List<ItemEntity>> = state
+
+    override suspend fun listPhotoKeys(): List<String> =
+        state.value.mapNotNull { it.photoKey?.takeIf(String::isNotBlank) }
 
     override suspend fun upsert(item: ItemEntity) {
         state.value = state.value.filterNot { it.id == item.id } + item
