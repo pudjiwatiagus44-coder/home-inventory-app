@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { authAwareFetch } from "../auth/auth-aware-fetch";
+
+type FetchLike = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export async function loadPhotoBlob(
+  loadUrl: string,
+  fetchImpl: FetchLike = authAwareFetch,
+) {
+  const response = await fetchImpl(loadUrl);
+  return response.ok ? response.blob() : null;
+}
 
 export function PhotoViewerDialog({
   title,
@@ -19,13 +33,12 @@ export function PhotoViewerDialog({
   useEffect(() => {
     let cancelled = false;
     let createdUrl: string | null = null;
-    fetch(loadUrl)
-      .then(async (response) => {
-        if (!response.ok) {
+    loadPhotoBlob(loadUrl)
+      .then((blob) => {
+        if (!blob) {
           if (!cancelled) setMissing(true);
           return;
         }
-        const blob = await response.blob();
         if (!cancelled) {
           createdUrl = URL.createObjectURL(blob);
           setObjectUrl(createdUrl);
