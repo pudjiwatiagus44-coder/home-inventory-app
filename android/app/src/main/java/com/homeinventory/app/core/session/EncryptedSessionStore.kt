@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class EncryptedSessionStore(context: Context) : SessionStore {
     private val preferences: SharedPreferences = run {
@@ -18,17 +20,33 @@ class EncryptedSessionStore(context: Context) : SessionStore {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }
+    private val mutableSessionCookie = MutableStateFlow(
+        preferences.getString(KEY_SESSION_COOKIE, null),
+    )
+    private val mutableSessionExpired = MutableStateFlow(false)
+
+    override val sessionCookieFlow: StateFlow<String?> = mutableSessionCookie
+    override val sessionExpiredFlow: StateFlow<Boolean> = mutableSessionExpired
 
     override fun saveSessionCookie(setCookieHeader: String) {
         val cookie = CookieHeaderParser.parse(setCookieHeader) ?: return
         preferences.edit().putString(KEY_SESSION_COOKIE, cookie).apply()
+        mutableSessionCookie.value = cookie
+        mutableSessionExpired.value = false
     }
 
-    override fun sessionCookie(): String? =
-        preferences.getString(KEY_SESSION_COOKIE, null)
+    override fun sessionCookie(): String? = mutableSessionCookie.value
 
     override fun clear() {
         preferences.edit().remove(KEY_SESSION_COOKIE).apply()
+        mutableSessionCookie.value = null
+        mutableSessionExpired.value = false
+    }
+
+    override fun invalidateSession() {
+        preferences.edit().remove(KEY_SESSION_COOKIE).apply()
+        mutableSessionCookie.value = null
+        mutableSessionExpired.value = true
     }
 
     private companion object {

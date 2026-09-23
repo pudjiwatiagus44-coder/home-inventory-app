@@ -37,6 +37,9 @@ import com.homeinventory.app.ui.login.LoginScreen
 import com.homeinventory.app.ui.theme.HomeInventoryTheme
 import kotlinx.coroutines.launch
 
+internal fun sessionErrorMessage(sessionExpired: Boolean): String? =
+    if (sessionExpired) "登录已失效，请重新登录" else null
+
 @Composable
 fun AppRoot() {
     val scope = rememberCoroutineScope()
@@ -111,7 +114,9 @@ fun AppRoot() {
     }
     val viewModel: DashboardViewModel = viewModel(factory = factory)
     val updateState by viewModel.updateCheckState().collectAsState()
-    var isLoggedIn by remember { mutableStateOf(sessionStore.sessionCookie() != null) }
+    val sessionCookie by sessionStore.sessionCookieFlow.collectAsState()
+    val sessionExpired by sessionStore.sessionExpiredFlow.collectAsState()
+    val isLoggedIn = sessionCookie != null
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -181,7 +186,7 @@ fun AppRoot() {
                 authRepository = authRepository,
                 database = app.database,
                 importExportRepository = importExportRepository,
-                onSignedOut = { isLoggedIn = false },
+                onSignedOut = {},
             )
         } else {
             LoginScreen(
@@ -189,7 +194,7 @@ fun AppRoot() {
                 password = password,
                 serverUrl = AppConfig.baseUrl,
                 isLoading = isLoading,
-                errorMessage = errorMessage,
+                errorMessage = errorMessage ?: sessionErrorMessage(sessionExpired),
                 rememberEmail = rememberEmail,
                 onRememberEmailChange = { rememberEmail = it },
                 forgotPasswordNotice = forgotPasswordNotice,
@@ -210,7 +215,6 @@ fun AppRoot() {
                             .onSuccess {
                                 password = ""
                                 persistRememberedEmail()
-                                isLoggedIn = true
                                 scope.launch {
                                     repository.loadHouseholds()
                                     repository.refreshSnapshot()
@@ -231,7 +235,6 @@ fun AppRoot() {
                             .onSuccess {
                                 password = ""
                                 persistRememberedEmail()
-                                isLoggedIn = true
                                 app.firstRunStore.markPending()
                                 scope.launch {
                                     repository.loadHouseholds()
