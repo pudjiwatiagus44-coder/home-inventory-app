@@ -78,6 +78,7 @@ export function createTextUnderstandingProviders(
       apiKey: options.deepseekApiKey,
       model: "deepseek-flash",
       baseUrl: "https://api.deepseek.com/chat/completions",
+      nonThinking: true,
       fetchImpl,
     })),
   };

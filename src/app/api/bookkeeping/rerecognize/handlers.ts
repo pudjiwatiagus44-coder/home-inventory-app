@@ -226,8 +226,9 @@ function parseMetadata(value: unknown): { input: RerecognitionInput; credentialM
       if (typeof record.capturedAt !== "string" || Number.isNaN(Date.parse(record.capturedAt))) throw new Error("invalid capturedAt");
       if (record.provider !== "DOUBAO" && record.provider !== "QWEN" && record.provider !== "DEEPSEEK") throw new Error("invalid provider");
       if (record.credentialMode !== "PLATFORM" && record.credentialMode !== "PERSONAL") throw new Error("invalid credential mode");
-      if (!Array.isArray(record.categories) || record.categories.length > MAX_CATEGORIES) throw new Error("invalid categories");
-      const categories = record.categories.map((item) => {
+      const categoryValues = Object.hasOwn(record, "categories") ? record.categories : [];
+      if (!Array.isArray(categoryValues) || categoryValues.length > MAX_CATEGORIES) throw new Error("invalid categories");
+      const categories = categoryValues.map((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid category");
         const category = item as Record<string, unknown>;
         const keys = Object.keys(category).sort().join(",");

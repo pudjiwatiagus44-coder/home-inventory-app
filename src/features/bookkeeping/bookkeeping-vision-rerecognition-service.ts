@@ -78,6 +78,7 @@ function createDefaultVisionProviders(
       apiKey: deepseekApiKey,
       model: "deepseek-flash",
       baseUrl: "https://api.deepseek.com/chat/completions",
+      nonThinking: true,
       timeoutMs: DEEPSEEK_VISION_TIMEOUT_MS,
       fetchImpl,
     }),
@@ -91,6 +92,7 @@ function createOpenAiVisionProvider(config: {
   requireBeijingWorkspace?: boolean;
   approvedModels?: ReadonlySet<string>;
   timeoutMs?: number;
+  nonThinking?: boolean;
   fetchImpl?: typeof fetch;
 }): VisionProvider {
   return async (input) => {
@@ -120,7 +122,7 @@ function createOpenAiVisionProvider(config: {
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: config.model,
-          temperature: 0.1,
+          ...(config.nonThinking ? { thinking: { type: "disabled" } } : { temperature: 0.1 }),
           messages: [{
             role: "user",
             content: [

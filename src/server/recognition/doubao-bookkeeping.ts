@@ -30,6 +30,7 @@ type Dependencies = {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  nonThinking?: boolean;
 };
 
 type RequestOptions = {
@@ -112,7 +113,7 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
           },
           body: JSON.stringify({
             model,
-            temperature: 0.1,
+            ...(deps.nonThinking ? { thinking: { type: "disabled" } } : { temperature: 0.1 }),
             messages: [
               { role: "system", content: SYSTEM_PROMPT },
               {

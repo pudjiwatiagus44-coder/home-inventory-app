@@ -18,6 +18,14 @@ const draft = {
 };
 
 describe("/api/bookkeeping/rerecognize", () => {
+  it("preserves deployed compatibility for omitted category candidates", async () => {
+    const service = serviceStub();
+    const requestMetadata: Record<string, unknown> = { ...metadata };
+    delete requestMetadata.categories;
+    const response = await authenticatedHandlers(service).POST(requestWithMetadata(requestMetadata));
+    expect(response.status).toBe(200);
+    expect(service.rerecognize).toHaveBeenCalledWith(expect.objectContaining({ categories: [] }), expect.any(Buffer));
+  });
   it("authenticates the account before reading multipart content", async () => {
     const service = serviceStub();
     const handlers = createBookkeepingRerecognizeHandlers({

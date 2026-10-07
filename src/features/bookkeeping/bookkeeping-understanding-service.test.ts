@@ -87,6 +87,8 @@ describe("understandWithFallback", () => {
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       expect(body.model).toBe("deepseek-flash");
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect(body).not.toHaveProperty("temperature");
       expect(body.messages).toBeInstanceOf(Array);
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(draft) } }] }), {
         status: 200, headers: { "Content-Type": "application/json" },

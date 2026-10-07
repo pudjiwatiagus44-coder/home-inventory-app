@@ -55,6 +55,8 @@ describe("bookkeeping vision rerecognition service", () => {
       expect(String(url)).toBe("https://api.deepseek.com/chat/completions");
       expect(init?.headers).toMatchObject({ Authorization: "Bearer sk-hosted-test-key" });
       expect(JSON.parse(String(init?.body)).model).toBe("deepseek-flash");
+      expect(JSON.parse(String(init?.body)).thinking).toEqual({ type: "disabled" });
+      expect(JSON.parse(String(init?.body))).not.toHaveProperty("temperature");
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify([draft]) } }] }), { status: 200 });
     }) as unknown as typeof fetch;
     const service = createBookkeepingVisionRerecognitionService({
