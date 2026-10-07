@@ -49,6 +49,7 @@ fun DraftsDialog(
     onEdit: (DraftEntity) -> Unit,
     onConfirm: (DraftEntity) -> Unit,
     onDelete: (DraftEntity) -> Unit,
+    onRetry: (DraftEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -99,6 +100,7 @@ fun DraftsDialog(
                             onEdit = { onEdit(draft) },
                             onConfirm = { onConfirm(draft) },
                             onDelete = { onDelete(draft) },
+                            onRetry = { onRetry(draft) },
                         )
                     }
                 }
@@ -116,6 +118,7 @@ private fun DraftRow(
     onEdit: () -> Unit,
     onConfirm: () -> Unit,
     onDelete: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -144,6 +147,9 @@ private fun DraftRow(
             }
         }
         Column(modifier = Modifier.weight(1f)) {
+            if (draft.status == DraftStatus.Failed) {
+                Text("识别失败，可编辑后保存或重试", color = androidx.compose.material3.MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
             val title = if (draft.status == DraftStatus.Recognizing && draft.name.isBlank()) {
                 "识别中…"
             } else {
@@ -167,6 +173,9 @@ private fun DraftRow(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
+            if (draft.status == DraftStatus.Failed) {
+                TextButton(onClick = onRetry, enabled = !isSaving) { Text("重试识别", fontSize = 12.sp) }
+            }
             OutlinedButton(onClick = onConfirm, enabled = !isSaving) {
                 Text(if (isSaving) "保存中…" else "保存")
             }

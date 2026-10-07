@@ -1098,3 +1098,19 @@
 - 线上无登录 smoke：`/login` 返回 200；`/api/bookkeeping/rerecognize` 与 `/api/bookkeeping/understand` 的 GET 返回预期 405；`/api/bookkeeping/qwen-credential` 未登录返回 401。没有发送模型请求、真实订单内容或 API Key。
 - 另以合成文本 `smoke` 对 `/api/bookkeeping/understand` 分别发送 DOUBAO/QWEN/DEEPSEEK + `credentialMode=PERSONAL` 的未登录请求，三者均返回 401 Unauthorized，表明请求合同/路由可解析并在模型调用前执行登录门禁；该请求未触发上游模型。
 - 已验证服务端本地测试 85 个文件、615 项通过、5 项跳过；本地 production build 成功。未验证：真实用户登录后各模型文本/图像识别端到端结果。此轮只部署服务器，没有改动或发布 Android APK。
+# 2026-10-07 个人 API 设置验收（本地实现完成）
+
+新增设置与 DeepSeek 接入必须验证账号隔离、Key 不落手机明文与日志、掩码/保存/验证/删除合同、登录失效与 Key 无效区分、旧豆包请求不回归、provider 严格校验、上游超时与错误脱敏、草稿服务选择一致、纯照片不调用模型。详细清单见 [个人 API 设置方案](inventory-personal-api-settings-2026-10-07.md)。真实 Key、真机与生产发布尚未验证或授权。
+
+本地验证（2026-10-07）：
+
+- `npx vitest run --exclude '.worktrees/**' --exclude '**/*.integration.test.ts'`：82 文件、620 项通过。
+- `android/gradlew.bat :app:testDebugUnitTest :app:assembleDebug --console=plain`：构建成功，JUnit XML 合计 92 项，失败和错误均 0；APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`，20,562,443 字节。
+- 业务源码 TypeScript：从现有 tsconfig 生成临时配置，仅包含 `src/**/*.ts(x)`、排除测试且禁用 incremental，`tsc --noEmit` 通过。
+- 全仓 `tsc --noEmit --incremental false` 未通过，存在原有测试类型错误（如 auth 测试 fake query 缺 rows、只读 NODE_ENV 赋值、既有 recognition-service.test 的 recognizeName）；本次引入的 env 类型错误已修复，业务源码检查重新通过。未把全仓类型检查记为通过。
+- 本轮未运行真实 PostgreSQL 集成、未操作生产、未使用真实个人 API Key、未做真机点击验收。旧工作树测试因缺文件不可运行，测试命令明确排除 `.worktrees/**`。
+
+- 
+px eslint src：exit 0，0 错误，7 条既有未使用变量警告；本次变更文件专项 lint 为 0 错误/警告。
+- 只读复核发现失败草稿没有重试入口，已补齐按钮、ViewModel 调用和仓库识别中状态；新增原图失败恢复重试与能力检查超时测试通过。
+- 最终 Debug APK SHA-256：CE8E3E244879C0E7F87D4814BE4671B407437DDAAA31F370273F8C6A83545DD4。

@@ -258,10 +258,14 @@ class DashboardViewModel(
         try {
             withTimeout(35_000) { gateway.recognize(draftId) }
         } catch (_: Exception) {
-            // repository marks ready on failure; timeout must not leave it pending
+            // Repository records a failed status; a retry requires an explicit action.
         } finally {
             recognizingDrafts.remove(draftId)
         }
+    }
+
+    fun retryDraftRecognition(draftId: String) {
+        viewModelScope.launch { recognizeDraftSafely(draftId) }
     }
 
     private suspend fun processPendingRecognitions() {

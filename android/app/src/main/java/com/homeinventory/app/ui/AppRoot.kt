@@ -43,10 +43,14 @@ fun AppRoot() {
     val app = LocalContext.current.applicationContext as HomeInventoryApplication
     val sessionStore = app.sessionStore
     val api = remember { NetworkModule.createApi(sessionStore) }
+    val androidRecognitionSettings = remember { com.homeinventory.app.data.recognition.AndroidRecognitionSettings(app, sessionStore) }
+    val recognitionSettings = androidRecognitionSettings.settings
+    val deepSeekSettings = remember { com.homeinventory.app.data.repository.DeepSeekSettingsRepository(api) }
     val authRepository = remember {
         AuthRepository(
             api = api,
             sessionStore = sessionStore,
+            onAuthenticated = androidRecognitionSettings::bindAccount,
         )
     }
     val importExportRepository = remember {
@@ -60,10 +64,12 @@ fun AppRoot() {
             itemDao = app.database.itemDao(),
             pendingOperationDao = app.database.pendingOperationDao(),
             syncStateDao = app.database.syncStateDao(),
+            recognitionProvider = recognitionSettings::provider,
         )
     }
     val draftRepository = remember {
         DraftRepository(
+            recognitionSettings = recognitionSettings,
             draftDao = app.database.draftDao(),
             api = api,
             savePhoto = { fileName, bytes ->
@@ -181,6 +187,8 @@ fun AppRoot() {
                 authRepository = authRepository,
                 database = app.database,
                 importExportRepository = importExportRepository,
+                recognitionSettings = recognitionSettings,
+                deepSeekSettings = deepSeekSettings,
                 onSignedOut = { isLoggedIn = false },
             )
         } else {

@@ -3,7 +3,7 @@ package com.homeinventory.app.ui.login
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,7 +33,7 @@ fun ForgotPasswordDialog(
             } else {
                 Column {
                     Text("输入注册邮箱，我们会发送一封密码重置邮件。")
-                    OutlinedTextField(
+                    ClearableOutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
                         modifier = Modifier.fillMaxWidth(),

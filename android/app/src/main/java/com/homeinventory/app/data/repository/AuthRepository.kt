@@ -12,6 +12,7 @@ import retrofit2.Response
 class AuthRepository(
     private val api: HomeInventoryApi,
     private val sessionStore: SessionStore,
+    private val onAuthenticated: (String?) -> Unit = {},
 ) {
     suspend fun login(email: String, password: String): Result<Unit> = authenticate(
         fallbackMessage = "登录失败，请检查邮箱和密码",
@@ -79,6 +80,7 @@ class AuthRepository(
         }
 
         sessionStore.saveSessionCookie(setCookie)
+        onAuthenticated(body.userId)
         return Result.success(Unit)
     }
 

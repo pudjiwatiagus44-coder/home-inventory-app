@@ -28,7 +28,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -315,7 +315,7 @@ fun ItemFormDialog(
                     )
                 }
             }
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("物品名称") },
@@ -350,7 +350,7 @@ fun ItemFormDialog(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 val selectedLocation = locations.firstOrNull { it.id == locationId }
-                OutlinedTextField(
+                ClearableOutlinedTextField(
                     value = selectedLocation?.name ?: locationLabel,
                     onValueChange = {},
                     readOnly = true,
@@ -396,7 +396,7 @@ fun ItemFormDialog(
                                 },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            OutlinedTextField(
+                            ClearableOutlinedTextField(
                                 value = quickAddLocationName,
                                 onValueChange = { quickAddLocationName = it },
                                 placeholder = { Text("位置名，如第一层") },
@@ -455,7 +455,7 @@ fun ItemFormDialog(
                     }
                 }
             }
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
                 label = { Text("备注") },
@@ -580,6 +580,7 @@ fun ItemFormDialog(
             }
             ExpireDateField(
                 expireDate = expireDate,
+                onClear = { expireDate = null },
                 onPickDate = { date ->
                     expireDate = date
                 },
@@ -673,10 +674,11 @@ fun ItemFormDialog(
 private fun ExpireDateField(
     expireDate: String?,
     onPickDate: (String) -> Unit,
+    onClear: () -> Unit,
 ) {
     val context = LocalContext.current
     Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
+        ClearableOutlinedTextField(
             value = expireDate ?: "",
             onValueChange = {},
             readOnly = true,
@@ -707,5 +709,10 @@ private fun ExpireDateField(
                     ).show()
                 },
         )
+        if (!expireDate.isNullOrEmpty()) {
+            Box(Modifier.align(androidx.compose.ui.Alignment.CenterEnd)) {
+                com.homeinventory.app.ui.components.ClearInputButton(onClick = onClear)
+            }
+        }
     }
 }

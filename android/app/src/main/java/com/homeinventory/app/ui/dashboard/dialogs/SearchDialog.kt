@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,7 +45,7 @@ fun SearchDialog(
                 Text("搜索物品", fontSize = 16.sp)
                 TextButton(onClick = onDismiss) { Text("关闭") }
             }
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = search,
                 onValueChange = onSearchChange,
                 placeholder = { Text("搜索名称或备注") },

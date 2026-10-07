@@ -1,11 +1,12 @@
 package com.homeinventory.app.data.repository
 
 import android.graphics.Bitmap
-import android.util.Log
 import com.homeinventory.app.core.network.HomeInventoryApi
 import com.homeinventory.app.data.local.DraftDao
 import com.homeinventory.app.data.local.DraftEntity
 import com.homeinventory.app.data.local.DraftStatus
+import com.homeinventory.app.data.recognition.RecognitionSettings
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.TimeoutCancellationException
@@ -46,6 +47,7 @@ class DraftRepository(
     private val readPhotoFileLarge: (fileName: String) -> Bitmap?,
     private val readPhotoBytes: (fileName: String) -> ByteArray?,
     private val deletePhotoFile: (fileName: String) -> Unit,
+    private val recognitionSettings: RecognitionSettings? = null,
 ) : DraftGateway {
     override fun observe(): Flow<List<DraftEntity>> = draftDao.observeAll()
 
@@ -77,6 +79,7 @@ class DraftRepository(
             status = if (ready) DraftStatus.Ready else DraftStatus.Recognizing,
             createdAt = System.currentTimeMillis(),
         )
+        recognitionSettings?.captureDraft(id)
         draftDao.upsert(draft)
         return draft
     }
@@ -86,7 +89,7 @@ class DraftRepository(
         val bytes = readPhotoBytes(draftFileName(id))
             ?: current.photoKey?.let { readPhotoBytes(it) }
         if (bytes == null) {
-            val fallback = current.copy(status = DraftStatus.Ready)
+            val fallback = current.copy(status = if (current.name.isBlank()) DraftStatus.Failed else DraftStatus.Ready)
             draftDao.upsert(fallback)
             return fallback
         }
@@ -95,22 +98,30 @@ class DraftRepository(
             "photo.jpg",
             bytes.toRequestBody("image/jpeg".toMediaType()),
         )
+        draftDao.upsert(current.copy(status = DraftStatus.Recognizing))
+        var expectedProvider = "DOUBAO"
         val response = try {
-            withTimeout(30_000) { api.recognize(part, "name") }
+            withTimeout(30_000) {
+                expectedProvider = recognitionSettings?.providerForDraft(id) ?: "DOUBAO"
+                com.homeinventory.app.data.recognition.requireRecognitionProvider(api, expectedProvider)
+                recognitionSettings?.providerForDraft(id)
+                api.recognize(part, "name", expectedProvider)
+            }
         } catch (error: TimeoutCancellationException) {
-            Log.w("DraftRecognition", "recognize timeout for $id")
-            val fallback = current.copy(status = DraftStatus.Ready)
+            val fallback = current.copy(status = DraftStatus.Failed)
             draftDao.upsert(fallback)
             return fallback
-        } catch (error: Exception) {
-            Log.w("DraftRecognition", "recognize failed for $id: ${error.message}")
-            val fallback = current.copy(status = DraftStatus.Ready)
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) {
+            val fallback = current.copy(status = DraftStatus.Failed)
             draftDao.upsert(fallback)
             return fallback
         }
         val envelope = response.body()
         val data = envelope?.data
-        val updated = if (response.isSuccessful && envelope?.ok == true && data != null) {
+        val stillOwned = runCatching { recognitionSettings?.providerForDraft(id) }.isSuccess
+        val updated = if (response.isSuccessful && envelope?.ok == true && data != null && data.recognized &&
+            stillOwned && (expectedProvider != "DEEPSEEK" || data.provider == expectedProvider)) {
             val key = data.thumbnailId
             if (key != null && key.isNotBlank()) {
                 try {
@@ -126,13 +137,14 @@ class DraftRepository(
                 status = DraftStatus.Ready,
             )
         } else {
-            current.copy(status = DraftStatus.Ready)
+            current.copy(status = DraftStatus.Failed)
         }
         draftDao.upsert(updated)
         return updated
     }
 
     override suspend fun delete(id: String) {
+        recognitionSettings?.forgetDraft(id)
         val current = draftDao.getById(id)
         draftDao.deleteById(id)
         deletePhotoFile(draftFileName(id))
@@ -140,6 +152,7 @@ class DraftRepository(
     }
 
     override suspend fun deleteAfterConfirm(id: String) {
+        recognitionSettings?.forgetDraft(id)
         draftDao.deleteById(id)
         deletePhotoFile(draftFileName(id))
         // keep the photoKey local file: it now belongs to the saved item

@@ -56,6 +56,16 @@ data class ForgotPasswordRequest(
 )
 
 interface HomeInventoryApi {
+    @GET("api/recognition")
+    suspend fun recognitionProviders(): Response<ApiEnvelope<com.homeinventory.app.data.remote.RecognitionProvidersDto>>
+    @GET("api/bookkeeping/deepseek-credential")
+    suspend fun deepSeekStatus(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto>>
+    @PUT("api/bookkeeping/deepseek-credential")
+    suspend fun deepSeekSave(@Body request: com.homeinventory.app.data.remote.DeepSeekSaveRequest): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto>>
+    @POST("api/bookkeeping/deepseek-credential")
+    suspend fun deepSeekValidate(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekValidationDto>>
+    @DELETE("api/bookkeeping/deepseek-credential")
+    suspend fun deepSeekDelete(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekDeleteDto>>
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): Response<AuthResponse>
 
@@ -120,6 +130,7 @@ interface HomeInventoryApi {
     suspend fun recognize(
         @Part file: MultipartBody.Part,
         @Query("mode") mode: String,
+        @Query("provider") provider: String? = null,
     ): Response<ApiEnvelope<RecognitionResponseDto>>
 
     @GET("api/inventory/items/{itemId}/photo")

@@ -199,3 +199,6 @@
 - 权限：owner/member 可拍摄、替换、删除；readonly 只能查看，服务端强制。
 - 数据与接口：`areas`、`locations` 新增 `photo_key`；新增区域/位置照片上传、读取、删除接口。
 - 设计文档：`docs/superpowers/specs/2026-08-11-area-location-photos-design.md`；架构与数据设计见 `dev-docs/architecture.md`、`dev-docs/database-design.md`。
+# 2026-10-07 个人 API 设置范围（已确认，本地实现完成）
+
+用户要求复用记账软件的个人 DeepSeek API 设置功能；拟在 Android 增加设置入口，支持默认豆包与个人 DeepSeek 的物品名称、备注和日期识别。凭据按当前登录账号复用既有加密托管，同账号两个 App 保存/删除共同生效。具体范围见 [个人 API 设置方案](inventory-personal-api-settings-2026-10-07.md)；用户已确认本地实施，不包含生产操作授权。

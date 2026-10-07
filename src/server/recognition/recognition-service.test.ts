@@ -87,6 +87,21 @@ function createFakes(overrides: Partial<{
 }
 
 describe("recognition service", () => {
+  it("resolves the personal client only for the authenticated user and never for photo mode", async () => {
+    const fakes = createFakes();
+    const seen: string[] = [];
+    const service = createRecognitionService({ ...fakes, loadHouseholdIdForUser: async () => fakes.householdId,
+      deepseekVisionForUser: async (userId) => { seen.push(userId); return {
+        recognizeItemDetails: async () => ({ ok: true, value: { name: "个人识别", note: null } }),
+        recognizeExpireDate: async () => ({ ok: true, value: "2027-01-01" }),
+      }; },
+    });
+    await service.recognizeForCurrentUser({ userId: "user-1", mode: "photo", jpegBuffer: makeJpeg(), provider: "DEEPSEEK" });
+    expect(seen).toEqual([]);
+    const result = await service.recognizeForCurrentUser({ userId: "user-1", mode: "name", jpegBuffer: makeJpeg(), provider: "DEEPSEEK" });
+    expect(result.name).toBe("个人识别");
+    expect(seen).toEqual(["user-1"]);
+  });
   it("recognizes a name, stores a pending thumbnail and returns its key", async () => {
     const fakes = createFakes({ householdId: "household-1" });
     const service = createRecognitionService({

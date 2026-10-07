@@ -74,6 +74,8 @@ fun DashboardHost(
     authRepository: AuthRepository,
     database: AppDatabase,
     importExportRepository: ImportExportRepository,
+    recognitionSettings: com.homeinventory.app.data.recognition.RecognitionSettings,
+    deepSeekSettings: com.homeinventory.app.data.repository.DeepSeekSettingsRepository,
     onSignedOut: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -91,6 +93,7 @@ fun DashboardHost(
     var previewDraft by remember { mutableStateOf<DraftEntity?>(null) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showApiSettings by remember { mutableStateOf(false) }
     var showHouseholdSwitcher by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<DashboardUiItem?>(null) }
     var editingDraftId by remember { mutableStateOf<String?>(null) }
@@ -514,6 +517,7 @@ fun DashboardHost(
                 viewModel.refreshJoinRequests()
                 viewModel.refreshMembers()
             },
+            onSettings = { showApiSettings = true },
             onHelp = {
                 showHelpDialog = true
             },
@@ -773,6 +777,10 @@ fun DashboardHost(
         )
     }
 
+    if (showApiSettings) {
+        com.homeinventory.app.ui.dashboard.dialogs.ApiSettingsDialog(recognitionSettings, deepSeekSettings) { showApiSettings = false }
+    }
+
     if (showHelpDialog) {
         HelpDialog(
             onDismiss = {
@@ -783,6 +791,7 @@ fun DashboardHost(
 
     if (showDraftsDialog) {
         DraftsDialog(
+            onRetry = { draft -> viewModel.retryDraftRecognition(draft.id) },
             drafts = draftsUi.drafts,
             savingDraftId = draftsUi.savingDraftId,
             errorMessage = draftsUi.errorMessage,

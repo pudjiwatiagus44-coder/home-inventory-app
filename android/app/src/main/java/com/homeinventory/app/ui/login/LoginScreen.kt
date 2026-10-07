@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -104,7 +104,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        OutlinedTextField(
+        ClearableOutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
             modifier = Modifier.fillMaxWidth(),
@@ -115,7 +115,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        ClearableOutlinedTextField(
             value = password,
             onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth(),
@@ -128,7 +128,7 @@ fun LoginScreen(
         if (isSignUp) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it },
                 modifier = Modifier.fillMaxWidth(),

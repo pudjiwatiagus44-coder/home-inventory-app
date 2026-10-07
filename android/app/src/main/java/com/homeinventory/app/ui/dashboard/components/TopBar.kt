@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,10 +40,12 @@ fun TopBar(
     onImport: () -> Unit,
     onInvite: () -> Unit,
     onHelp: () -> Unit,
+    onSettings: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     onDraftBounds: (Rect) -> Unit = {},
 ) {
+    var moreExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -104,10 +109,14 @@ fun TopBar(
                 }
             }
         }
-        TextButton(onClick = onBackup) { Text("备份") }
-        TextButton(onClick = onImport) { Text("导入") }
-        TextButton(onClick = onInvite) { Text("邀请") }
-        TextButton(onClick = onHelp) { Text("帮助") }
-        TextButton(onClick = onSignOut) { Text("退出") }
+        TextButton(onClick = onSettings) { Text("设置") }
+        Box {
+            TextButton(onClick = { moreExpanded = true }) { Text("更多") }
+            DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                listOf("备份" to onBackup, "导入" to onImport, "邀请" to onInvite, "帮助" to onHelp, "退出" to onSignOut).forEach { (label, action) ->
+                    DropdownMenuItem(text = { Text(label) }, onClick = { moreExpanded = false; action() })
+                }
+            }
+        }
     }
 }

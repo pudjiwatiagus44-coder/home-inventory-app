@@ -13,7 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,7 +64,7 @@ fun LocationFormDialog(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(text = title, fontSize = 16.sp)
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("位置名称") },
@@ -139,7 +139,7 @@ fun AreaDropdown(
             selectedAreaId == UNASSIGNED_MARKER -> "未分区"
             else -> areas.firstOrNull { it.id == selectedAreaId }?.name ?: "请选择区域"
         }
-        OutlinedTextField(
+        ClearableOutlinedTextField(
             value = selectedName,
             onValueChange = {},
             readOnly = true,
@@ -187,7 +187,7 @@ fun AreaDropdown(
                         .onGloballyPositioned { onQuickAddBounds(it.boundsInRoot()) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedTextField(
+                    ClearableOutlinedTextField(
                         value = quickAddName,
                         onValueChange = { quickAddName = it },
                         placeholder = { Text("区域名，如厨房") },

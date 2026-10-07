@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 object DraftStatus {
     const val Recognizing = "recognizing"
     const val Ready = "ready"
+    const val Failed = "failed"
 }
 
 @Entity(tableName = "drafts")

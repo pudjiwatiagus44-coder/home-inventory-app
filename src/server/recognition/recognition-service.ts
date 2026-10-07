@@ -22,6 +22,7 @@ export type RecognitionServiceDependencies = {
   photoRepository: PhotoRepository;
   photoStore: PhotoStore;
   doubaoVision: DoubaoVisionClient;
+  deepseekVisionForUser?: (userId: string) => Promise<DoubaoVisionClient>;
 };
 
 export function createRecognitionService(
@@ -42,6 +43,7 @@ export function createRecognitionService(
       userId: string;
       mode: "name" | "expiry" | "photo";
       jpegBuffer: Buffer;
+      provider?: "DOUBAO" | "DEEPSEEK";
     }): Promise<RecognitionOutcome> {
       const householdId = await loadHouseholdId(input.userId);
 
@@ -62,8 +64,13 @@ export function createRecognitionService(
         };
       }
 
+      const vision = input.provider === "DEEPSEEK"
+        ? await deps.deepseekVisionForUser?.(input.userId)
+        : deps.doubaoVision;
+      if (!vision) throw new Error("DeepSeek 识别服务未配置");
+
       if (input.mode === "expiry") {
-        const result = await deps.doubaoVision.recognizeExpireDate(
+        const result = await vision.recognizeExpireDate(
           input.jpegBuffer,
         );
 
@@ -91,7 +98,7 @@ export function createRecognitionService(
         photoKey,
       });
 
-      const result = await deps.doubaoVision.recognizeItemDetails(input.jpegBuffer);
+      const result = await vision.recognizeItemDetails(input.jpegBuffer);
 
       if (!result.ok) {
         if (result.reason === "api_key_missing") {

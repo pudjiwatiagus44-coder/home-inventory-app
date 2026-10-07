@@ -1,3 +1,3 @@
 import { createRecognitionHandlers } from "./handlers";
 
-export const { POST } = createRecognitionHandlers();
+export const { GET, POST } = createRecognitionHandlers();

@@ -43,6 +43,37 @@ import retrofit2.Response
 
 class InventoryRepositoryTest {
     @Test
+    fun oldServerIsRejectedBeforeSendingPhotoToWrongProvider() = runTest {
+        var calls = 0
+        val api = object : TestApiStub() {
+            override suspend fun recognitionProviders(): Response<ApiEnvelope<com.homeinventory.app.data.remote.RecognitionProvidersDto>> =
+                Response.error(405, "old server".toResponseBody("text/plain".toMediaType()))
+            override suspend fun recognize(file: MultipartBody.Part, mode: String, provider: String?): Response<ApiEnvelope<RecognitionResponseDto>> {
+                calls++
+                return super.recognize(file, mode, provider)
+            }
+        }
+        val result = repositoryWith(api, { "DEEPSEEK" }).recognizeItemPhoto("name", byteArrayOf(1))
+        assertTrue(result.isFailure)
+        assertEquals(0, calls)
+        assertEquals("服务器尚未支持个人 DeepSeek，请更新服务器后再试", result.exceptionOrNull()?.message)
+    }
+    @Test
+    fun selectedProviderIsSentOnlyForModelRecognition() = runTest {
+        val seen = mutableListOf<String?>()
+        val api = object : TestApiStub() {
+            override suspend fun recognize(file: MultipartBody.Part, mode: String, provider: String?): Response<ApiEnvelope<RecognitionResponseDto>> {
+                seen.add(provider)
+                return super.recognize(file, mode, provider)
+            }
+        }
+        val repository = repositoryWith(api, recognitionProvider = { "DEEPSEEK" })
+        assertTrue(repository.recognizeItemPhoto("name", byteArrayOf(1)).isSuccess)
+        assertTrue(repository.recognizeItemPhoto("expiry", byteArrayOf(1)).isSuccess)
+        assertTrue(repository.uploadThumbnailOnly(byteArrayOf(1)).isSuccess)
+        assertEquals(listOf("DEEPSEEK", "DEEPSEEK", null), seen)
+    }
+    @Test
     fun recognizeItemPhotoReturnsDraftOnSuccess() = runTest {
         val repository = repositoryWith(api = FakeRecognizeApi())
 
@@ -61,6 +92,7 @@ class InventoryRepositoryTest {
                 override suspend fun recognize(
                     file: MultipartBody.Part,
                     mode: String,
+        provider: String?,
                 ): Response<ApiEnvelope<RecognitionResponseDto>> =
                     Response.error(
                         429,
@@ -539,7 +571,7 @@ class InventoryRepositoryTest {
         assertEquals("无法连接服务器，请检查网络", result.exceptionOrNull()?.message)
     }
 
-    private fun repositoryWith(api: TestApiStub): InventoryRepository =
+    private fun repositoryWith(api: TestApiStub, recognitionProvider: () -> String = { "DOUBAO" }): InventoryRepository =
         InventoryRepository(
             api = api,
             areaDao = FakeAreaDao(),
@@ -547,6 +579,7 @@ class InventoryRepositoryTest {
             itemDao = FakeItemDao(),
             pendingOperationDao = FakePendingOperationDao(),
             syncStateDao = FakeSyncStateDao(),
+            recognitionProvider = recognitionProvider,
         )
 }
 
@@ -853,6 +886,7 @@ private class FakeRecognizeApi : TestApiStub() {
     override suspend fun recognize(
         file: MultipartBody.Part,
         mode: String,
+        provider: String?,
     ): Response<ApiEnvelope<RecognitionResponseDto>> =
         Response.success(
             ApiEnvelope(

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 import { createRecognitionHandlers } from "./handlers";
 import { createRecognitionRateLimiter } from "../../../server/recognition/rate-limiter";
+import { DeepSeekRecognitionError } from "../../../server/recognition/deepseek-vision";
 
 function jpegBlob() {
   return new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])], {
@@ -22,6 +23,40 @@ function requestWithFormData(body: FormData, mode?: string) {
 }
 
 describe("recognition route", () => {
+  it("advertises provider support only to logged-in clients", async () => {
+    const url = "http://localhost/api/recognition";
+    const unauthorized = await createRecognitionHandlers().GET(new NextRequest(url));
+    expect(unauthorized.status).toBe(401);
+    const handlers = createRecognitionHandlers({ authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@b.c" }) } });
+    const response = await handlers.GET(new NextRequest(url, { headers: { cookie: "home_inventory_session=test" } }));
+    expect(await response.json()).toEqual({ ok: true, data: { providers: ["DOUBAO", "DEEPSEEK"] } });
+  });
+  it("forwards DeepSeek and trusted session identity and returns safe provider errors", async () => {
+    let seen: unknown;
+    const handlers = createRecognitionHandlers({
+      authService: { getCurrentUser: async () => ({ userId: "user-a", email: "a@b.c" }) },
+      recognitionService: {
+        recognizeForCurrentUser: async (input) => { seen = input; throw new DeepSeekRecognitionError("DEEPSEEK_AUTH_INVALID", 401, "DeepSeek 密钥无效，请在设置中更新"); },
+        attachPhotoToItem: async () => true, getItemPhoto: async () => null,
+        deleteItemPhoto: async () => undefined, cleanupExpiredPendingPhotos: async () => 0,
+      },
+    });
+    const form = new FormData();
+    form.append("file", jpegBlob(), "photo.jpg");
+    form.append("userId", "user-b");
+    const result = await handlers.POST(new NextRequest("http://localhost/api/recognition?provider=DEEPSEEK", { method: "POST", body: form, headers: { cookie: "home_inventory_session=test" } }));
+    expect(seen).toMatchObject({ provider: "DEEPSEEK", userId: "user-a", mode: "name" });
+    expect(result.status).toBe(401);
+    expect(await result.json()).toEqual({ ok: false, code: "DEEPSEEK_AUTH_INVALID", message: "DeepSeek 密钥无效，请在设置中更新" });
+  });
+  it("rejects an unknown provider before invoking recognition", async () => {
+    const handlers = createRecognitionHandlers({ authService: { getCurrentUser: async () => ({ userId: "user-1", email: "a@b.c" }) } });
+    const form = new FormData();
+    form.append("file", jpegBlob(), "photo.jpg");
+    const result = await handlers.POST(new NextRequest("http://localhost/api/recognition?provider=OTHER", { method: "POST", body: form, headers: { cookie: "home_inventory_session=test" } }));
+    expect(result.status).toBe(400);
+    expect(await result.json()).toEqual({ ok: false, message: "不支持的识别服务" });
+  });
   it("returns 401 without a session", async () => {
     const handlers = createRecognitionHandlers();
     const response = await handlers.POST(

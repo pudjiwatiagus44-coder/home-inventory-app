@@ -64,6 +64,7 @@ class InventoryRepository(
     private val pendingOperationDao: PendingOperationDao,
     private val syncStateDao: SyncStateDao,
     private val gson: Gson = Gson(),
+    private val recognitionProvider: () -> String = { "DOUBAO" },
 ) {
     @Volatile
     private var currentHouseholdId: String? = null
@@ -347,8 +348,13 @@ class InventoryRepository(
     ): Result<RecognitionDraft> {
         val body = jpegBytes.toRequestBody("image/jpeg".toMediaType())
         val part = MultipartBody.Part.createFormData("file", "photo.jpg", body)
+        val provider = if (mode == "photo") null else recognitionProvider()
         val response = try {
-            api.recognize(part, mode)
+            if (provider != null) com.homeinventory.app.data.recognition.requireRecognitionProvider(api, provider)
+            api.recognize(part, mode, provider)
+        } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (error: IllegalStateException) {
+            return Result.failure(error)
         } catch (_: Exception) {
             return Result.failure(IllegalStateException("无法连接服务器，请检查网络"))
         }
@@ -363,6 +369,12 @@ class InventoryRepository(
         }
 
         val data = envelope.data
+        if (provider == "DEEPSEEK" && data.provider != "DEEPSEEK") {
+            return Result.failure(IllegalStateException("服务器识别服务不匹配，请更新服务器后再试"))
+        }
+        if (mode != "photo" && !data.recognized) {
+            return Result.failure(IllegalStateException("未能识别，请重试或手动填写"))
+        }
         return Result.success(
             RecognitionDraft(
                 mode = data.mode,

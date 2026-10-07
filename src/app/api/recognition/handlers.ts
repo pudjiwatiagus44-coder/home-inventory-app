@@ -17,6 +17,9 @@ import {
 } from "../../../server/recognition/doubao-vision";
 import { createRecognitionRateLimiter } from "../../../server/recognition/rate-limiter";
 import { createRecognitionService } from "../../../server/recognition/recognition-service";
+import { createDeepSeekVisionClient, DeepSeekRecognitionError } from "../../../server/recognition/deepseek-vision";
+import { createDeepSeekCredentialService } from "../../../features/bookkeeping/deepseek-credential-service";
+import { createPostgresDeepSeekCredentialRepository } from "../../../features/bookkeeping/deepseek-credential-repository";
 import { createPostgresInventoryRepository } from "../../../features/inventory/inventory-repository";
 import { ReadOnlyMemberError } from "../../../features/inventory/inventory-service";
 import type { createAuthService } from "../../../server/auth/auth-service";
@@ -66,6 +69,20 @@ export function createRouteRecognitionService(
     photoRepository,
     photoStore,
     doubaoVision,
+    deepseekVisionForUser: async (userId) => {
+      try {
+        const credentials = createDeepSeekCredentialService({
+          database: createPostgresDeepSeekCredentialRepository(queryClient),
+          env: { ...env, NODE_ENV: process.env.NODE_ENV },
+        });
+        const apiKey = await credentials.decryptForProvider(userId);
+        if (!apiKey) throw new DeepSeekRecognitionError("DEEPSEEK_CREDENTIAL_NOT_CONFIGURED", 409, "请先在设置中配置 DeepSeek API Key");
+        return createDeepSeekVisionClient({ apiKey });
+      } catch (error) {
+        if (error instanceof DeepSeekRecognitionError) throw error;
+        throw new DeepSeekRecognitionError("DEEPSEEK_CREDENTIAL_UNAVAILABLE", 503, "DeepSeek 密钥托管暂时不可用");
+      }
+    },
   });
 }
 
@@ -73,6 +90,15 @@ export function createRecognitionHandlers(
   dependencies: RecognitionDependencies = {},
 ) {
   return {
+    async GET(request: NextRequest) {
+      try {
+        const user = await getCurrentUserFromRequest(request, dependencies.authService);
+        if (!user) return NextResponse.json({ ok: false, message: "Authentication required" }, { status: 401 });
+        return NextResponse.json({ ok: true, data: { providers: ["DOUBAO", "DEEPSEEK"] } });
+      } catch {
+        return NextResponse.json({ ok: false, message: "无法读取识别服务状态" }, { status: 503 });
+      }
+    },
     async POST(request: NextRequest) {
       try {
         const currentUser = await getCurrentUserFromRequest(
@@ -85,6 +111,11 @@ export function createRecognitionHandlers(
             { ok: false, message: "Authentication required" },
             { status: 401 },
           );
+        }
+
+        const rawProvider = request.nextUrl.searchParams.get("provider");
+        if (rawProvider !== null && rawProvider !== "DOUBAO" && rawProvider !== "DEEPSEEK") {
+          return NextResponse.json({ ok: false, message: "不支持的识别服务" }, { status: 400 });
         }
 
         const limiter =
@@ -140,11 +171,12 @@ export function createRecognitionHandlers(
           userId: currentUser.userId,
           mode,
           jpegBuffer: buffer,
+          ...(rawProvider ? { provider: rawProvider } : {}),
         });
 
         await service.cleanupExpiredPendingPhotos().catch(() => undefined);
 
-        return NextResponse.json({ ok: true, data });
+        return NextResponse.json({ ok: true, data: rawProvider && mode !== "photo" ? { ...data, provider: rawProvider } : data });
       } catch (error) {
         return createRecognitionErrorResponse(error);
       }
@@ -153,6 +185,9 @@ export function createRecognitionHandlers(
 }
 
 function createRecognitionErrorResponse(error: unknown) {
+  if (error instanceof DeepSeekRecognitionError) {
+    return NextResponse.json({ ok: false, code: error.code, message: error.message }, { status: error.status });
+  }
   if (error instanceof DoubaoApiKeyMissingError) {
     return NextResponse.json(
       { ok: false, message: error.message },

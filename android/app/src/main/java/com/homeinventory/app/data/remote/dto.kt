@@ -249,6 +249,7 @@ data class RecognitionResponseDto(
     val note: String? = null,
     val expireDate: String? = null,
     val thumbnailId: String? = null,
+    val provider: String? = null,
 )
 
 data class PhotoUploadResponseDto(

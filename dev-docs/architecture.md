@@ -347,3 +347,6 @@ Android 拍物品正面照
 ## 2026-09-01 记账识别纠错反馈
 
 用户确认继续本地实现识别纠错闭环。服务端新增账号隔离的 `bookkeeping_recognition_feedback` 表和认证反馈接口；Android 每次“保存并报错”都必须先预览并明确授权，只上传脱敏文字、固定 12 字段前后快照、差异项、模型和授权时间。理解接口仅在有效登录会话下检索当前账号最多 3 条相似纠正样本，无会话或查询失败时退化为普通识别。纠正样本作为不可信 JSON 数据，不能改变 system prompt 或输出契约。禁止跨账号共享、自动精调、上传截图和在日志中记录正文。完整边界见 `dev-docs/bookkeeping-recognition-feedback-design.md`；生产迁移和部署仍需再次确认。
+# 2026-10-07 个人 DeepSeek 接入扩展（已确认，本地实现完成）
+
+拟复用 `/api/bookkeeping/deepseek-credential` 账号加密托管；库存识别只能用服务端当前会话账号解密其自身凭据。Android 仅保存按账号隔离的非敏感 provider 选择。库存提示、输出解析独立于记账分类合同，旧请求缺省豆包，禁止跨模型自动兜底。不新增 schema；同账号跨 App 凭据共用须明示。见 [个人 API 设置方案](inventory-personal-api-settings-2026-10-07.md)。

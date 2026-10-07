@@ -38,6 +38,11 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 
 abstract class TestApiStub : HomeInventoryApi {
+    override suspend fun recognitionProviders(): Response<ApiEnvelope<com.homeinventory.app.data.remote.RecognitionProvidersDto>> = Response.success(ApiEnvelope(true, com.homeinventory.app.data.remote.RecognitionProvidersDto(listOf("DOUBAO", "DEEPSEEK"))))
+    override suspend fun deepSeekStatus(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto>> = Response.success(ApiEnvelope(true, com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto(false)))
+    override suspend fun deepSeekSave(request: com.homeinventory.app.data.remote.DeepSeekSaveRequest): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto>> = Response.success(ApiEnvelope(true, com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto(true)))
+    override suspend fun deepSeekValidate(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekValidationDto>> = Response.success(ApiEnvelope(true, com.homeinventory.app.data.remote.DeepSeekValidationDto(com.homeinventory.app.data.remote.DeepSeekCredentialStatusDto(true), 0)))
+    override suspend fun deepSeekDelete(): Response<ApiEnvelope<com.homeinventory.app.data.remote.DeepSeekDeleteDto>> = Response.success(ApiEnvelope(true, com.homeinventory.app.data.remote.DeepSeekDeleteDto(true)))
     override suspend fun login(request: LoginRequest): Response<AuthResponse> =
         Response.success(AuthResponse(ok = true))
 
@@ -91,11 +96,13 @@ abstract class TestApiStub : HomeInventoryApi {
     override suspend fun recognize(
         file: MultipartBody.Part,
         mode: String,
+        provider: String?,
     ): Response<ApiEnvelope<RecognitionResponseDto>> =
         Response.success(
             ApiEnvelope(
                 ok = true,
                 data = RecognitionResponseDto(
+                    provider = provider,
                     mode = mode,
                     recognized = true,
                     name = "牛奶",

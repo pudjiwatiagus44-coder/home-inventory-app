@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
+import com.homeinventory.app.ui.components.ClearableOutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +58,7 @@ fun AreaFormDialog(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(text = title, fontSize = 16.sp)
-            OutlinedTextField(
+            ClearableOutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("区域名称") },

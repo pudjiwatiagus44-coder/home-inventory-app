@@ -1,5 +1,7 @@
 # Development Truth Index
 
+2026-10-07：家庭物品 Android 设置入口、个人 DeepSeek 凭据管理及物品识别接入方案已整理，具体复用边界已确认，本地实现与验证完成，尚未部署。见 [个人 API 设置方案](inventory-personal-api-settings-2026-10-07.md)。
+
 2026-09-29 记账识别接口 400/422 的分阶段修复设计已确认、尚未实施：图片重识别允许省略本地分类候选；疑似多笔仅在客户端显式声明能展示漏单警告时返回“单笔＋警告”，旧版仍返回 422。生产切换另需授权。见 [识别协议修复真源](bookkeeping-recognition-protocol-repair-2026-09-29.md)。
 
 本目录是 Home Inventory App 的内部开发真源。后续代码、数据库、界面、部署和验收都必须回到这里对齐。

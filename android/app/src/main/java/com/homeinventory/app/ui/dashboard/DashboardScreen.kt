@@ -55,6 +55,7 @@ fun DashboardScreen(
     onImport: () -> Unit,
     onInvite: () -> Unit,
     onHelp: () -> Unit,
+    onSettings: () -> Unit,
     onDraftsClick: () -> Unit,
     draftCount: Int,
     onSignOut: () -> Unit,
@@ -74,6 +75,7 @@ fun DashboardScreen(
                 onImport = onImport,
                 onInvite = onInvite,
                 onHelp = onHelp,
+                onSettings = onSettings,
                 onSignOut = onSignOut,
                 onDraftBounds = onDraftButtonBounds,
             )
