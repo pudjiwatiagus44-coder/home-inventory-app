@@ -1110,7 +1110,6 @@
 - 全仓 `tsc --noEmit --incremental false` 未通过，存在原有测试类型错误（如 auth 测试 fake query 缺 rows、只读 NODE_ENV 赋值、既有 recognition-service.test 的 recognizeName）；本次引入的 env 类型错误已修复，业务源码检查重新通过。未把全仓类型检查记为通过。
 - 本轮未运行真实 PostgreSQL 集成、未操作生产、未使用真实个人 API Key、未做真机点击验收。旧工作树测试因缺文件不可运行，测试命令明确排除 `.worktrees/**`。
 
-- 
-px eslint src：exit 0，0 错误，7 条既有未使用变量警告；本次变更文件专项 lint 为 0 错误/警告。
+- `npx eslint src`：exit 0，0 错误，7 条既有未使用变量警告；本次变更文件专项 lint 为 0 错误/警告。
 - 只读复核发现失败草稿没有重试入口，已补齐按钮、ViewModel 调用和仓库识别中状态；新增原图失败恢复重试与能力检查超时测试通过。
 - 最终 Debug APK SHA-256：CE8E3E244879C0E7F87D4814BE4671B407437DDAAA31F370273F8C6A83545DD4。
