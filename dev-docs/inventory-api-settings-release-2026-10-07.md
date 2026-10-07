@@ -11,7 +11,15 @@
 - Next.js 独立 `tsconfig.build.json` 保持严格检查业务源码和生成的路由类型；单元测试继续由 Vitest/JUnit 独立执行，全仓测试类型错误仍保留在原 tsconfig 检查结果中，不配置 ignoreBuildErrors。
 - 本轮没有 schema 迁移；复用已经部署的 DeepSeek 托管表及既有主密钥。授权后若检查发现必要表/主密钥未配置，停止切换并报告，不临时修改密钥或 schema。
 
-## 生产操作待确认
+## 本地发布验证（已完成）
+
+- `npm run build` 成功，包含 Next.js 编译、严格 TypeScript 检查、静态页面生成；Build ID 为 `HNKiG34BR5mGfHevgWXsJ`。
+- 0.5.35/code 41 APK 重新构建成功，92 项 Android 单元测试通过。
+- 本机生产模式 smoke：`GET /login` 为 200；未登录 `GET /api/recognition`、`GET /api/bookkeeping/deepseek-credential`、`GET /api/mobile/inventory/snapshot` 和 `POST /api/recognition?provider=DEEPSEEK` 均为 401。
+- 发布材料位于忽略目录 `exports/releases/inventory-api-settings-20261007/`：APK、version.json、服务端 tar.gz、manifest.json。服务端包不含环境文件、私钥、数据库、照片、node_modules 或 Git 元数据；不覆盖服务器原有 public/、data/。
+- 代码提交 `a79784c`；产物清单记录 SHA-256 和大小。服务器包需要沿用 Linux 运行依赖，不能把 Windows node_modules 上传。
+
+## 待授权的执行清单
 
 1. 检查服务器当前版本与服务状态，记录版本/路由，不读取或打印用户 Key、环境文件内容或数据库密码。
 2. 在服务器本地备份现有应用目录、数据库及 latest APK/version.json；备份不下载至仓库。
