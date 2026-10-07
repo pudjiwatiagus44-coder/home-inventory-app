@@ -1,6 +1,6 @@
 # Development Truth Index
 
-2026-10-07 个人 API 设置的[发布准备与操作清单](inventory-api-settings-release-2026-10-07.md)已整理，准备 0.5.35/code 41；生产操作尚待确认。
+2026-10-07 用户明确确认后，个人 API 设置已部署服务端并发布 Android 0.5.35/code 41；见[发布记录与回滚材料](inventory-api-settings-release-2026-10-07.md)。真实 Key 与真机识别待用户验证。
 
 2026-10-07：家庭物品 Android 设置入口、个人 DeepSeek 凭据管理及物品识别接入方案已整理，具体复用边界已确认，本地实现与验证完成，尚未部署。见 [个人 API 设置方案](inventory-personal-api-settings-2026-10-07.md)。
 
