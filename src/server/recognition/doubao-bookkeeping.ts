@@ -1,3 +1,4 @@
+import { parseRefreshHints, REFRESH_HINTS_PROMPT, type RefreshHints } from "./bookkeeping-refresh";
 import { applyTrustedPaymentAmount, type PaymentAmountCandidate } from "./payment-amount-candidates";
 
 export const BOOKKEEPING_DRAFT_FIELDS = [
@@ -15,7 +16,7 @@ export const BOOKKEEPING_DRAFT_FIELDS = [
   "note",
 ] as const;
 
-export type BookkeepingDraft = Record<(typeof BOOKKEEPING_DRAFT_FIELDS)[number], string>;
+export type BookkeepingDraft = Record<(typeof BOOKKEEPING_DRAFT_FIELDS)[number], string> & { refreshHints?: RefreshHints };
 
 export type BookkeepingUnderstandingResult =
   | { ok: true; value: BookkeepingDraft[]; model: string }
@@ -37,6 +38,7 @@ type RequestOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
   reviewInstruction?: string;
+  refreshHints?: boolean;
 };
 
 export type BookkeepingCategoryContext = {
@@ -115,7 +117,7 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
             model,
             ...(deps.nonThinking ? { thinking: { type: "disabled" } } : { temperature: 0.1 }),
             messages: [
-              { role: "system", content: SYSTEM_PROMPT },
+              { role: "system", content: SYSTEM_PROMPT + (options.refreshHints ? "\n" + REFRESH_HINTS_PROMPT : "") },
               {
                 role: "user",
                 content: JSON.stringify({
@@ -162,7 +164,7 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
         if (values.length === 0) throw new Error("empty result");
         const drafts = values.map((value) => {
           if (!value || typeof value !== "object") throw new Error("invalid object");
-          const keys = Object.keys(value as Record<string, unknown>).sort();
+          const keys = Object.keys(value as Record<string, unknown>).filter(key => !(options.refreshHints && key === "refreshHints")).sort();
           if (keys.join(",") !== [...BOOKKEEPING_DRAFT_FIELDS].sort().join(",")) {
             throw new Error("invalid fields");
           }
@@ -172,12 +174,15 @@ export function createDoubaoBookkeepingClient(deps: Dependencies = {}) {
               if (typeof fieldValue !== "string") throw new Error(`invalid ${field}`);
               return [field, fieldValue.trim()];
             }),
-          ) as BookkeepingDraft;
+          ) as unknown as BookkeepingDraft;
           if (!isFreeCategoryDraft(draft)) throw new Error("invalid category or type");
           draft.dateTime = deriveExplicitDateTime(ocrText, capturedAt) || draft.dateTime;
+          if (options.refreshHints) draft.refreshHints = parseRefreshHints((value as Record<string, unknown>).refreshHints, draft.amount);
           return draft;
         });
-        return { ok: true, value: applyTrustedPaymentAmount(drafts, amountCandidates), model };
+        const finalDrafts = applyTrustedPaymentAmount(drafts, amountCandidates);
+        if (options.refreshHints) finalDrafts.forEach(draft => { draft.refreshHints = parseRefreshHints(draft.refreshHints, draft.amount); });
+        return { ok: true, value: finalDrafts, model };
       } catch {
         return { ok: false, reason: "invalid_response" };
       }

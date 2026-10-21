@@ -1,3 +1,4 @@
+import { parseRefreshHints, REFRESH_HINTS_PROMPT } from "../../server/recognition/bookkeeping-refresh";
 import {
   BOOKKEEPING_DRAFT_FIELDS,
   type BookkeepingCategoryContext,
@@ -16,6 +17,7 @@ export type RerecognitionInput = {
   categories: BookkeepingCategoryContext[];
   provider: RerecognitionProvider;
   signal?: AbortSignal;
+  refreshHints?: boolean;
 };
 type ProviderResult = BookkeepingUnderstandingResult | { ok: false; reason: string };
 type TextProvider = (input: RerecognitionInput) => Promise<ProviderResult>;
@@ -153,12 +155,12 @@ function createOpenAiVisionProvider(config: {
     const body = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: unknown } }> } | null;
     const content = body?.choices?.[0]?.message?.content;
     if (typeof content !== "string") return { ok: false, reason: "invalid_response" };
-    const drafts = parseStrictDrafts(content);
+    const drafts = parseStrictDrafts(content, input.refreshHints);
     return drafts ? { ok: true, value: drafts, model: config.model } : { ok: false, reason: "invalid_response" };
   };
 }
 
-function parseStrictDrafts(content: string): BookkeepingDraft[] | null {
+function parseStrictDrafts(content: string, refreshHints = false): BookkeepingDraft[] | null {
   try {
     const trimmed = content.trim();
     const fence = trimmed.match(/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i);
@@ -168,14 +170,16 @@ function parseStrictDrafts(content: string): BookkeepingDraft[] | null {
     return parsed.map((value) => {
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid draft");
       const record = value as Record<string, unknown>;
-      if (Object.keys(record).length !== BOOKKEEPING_DRAFT_FIELDS.length ||
-          Object.keys(record).some((field) => !BOOKKEEPING_DRAFT_FIELDS.includes(field as typeof BOOKKEEPING_DRAFT_FIELDS[number]))) {
+      if (Object.keys(record).filter(field => !(refreshHints && field === "refreshHints")).length !== BOOKKEEPING_DRAFT_FIELDS.length ||
+          Object.keys(record).filter(field => !(refreshHints && field === "refreshHints")).some((field) => !BOOKKEEPING_DRAFT_FIELDS.includes(field as typeof BOOKKEEPING_DRAFT_FIELDS[number]))) {
         throw new Error("unexpected draft field");
       }
-      return Object.fromEntries(BOOKKEEPING_DRAFT_FIELDS.map((field) => {
+      const draft = Object.fromEntries(BOOKKEEPING_DRAFT_FIELDS.map((field) => {
         if (typeof record[field] !== "string") throw new Error("invalid draft field");
         return [field, record[field].trim()];
-      })) as BookkeepingDraft;
+      })) as unknown as BookkeepingDraft;
+      if (refreshHints) draft.refreshHints = parseRefreshHints(record.refreshHints, draft.amount);
+      return draft;
     });
   } catch {
     return null;
@@ -190,7 +194,7 @@ function isCompleteDraft(draft: BookkeepingDraft) {
 }
 
 function visionPrompt(input: RerecognitionInput) {
-  return `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出非空的自由细分分类名称；建议四字内但不限制长度（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”或“收入”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
+  return (input.refreshHints ? REFRESH_HINTS_PROMPT + "\n" : "") + `用户已明确授权对这张订单截图重新识别。必须以截图画面为主要依据重新理解订单，OCR 文字只作辅助。逐个可见订单卡片识别，每个仍然有效的真实交易输出一个草稿；过滤已取消订单、广告、权益和推荐内容。每个草稿的金额、商户、商品、订单时间、支付时间、路线、车次、座位等字段只能来自同一张订单卡片，不得跨卡片拼接。category 由你按自己的理解直接给出非空的自由细分分类名称；建议四字内但不限制长度（如：早餐、咖啡茶饮、网约车、停车费、宠物食品、火车票）；不依赖任何预设分类表，预设里没有的细分名称同样允许使用；禁止输出“餐饮”“购物”“交通”等一级大类。只输出一个 JSON 数组，不要解释；没有有效订单时输出空数组。数组中每个对象必须且只能包含字符串字段：${BOOKKEEPING_DRAFT_FIELDS.join(",")}。type 必须严格为“支出”或“收入”之一。\nOCR:${input.ocrText}\n时间:${input.capturedAt}`;
 }
 
 function isBeijingWorkspaceUrl(value: string) {

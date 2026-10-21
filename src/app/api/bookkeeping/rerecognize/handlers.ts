@@ -132,7 +132,7 @@ export function createBookkeepingRerecognizeHandlers(deps: RerecognizeDependenci
         deepseekApiKey,
         qwenApiKey,
       });
-      const result = await service.rerecognize({ ...parsed.input, signal: request.signal }, parsed.image);
+      const result = await service.rerecognize({ ...parsed.input, refreshHints: request.headers.get("X-Bookkeeping-Refresh") === "1", signal: request.signal }, parsed.image);
       if (!result.ok) {
         console.warn("bookkeeping rerecognition failed", {
           provider: parsed.input.provider,

@@ -33,6 +33,8 @@ type FeedbackLookupService = Pick<
 
 export type BookkeepingUnderstandDependencies = {
   client?: BookkeepingClient;
+  /** Server-generated only; never accepted from request JSON. */
+  refreshInstruction?: string;
   authService?: CurrentUserAuthService;
   feedbackService?: FeedbackLookupService;
   env?: PostgresEnv;
@@ -211,10 +213,10 @@ export function createBookkeepingUnderstandHandlers(
           categories,
           correctionExamples,
           amountCandidates,
-          { signal: request.signal, ...(reviewInstruction ? { reviewInstruction } : {}) },
+          { signal: request.signal, ...(request.headers.get("X-Bookkeeping-Refresh") === "1" ? {refreshHints: true} : {}), ...((reviewInstruction ?? dependencies.refreshInstruction) ? { reviewInstruction: reviewInstruction ?? dependencies.refreshInstruction } : {}) },
         )
         : understandWithFallback(
-          { mode: modelMode, ocrText, capturedAt, categories, correctionExamples, amountCandidates, signal: request.signal, reviewInstruction },
+          { mode: modelMode, ocrText, capturedAt, categories, correctionExamples, amountCandidates, signal: request.signal, ...(request.headers.get("X-Bookkeeping-Refresh") === "1" ? {refreshHints: true} : {}), reviewInstruction: reviewInstruction ?? dependencies.refreshInstruction },
           providers,
         );
       let result = await recognize();
@@ -232,7 +234,7 @@ export function createBookkeepingUnderstandHandlers(
       }
       let data = Array.isArray(result.value) ? result.value : [result.value];
       const multiOrder = detectSuspectedMultiOrder(ocrText);
-      if (multiOrder.suspected && data.length <= 1) {
+      if (!dependencies.refreshInstruction && multiOrder.suspected && data.length <= 1) {
         console.info("bookkeeping multi-order review started", { modelMode, evidenceCount: multiOrder.evidenceCount });
         const reviewed = await recognize(
           `检测到至少 ${multiOrder.evidenceCount} 个独立实付区块。请逐个订单卡片复核并输出全部真实订单；不要把推荐商品、广告、优惠、运费或原价作为订单。`,
@@ -303,9 +305,9 @@ function parseCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
   });
 }
 
-class BodyTooLargeError extends Error {}
+export class BodyTooLargeError extends Error {}
 
-async function readBoundedJsonObject(request: NextRequest): Promise<Record<string, unknown> | null> {
+export async function readBoundedJsonObject(request: NextRequest): Promise<Record<string, unknown> | null> {
   const contentLength = request.headers.get("content-length");
   if (contentLength !== null) {
     if (!/^\d+$/.test(contentLength)) throw new Error("invalid_content_length");

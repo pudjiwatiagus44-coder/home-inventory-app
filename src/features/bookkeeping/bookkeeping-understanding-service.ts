@@ -24,6 +24,7 @@ export type TextUnderstandingInput = {
   signal?: AbortSignal;
   timeoutMs?: number;
   reviewInstruction?: string;
+  refreshHints?: boolean;
 };
 
 export type TextUnderstandingProvider = {
@@ -106,7 +107,7 @@ function createQwenProvider(env: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, pe
 
 function toProvider(client: ReturnType<typeof createDoubaoBookkeepingClient>): TextUnderstandingProvider {
   return {
-    understand: ({ ocrText, capturedAt, categories, correctionExamples, amountCandidates, signal, timeoutMs, reviewInstruction }) =>
-      client.understandOcrText(ocrText, capturedAt, categories, correctionExamples, amountCandidates, { signal, timeoutMs, reviewInstruction }),
+    understand: ({ ocrText, capturedAt, categories, correctionExamples, amountCandidates, signal, timeoutMs, reviewInstruction, refreshHints }) =>
+      client.understandOcrText(ocrText, capturedAt, categories, correctionExamples, amountCandidates, { signal, timeoutMs, reviewInstruction, refreshHints }),
   };
 }
