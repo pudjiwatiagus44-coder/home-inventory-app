@@ -16,3 +16,16 @@ describe("refresh contract", () => {
         expect(selectRefreshResult("MERCHANT", current, draft, ["b 店"]).status).toBe("NO_ALTERNATIVE");
     });
 });
+it("allows whole-transaction refresh to retain unknown merchant and description", () => {
+    const current = { amount: "18.00", direction: "Expense" as const, category: "午餐", merchant: "", description: "" };
+    const proposed = { ...current, amount: "20.00" };
+    expect(selectRefreshResult("TRANSACTION", current, proposed, [])).toEqual({ status: "CHANGED", data: proposed });
+    expect(selectRefreshResult("TRANSACTION", current, current, []).status).toBe("NO_ALTERNATIVE");
+    expect(selectRefreshResult("TRANSACTION", current, proposed, [JSON.stringify(proposed)]).status).toBe("NO_ALTERNATIVE");
+    expect(selectRefreshResult("TRANSACTION", current, { ...proposed, category: "" }, []).status).toBe("NO_ALTERNATIVE");
+});
+it("still rejects an empty value when refreshing an individual text field", () => {
+    const current = { amount: "18.00", direction: "Expense" as const, category: "午餐", merchant: "小店", description: "午餐" };
+    expect(selectRefreshResult("MERCHANT", current, { ...current, merchant: "" }, []).status).toBe("NO_ALTERNATIVE");
+    expect(selectRefreshResult("DESCRIPTION", current, { ...current, description: "" }, []).status).toBe("NO_ALTERNATIVE");
+});

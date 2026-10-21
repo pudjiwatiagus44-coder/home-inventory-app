@@ -48,6 +48,7 @@ export function parseRefreshHints(value: unknown, currentAmount: string): Refres
 export function selectRefreshResult(scope: RefreshScope, current: RefreshData, proposed: RefreshData, excluded: string[]) {
     const field = ({ AMOUNT: "amount", MERCHANT: "merchant", DESCRIPTION: "description", CATEGORY: "category" } as const)[scope as Exclude<RefreshScope, "TRANSACTION">];
     const fields = field ? [field] : Object.keys(current) as Array<keyof RefreshData>;
+    const requiredFields: Array<keyof RefreshData> = field ? [field] : ["amount", "direction", "category"];
     const changed = fields.some(key => normalizeRefreshValue(key, current[key]) !== normalizeRefreshValue(key, proposed[key]));
     const excludedMatch = field ? excluded.some(value => normalizeRefreshValue(field, value) === normalizeRefreshValue(field, proposed[field])) : excluded.some(value => {
         try {
@@ -58,7 +59,7 @@ export function selectRefreshResult(scope: RefreshScope, current: RefreshData, p
             return false;
         }
     });
-    if (((!field || field === "amount") && (!/^\d+(\.\d{1,2})?$/.test(proposed.amount) || !Number.isFinite(Number(proposed.amount)) || Number(proposed.amount) <= 0)) || (!field && !["Income", "Expense"].includes(proposed.direction)) || !changed || excludedMatch || fields.some(key => !proposed[key]?.trim()))
+    if (((!field || field === "amount") && (!/^\d+(\.\d{1,2})?$/.test(proposed.amount) || !Number.isFinite(Number(proposed.amount)) || Number(proposed.amount) <= 0)) || (!field && !["Income", "Expense"].includes(proposed.direction)) || !changed || excludedMatch || requiredFields.some(key => !proposed[key]?.trim()))
         return { status: "NO_ALTERNATIVE" as const, data: current };
     return { status: "CHANGED" as const, data: field ? { ...current, [field]: proposed[field] } : proposed };
 }

@@ -28,3 +28,9 @@
 2026-10-21 在当前提交 `5b17fd8` 上重新执行上述定向Vitest：8文件104项通过；本轮全部变更TS文件ESLint0错误0警告。`npm run build`生产构建成功，既有`tsconfig.build.json`生产类型检查通过，包含新`/api/bookkeeping/refresh`路由。未部署、未推送；用户原`tsconfig.tsbuildinfo`仍保持现有修改。
 
 Android侧已处理来源、current和excluded文本脱敏，拒绝新脱敏占位内容保存；每卡独立门闩、原ID事务CAS与账号会话代号防晚写。当前仅合同和人工构造样本验证，真实模型对同图多订单/推荐价格的语义归属尚未验证，不能将提示词约束宣称为确定性归属校验。
+
+### 2026-10-21 整笔刷新历史空字段兼容
+
+- 整笔刷新仅强制 amount/direction/category 非空，允许历史未知 merchant/description 保持空字符串；业务变化与排除比较仍覆盖全部5字段。单字段商户/描述刷新仍拒绝空替代。
+- 新增空商户/描述但金额18→20、整笔相同、整笔历史排除、空分类和单字段空值回归；空商户/描述用例先红后绿。8文件106项通过，定向 ESLint 0错误0警告。
+- `npm run build` 通过：Next.js生产编译、`tsconfig.build.json`生产类型检查、35个静态页面生成与路由产物均成功，包含 `/api/bookkeeping/refresh`。未修改构建配置或用户原有 tsbuildinfo。
