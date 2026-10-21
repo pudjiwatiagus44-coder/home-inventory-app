@@ -14,3 +14,11 @@
 - TDD：新增合同测试先出现缺失模块的红灯；实现后定向8文件共99项通过，包括新路由5项、候选规范化与字段隔离3项、文字/图像响应协商3项和旧版88项兼容检查。命令：`node_modules/.bin/vitest.cmd run --exclude '**/.worktrees/**' src/server/recognition/bookkeeping-refresh src/server/recognition/doubao-bookkeeping.test.ts src/features/bookkeeping/bookkeeping-understanding-service.test.ts src/features/bookkeeping/bookkeeping-vision-rerecognition-service.test.ts src/app/api/bookkeeping/understand/route.test.ts src/app/api/bookkeeping/rerecognize/route.test.ts src/app/api/bookkeeping/refresh/route.test.ts`。
 - 定向 ESLint 通过（0错误、0警告）。全库 `tsc --noEmit --incremental false` 未通过：已有 exports 发布源码快照引用缺失和既存测试类型错误；本次生产源码和新增测试未检出类型错误。未改动用户现有 `tsconfig.tsbuildinfo`。
 - 未请求真实凭据/真实模型、未访问真实账目、未推送/部署。真实模型候选可信度、真实账号路由及手机到线上新接口闭环均未验证，生产环境尚无此新增接口。
+
+### 2026-10-21 协议复核修正
+
+- AMOUNT 只请求候选，返回 `NO_ALTERNATIVE` 和原 current，Android 自行从候选循环选取。候选按 AI 原 rank 排序，不把拟议新 amount 移到首位；校验的是输入当前原金额，缺失时丢弃候选。保留模型 rank 数值，最多5项后仍须包含当前金额。
+- 刷新路由通过服务器内部 `skipCorrectionExamples` 禁止读取/发送历史纠错样本，普通 understand 原有行为不变。
+- excludedValues 上限由30提高到1000，整体256KB请求界限仍有效；不得通过截断历史重新允许已展示结果。
+- 新增5项回归先全部失败，修正后8文件104项通过，定向 ESLint 0错误0警告。覆盖旧金额不是首选、候选缺原金额、金额刷新原值保持、无历史反馈读取、32项排除仍拦截旧答案。
+- 尚未生产部署或调用真实模型，归属校验与脱敏其它审查项由 Android 集成继续处理。

@@ -35,6 +35,8 @@ export type BookkeepingUnderstandDependencies = {
   client?: BookkeepingClient;
   /** Server-generated only; never accepted from request JSON. */
   refreshInstruction?: string;
+  /** Refresh scope must not submit unrelated stored records to a model. */
+  skipCorrectionExamples?: boolean;
   authService?: CurrentUserAuthService;
   feedbackService?: FeedbackLookupService;
   env?: PostgresEnv;
@@ -117,7 +119,7 @@ export function createBookkeepingUnderstandHandlers(
       }
       let correctionExamples: BookkeepingCorrectionExample[] = [];
       try {
-        if (currentUser) {
+        if (currentUser && !dependencies.skipCorrectionExamples) {
           const feedbackService = dependencies.feedbackService ?? createBookkeepingFeedbackService({
             client: createPostgresQueryClientFromEnv(dependencies.env ?? process.env),
           });
