@@ -34,3 +34,22 @@ Android侧已处理来源、current和excluded文本脱敏，拒绝新脱敏占�
 - 整笔刷新仅强制 amount/direction/category 非空，允许历史未知 merchant/description 保持空字符串；业务变化与排除比较仍覆盖全部5字段。单字段商户/描述刷新仍拒绝空替代。
 - 新增空商户/描述但金额18→20、整笔相同、整笔历史排除、空分类和单字段空值回归；空商户/描述用例先红后绿。8文件106项通过，定向 ESLint 0错误0警告。
 - `npm run build` 通过：Next.js生产编译、`tsconfig.build.json`生产类型检查、35个静态页面生成与路由产物均成功，包含 `/api/bookkeeping/refresh`。未修改构建配置或用户原有 tsbuildinfo。
+
+## 2026-10-21 上线授权
+
+用户明确回复“直接上线吧”，授权备份当前服务及发布文件、部署已验证刷新接口、发布0.1.71记账APK并重启服务。仅此功能，不修改数据库schema/密钥，不读真实账目或调用真实个人凭据。上线采用独立staging、沿用Linux依赖与原data/public路径，冒烟失败恢复旧服务及记账APK/清单。
+
+## 2026-10-21 已授权生产上线
+
+用户“直接上线吧”并追加“继续”授权后完成部署。线上源码与5df94b8逐文件归一化比较一致；favicon作为二进制单独SHA-256核对一致。锁文件SHA-256 eeba2f52f850d570a9f2fe3153c23dd7e5835fc01cdf0b287dfc498ebad9bb48匹配，沿用原Linux依赖。发布代码0b51ad4，Build ID fpcOIA6ty43d6NqBZEDRI；包SHA-256 8865ad683b82230dae0956391e168c1ce12c2038c7db80de3de215bc2d13b33f。
+
+- 备份目录 `/opt/home-inventory-backups/bookkeeping-refresh-20261021`，root私有151MB；数据库dump可被pg_restore列目录读取，SHA-256 08868c798863d52194b0619ce237c4e8a5cacc5d895d593706ee7b3dd407bb53；应用archive SHA-256 505baa07159b6dee89f640e1d23f62341469eba317fb8229685adaedd6fef89c。
+- 独立staging端口3108通过登录页200、既有识别/凭据/移动快照未登录401、新refresh无效body400后才切换。旧应用留在 `/opt/home-inventory-app-rollback-refresh-20261021`；原data/public/node_modules绝对链接保留，无数据库迁移或密钥改动。
+- 生产home-inventory-app.service active，PostgreSQL accepting connections，最近5分钟错误级服务日志0；既有受保护接口401，新refresh无效请求400，公网合法结构未授权请求401，未调用真实模型。
+- 记账APK更新为0.1.71/code71、156425284字节，SHA-256 d9a00766c3248e63e488efc45abf7f2cbba724fb1ad124826840bb8e35721206。库存App APK与version.json两文件哈希逐项保持一致。
+- 发布材料在忽略目录exports/releases/bookkeeping-refresh-20261021；不包含环境、私钥、数据库、用户照片或node_modules。数据库备份只在服务器私有目录，不下载。
+- 自动审批最初拒绝将脚本生成/上传/操作合并的大命令，仅返回blocked by policy。改为文件工具生成可核对脚本、分步语法检查/备份/校验/staging/切换成功；未绕过权限或扩大授权范围。
+
+真实用户模型候选质量、手机到AI刷新与原账目同步仍待用户主动验收，不以HTTP冒烟替代。
+
+公网完整下载0.1.71 APK校验通过：MIME application/vnd.android.package-archive；SHA-256 d9a00766c3248e63e488efc45abf7f2cbba724fb1ad124826840bb8e35721206与本地一致。
