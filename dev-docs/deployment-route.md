@@ -211,6 +211,17 @@ Vercel 只配置 public client 所需变量：
 - 邀请链接落地页和 Android App 启动时读取版本信息对比本地版本，发现新版提示下载；受 Android 系统限制，安装动作需要用户确认，不做静默安装。
 - 服务器保留最近至少一个历史 APK 版本，便于回滚；不删除正在被下载的文件。
 
+## 2026-11-12 服务器磁盘清理与备份保留策略
+
+- 背景：根分区 40G 曾 100% 满，仅剩 153M；`/opt` 下有 31 个历史 app 目录可清理。
+- 根因：历次部署用 `mv` 保留完整 app 目录，包含 `node_modules`、`.next`、`public` 和历史 APK，且没有自动清理；单个副本约 0.8–2.8G。
+- 关键运行时：线上 `/opt/home-inventory-app` 的 `data`、`public`、`node_modules` 是软链接，指向 `/opt/home-inventory-app-pre-deepseek-request-fix-20260924T2215`，必须保留，不能按普通备份删除。
+- 已保留：线上 app、上述运行时、当前 0.1.89 APK、上一版 0.1.88 APK（`/opt/home-inventory-backups/bookkeeper-89-20261112`）、PostgreSQL 数据库及其 dump。
+- 已清理：31 个历史 app 目录、旧 release/staging/rollback 目录、`public/apk/backups` 历史 APK、`home-inventory-backups` 旧 app 副本和旧 APK；清理后根分区 7.2G/40G，可用 31G。
+- 清理前备份：`/root/home-inventory-cleanup-20261112_215204/`，含 `home_inventory_test.dump`（340K，`pg_restore -l` 校验通过）、`historical-data.tar.gz`（11M）、`current-app-code.tar.gz`（1.8M）、`deleted-app-dirs.txt`。
+- 验证：`home-inventory-app` 为 active；`https://homestorag.xyz/` 返回 200；0.1.89 APK 返回 200（156211910 字节）；记账数据 transactions 909、categories 394、tombstones 179；线上 `data` 下 94 个文件。
+- 后续策略：不再用整包 `mv` 保留备份；新备份使用压缩包并排除 `node_modules`、`public`、`data`；APK 只保留当前版和上一版；数据库 dump 定期保留；新增自动清理 cron 前先确认保留周期。
+
 ## 当前未验证项
 
 - Vercel 项目已创建并接入 GitHub；当前仍存在 Vercel 访问保护和中国大陆访问稳定性问题。

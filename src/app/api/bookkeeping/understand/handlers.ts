@@ -309,11 +309,14 @@ function parseCategoryContracts(value: unknown): BookkeepingCategoryContext[] {
 
 export class BodyTooLargeError extends Error {}
 
-export async function readBoundedJsonObject(request: NextRequest): Promise<Record<string, unknown> | null> {
+export async function readBoundedJsonObject(
+  request: NextRequest,
+  maxBytes = MAX_UNDERSTAND_BODY_BYTES,
+): Promise<Record<string, unknown> | null> {
   const contentLength = request.headers.get("content-length");
   if (contentLength !== null) {
     if (!/^\d+$/.test(contentLength)) throw new Error("invalid_content_length");
-    if (Number(contentLength) > MAX_UNDERSTAND_BODY_BYTES) throw new BodyTooLargeError();
+    if (Number(contentLength) > maxBytes) throw new BodyTooLargeError();
   }
   const reader = request.body?.getReader();
   if (!reader) throw new Error("missing_body");
@@ -324,7 +327,7 @@ export async function readBoundedJsonObject(request: NextRequest): Promise<Recor
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_UNDERSTAND_BODY_BYTES) {
+      if (total > maxBytes) {
         await reader.cancel().catch(() => undefined);
         throw new BodyTooLargeError();
       }

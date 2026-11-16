@@ -1122,3 +1122,48 @@
 - 数据库和原应用备份完成，旧应用回滚目录保留；没有数据库结构或加密主密钥变更。生产服务 active，公网登录页 200，识别与凭据接口未登录均 401。
 - Android 0.5.35/code 41 已发布，公网下载大小 20,311,546 字节，SHA-256 `b3eaf62408234803d4935c58174c12079a3beaeb6aca70963d945d230ecc3661` 与发布包一致。
 - 设置按钮、个人 DeepSeek 与输入框清除功能已交付；真实个人 Key 连通性、真实照片识别与真机点击验收尚未执行。
+
+## 2026-10-29 页面翻译接口生产部署
+
+用户明确要求“先部署翻译接口”，授权本轮部署 `POST /api/bookkeeping/translate`。仅发布服务端翻译路由，未修改数据库 schema、密码、现有 API Key、Android APK 或无关业务。
+
+- 本地生产构建成功，Build ID `pW2tFuHBk4i32dxu4ql1m`，路由清单包含 `/api/bookkeeping/translate`；发布包 1,865,593 字节，SHA-256 `E97C29AAEB370574F3B454E4FABB8FB013F6D49C69E789824CAFD460B4BC294E`，服务器端校验一致。
+- 独立 staging 3108 验证后切换：登录页 200、翻译 GET 405、无 token POST 401、带 token 空 body 400、同语言 400、千问凭据未登录 401。
+- 公网复测结果一致；70,000 字节请求体 413 `Request body is too large`，12,001 字符文本 413 `TEXT_TOO_LONG`，确认 Nginx 未提前拦截 64KB 请求体。
+- `home-inventory-app` 为 active，WorkingDirectory `/opt/home-inventory-app`，最近 3 分钟错误级日志 0；data/public/node_modules 保持原绝对链接。
+- 备份 `/opt/home-inventory-backups/bookkeeping-translate-20261029/home-inventory-app.tar.gz`（SHA-256 `69b92f26612a449d0631b404abaa8795647a63ae187d7ad7b3d62171c009e552`）和 `home_inventory.dump`（SHA-256 `18184a182cca22d3a45c337897bc08f60ee6fa1b62ef7ded671245959b852eb3`，`pg_restore --list` 203 项）；旧应用保留在 `/opt/home-inventory-app-rollback-translate-20261029`。
+- 未调用真实豆包/千问/DeepSeek，未发送真实 OCR 正文或用户数据。真实模型翻译质量、Android 真机屏幕授权与端到端结果仍为未验证。
+
+## 2026-10-29 逐句翻译与生词发布
+
+用户追加要求“原文一句、翻译一句、下面放生词”，并明确示例 `conservative / pro-life / rally`。本轮发布服务端结构化逐句合同和 Android 0.1.78，仍不改变截图、OCR、数据库和隐私边界。
+
+- 服务端先在本地按换行和自然句切分并保留原文，模型只返回 `index / translatedText / vocabulary`；服务端回填原句并从逐句译文拼接兼容旧客户端的 `translatedText`。
+- 生词每句最多4项，`term` 必须出现在对应原句；解析器拒绝漏句、重复索引、额外字段、空译文和编造生词。15项定向 Vitest 通过，4个修改文件 ESLint 通过，生产构建 Build ID `yv4K1_5tDw4oqpsonc515`。
+- 发布包 SHA-256 `74E0C9B1F3A7CD84D11AE340303F69F07556B97B4E9668B35D4FFADA695884F7`，服务器校验一致；3108 staging 和公网均通过鉴权、边界和真实豆包平台额度冒烟。真实调用仅发送合成英文句子。
+- Android 0.1.78 去掉逐句模式下的“显示原文”开关，气泡内每句依次显示原文、`✅ 翻译`、`生词`；复制内容包含原文、译文和生词，仍不启动全屏 Activity。
+- 最终候选 `versionCode 78` / `versionName 0.1.78`，849项 JVM 测试、Lint、Debug APK 和 androidTest APK 构建通过；模拟器 8项悬浮翻译测试通过；签名证书 SHA-256 `279fb2d7226ba66f7c683b53bb801efced874ecdfb112cc2e2322e406fbb5fbf` 与 0.1.77 一致。
+- 公网清单 code 78、大小 156,129,990 字节；APK HTTP 200、MIME `application/vnd.android.package-archive`、Content-Length 与清单一致；重新下载 SHA-256 `7C2F072805384172F0DBB2F0DC831E645B1A7C866CE70AE8F2A624B806C0F6D8` 与本地候选一致。
+- 发布前 0.1.77 APK 与清单备份到 `/opt/home-inventory-backups/bookkeeper-78-20261029/`；服务端旧应用保留 `/opt/home-inventory-app-rollback-translate-segments-20261029`。真机屏幕授权、真实页面翻译、大字体、深色模式和 TalkBack 仍为未验证。
+
+## 2026-10-29 AI 自行分句与简洁气泡发布
+
+用户反馈本地切句太乱，要求“直接让 AI 分，返回全部结果包括原文和翻译比对，界面简洁”。本轮移除本地 `Intl.Segmenter` 切句，模型自行返回完整 `originalText / translatedText / vocabulary`，服务端只负责覆盖完整性和生词来源校验。
+
+- 服务端 Build ID `clz5Xe_ygwVrTUouxQmHX`，发布包 1,561,186 字节，SHA-256 `6EADF02863BDFA7A0C7476A90A43AFBB13DAD6193385D6918CD5B8D99C1A3216`。14项定向 Vitest、修改文件 ESLint 和生产构建通过。
+- 3109 staging 与公网真实豆包调用返回 HTTP 200；示例文本被 AI 自行拆成4个自然句，响应逐句包含原文、译文、生词，服务端拼接的兼容 `translatedText` 完整。
+- 服务端校验忽略空白后必须由全部 `originalText` 按顺序还原输入；漏句、乱序、改写、重复索引/字段、编造生词都会拒绝。切换前保留 `/opt/home-inventory-app-rollback-ai-segments-20261029`，staging 目录 `/opt/home-inventory-app-staging-ai-segments-20261029`。
+- Android 0.1.79 去掉固定卡片和可见标题，每个 AI 句子按“原文 / 译文 / 可选生词行”自然渲染；没有生词时只有原文和译文，不强制固定三行。849项JVM、Lint/APK、androidTest APK 和模拟器8项通过。
+- 最终候选 `versionCode 79` / `versionName 0.1.79`，大小 156,129,990 字节，签名证书 SHA-256 `279fb2d7226ba66f7c683b53bb801efced874ecdfb112cc2e2322e406fbb5fbf`；公网清单 code 79、Content-Length 与清单一致，重新下载 SHA-256 `E32476C56D8452D7B33D232B89EFD7ADEC45AFB911094051441B19C69C9A2085` 与本地一致。
+- 发布前 0.1.78 备份至 `/opt/home-inventory-backups/bookkeeper-79-20261029/`。真机页面翻译、大字体、深色模式和 TalkBack 仍未验证。
+
+## 2026-10-29 难词收敛与紧凑语言设置发布
+
+用户反馈语言切换区域占比太大，要求收进小设置图标；同时反馈 AI 把普通单词都当作生词，要求只列真正有难度的词。本轮发布服务端难词策略收紧和 Android 0.1.80，仍不改变截图、OCR、数据库和隐私边界。
+
+- 服务端提示词只列真正影响理解、低频、专业或有特殊语境的词，排除常见基础词、功能词和可轻松直译的词；解析器每句最多 2 项、整段最多 8 项，超过判 `invalid_response`。16 项定向 Vitest、修改文件 ESLint 和生产构建通过，Build ID `53I77QLGq79uia2s6u8KE`。
+- 发布包 `next-build-difficult-words-v1.tar.gz` 1,560,820 字节，SHA-256 `5FF7544FCCF647060600FEF7D0CA7836EA7967ED913F23F03CC4C4D1FB5299DD`，服务器校验一致；3109 staging 与公网真实豆包调用均 HTTP 200，3 句合成英文只返回 5 个难词，每句最多 2 项，`peaceful` 等基础词未再列入。
+- 切换前保留 `/opt/home-inventory-app-rollback-difficult-words-20261029`（Build ID `clz5Xe_ygwVrTUouxQmHX`）；生产 `home-inventory-app` 保持 active，未修改数据库、密钥或账号数据，真实调用只发送合成英文。
+- Android 0.1.80 把原文/目标语言栏默认收起，标题栏只保留齿轮按钮；点击齿轮展开语言设置，再次点击收起。849 项 JVM、Lint、Debug APK、androidTest APK 和模拟器 8 项悬浮翻译测试通过，其中新增默认收起/展开/再收起断言。
+- 最终候选 `versionCode 80` / `versionName 0.1.80`，大小 156,129,990 字节，签名证书 SHA-256 `279fb2d7226ba66f7c683b53bb801efced874ecdfb112cc2e2322e406fbb5fbf`；公网清单 code 80、Content-Length 与清单一致，重新下载 SHA-256 `984043CBA47D367471BD423F72BEC47C0A4750E7BAB4820D06E9718C575B4E76` 与本地一致。
+- 发布前 0.1.79 APK 与清单备份至 `/opt/home-inventory-backups/bookkeeper-80-20261029/`；桌面包 `C:\Users\Administrator\Desktop\一键记账-0.1.80-紧凑设置难词版.apk`。真机页面翻译、大字体、深色模式和 TalkBack 仍未验证。

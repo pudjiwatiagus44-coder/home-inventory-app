@@ -1,5 +1,11 @@
 # Development Truth Index
 
+2026-11-11：修复页面翻译“翻译结果格式异常”。真实根因是整页难词达到 9 至 10 个、超过 8 个上限后整页被丢弃；约 10,920 字符长页另因 `finish_reason=length` 截断。翻译解析改为 6,000 字符分块并行、长页难词截断到 8 个、非法难词容错过滤，原文覆盖校验保持严格；Nginx 翻译路由超时设为 180 秒。676 项干净单测、ESLint、生产构建通过，Build ID `2vuhrF4keXsR3jpq4ds1U`；公网 3 次合成邮件真实调用全部 200，均为 10 分段、8 难词并保留脱敏占位符。服务器源码已与 `.next` 构建同步，旧构建备份在 `/opt/home-inventory-app/.next.previous-translation-format-20261111`。见[页面翻译接口真源](bookkeeping-page-translation-design.md)。
+
+2026-11-10：用户确认在页面翻译气泡内点击英文单词查询词卡。新增 `POST /api/bookkeeping/word-lookup`，只发送单词和所在单句，返回英文音标、词性、语境释义、词根词缀、助记和例句；不保存正文或查询历史。674 项干净单测、修改文件 ESLint 和生产构建通过（Build ID `9YS9_XJBFS2pdFLpovlt_`）。用户回复“上线”后，服务端已部署；staging 与公网通过登录页 200、GET 405、无 token 401、额外字段 400、词不在上下文 400，以及真实豆包合成句词卡 200，模型返回 UK/US 音标、词性、语境释义、词根词缀、助记和 2 条例句。Android `0.1.85/code 85` 已发布后又发布 `0.1.86/code 86`，新增词卡助记/例句内无限层嵌套点词与返回栈；当前公网 APK 156,211,910 字节、SHA-256 `1BCCB933BF9BE04B7DC4734EA3B665F8A9DF34D9FE6E7CEE0744040A69083123`，完整重下载一致。设计与接口合同见[英文点词查询接口真源](english-word-lookup-design.md)。
+
+2026-10-29：记账页面翻译接口升级为 AI 自行分句并部署。`POST /api/bookkeeping/translate` 由模型返回每句原文、译文和难词；难词每句最多2项、整段最多8项，只列真正影响理解的低频、专业或特殊语境词。16项合同测试、定向 ESLint 和生产构建通过，真实豆包平台额度调用已验证，Android 0.1.80 已发布。真实页面翻译和真机权限链路仍未验证。见[页面翻译接口真源](bookkeeping-page-translation-design.md)。
+
 2026-10-21：用户明确授权后，记账成功卡刷新接口已部署，0.1.71/code71记账APK已发布；106项合同测试、ESLint与生产构建通过，线上服务/鉴权冒烟通过。真实模型和真机主动刷新仍待验收。见[刷新合同与证据](2026-10-21-bookkeeping-refresh.md)。
 
 2026-10-07 用户明确确认后，个人 API 设置已部署服务端并发布 Android 0.5.35/code 41；见[发布记录与回滚材料](inventory-api-settings-release-2026-10-07.md)。真实 Key 与真机识别待用户验证。
@@ -36,6 +42,8 @@
 - `bookkeeping-error-report-design.md` - 回收站错误订单上报、账号隔离、图片存储与维护删除真源（服务端本地实现已完成；迁移、服务器目录、反代限额、部署和生产验证均未执行）。
 - `bookkeeping-deepseek-hosted-key-design.md` - 记账 DeepSeek API Key 按账号加密托管、自由细分类与单次视觉重试设计（2026-09-21 已确认范围，待实施/部署）。
 - `bookkeeping-qwen-hosted-key-design.md` - 记账千问 API Key 按账号加密托管及显式 provider/credentialMode 路由设计（2026-09-23 本轮用户已授权先备份，再做记账识别服务部署与新增表迁移；真机 API Key 验证不在范围内）。
+- `bookkeeping-page-translation-design.md` - 记账 AI 分句翻译接口、生词、原文覆盖校验、鉴权与隐私边界（2026-10-29 已部署；真实模型合成文本冒烟通过，真机未验证）。
+- `smart-classify-release-20261110.md` - 双击智能分流 `/classify` 生产部署、备份回滚、真实豆包合成样本冒烟、662 项干净单测与 Android 0.1.84 发布证据。
 
 ## 2026-08-11 新用户引导与内联新增区域/位置（本地实现完成，已部署阿里云测试环境）
 

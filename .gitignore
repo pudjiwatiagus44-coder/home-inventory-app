@@ -3,9 +3,11 @@ node_modules/
 
 # Build output
 .next/
+.next.previous*/
 dist/
 build/
 out/
+_tmp/
 .worktrees/
 .superpowers/
 android-test-build/
